@@ -33,12 +33,20 @@ const updateUserSchema = z.object({
  */
 userRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
     const db = getDB();
     let usersList: any[] = [];
 
     if (db) {
       try {
-        const cursor = db.collection('users').find({}, { projection: { password: 0 } });
+        const query = isSuperAdmin
+          ? {}
+          : activeVendorId === 'vnd_sipspot_central'
+          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
+
+        const cursor = db.collection('users').find(query, { projection: { password: 0 } });
         usersList = await cursor.toArray();
       } catch (e) {
         // Fallback
@@ -46,13 +54,18 @@ userRouter.get('/', async (req: Request, res: Response) => {
     }
 
     if (usersList.length === 0) {
-      usersList = fallbackStore.users.map(({ password, ...rest }) => rest);
+      const allUsers = fallbackStore.users.map(({ password, ...rest }) => rest);
+      usersList = isSuperAdmin
+        ? allUsers
+        : allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === activeVendorId);
     }
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       users: usersList.map(u => ({
         id: u._id ? u._id.toString() : u.id,
+        vendorId: u.vendorId || activeVendorId,
         email: u.email,
         name: u.name,
         role: u.role,
@@ -81,6 +94,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const { name, email, password, role, pin, avatar } = parsed.data;
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
 
     // Check existing email
@@ -103,11 +117,12 @@ userRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await hashPassword(password);
-    const newUser = {
+    const newUser: any = {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       role,
+      vendorId: activeVendorId,
       pin,
       avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
@@ -132,9 +147,10 @@ userRouter.post('/', async (req: Request, res: Response) => {
       entity: 'USER',
       entityId: insertedId,
       entityName: `${name} (${role})`,
-      summary: `Mendaftarkan pengguna baru '${name}' dengan peran ${role} (${email})`,
+      summary: `Mendaftarkan pengguna baru '${name}' dengan peran ${role} (${email}) untuk vendor ${activeVendorId}`,
       details: {
         userId: insertedId,
+        vendorId: activeVendorId,
         name,
         email,
         role
@@ -147,6 +163,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
       message: `User ${name} (${role}) berhasil didaftarkan!`,
       user: {
         id: insertedId,
+        vendorId: activeVendorId,
         email: newUser.email,
         name: newUser.name,
         role: newUser.role,
@@ -165,12 +182,41 @@ userRouter.post('/', async (req: Request, res: Response) => {
 userRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
+
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
         error: 'Validation Error',
         details: parsed.error.format()
+      });
+    }
+
+    const db = getDB();
+    let existingUser: any = null;
+
+    if (db) {
+      try {
+        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+        existingUser = await db.collection('users').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!existingUser) {
+      existingUser = fallbackStore.users.find(u => (u._id && u._id.toString() === id) || u.id === id);
+    }
+
+    if (!existingUser) {
+      return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
+    }
+
+    const userVendor = existingUser.vendorId || 'vnd_sipspot_central';
+    if (userVendor !== activeVendorId && !isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Akses Ditolak: Anda tidak memiliki izin untuk mengedit pengguna dari vendor lain.'
       });
     }
 
@@ -184,13 +230,9 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       updateFields.password = await hashPassword(parsed.data.newPassword);
     }
 
-    const db = getDB();
-    let existingUser: any = null;
-
     if (db) {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        existingUser = await db.collection('users').findOne(query);
         await db.collection('users').updateOne(query, { $set: updateFields });
       } catch (e) {}
     }
@@ -198,7 +240,6 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     // Update fallback store
     const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
     if (idx !== -1) {
-      if (!existingUser) existingUser = fallbackStore.users[idx];
       fallbackStore.users[idx] = { ...fallbackStore.users[idx], ...updateFields };
     }
 
@@ -213,6 +254,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       summary: `Memperbarui data akun pengguna '${userName}'${parsed.data.newPassword ? ' (termasuk reset password)' : ''}`,
       details: {
         userId: id,
+        vendorId: userVendor,
         updatedFields: Object.keys(updateFields).filter(k => k !== 'password'),
         passwordChanged: !!parsed.data.newPassword
       },
@@ -234,6 +276,8 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
 userRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
 
     // Prevent deleting self
     if (req.user?.userId === id) {
@@ -251,13 +295,34 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         targetUser = await db.collection('users').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!targetUser) {
+      targetUser = fallbackStore.users.find(u => (u._id && u._id.toString() === id) || u.id === id);
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
+    }
+
+    const userVendor = targetUser.vendorId || 'vnd_sipspot_central';
+    if (userVendor !== activeVendorId && !isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Akses Ditolak: Anda tidak dapat menghapus pengguna milik vendor lain.'
+      });
+    }
+
+    if (db) {
+      try {
+        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         await db.collection('users').deleteOne(query);
       } catch (e) {}
     }
 
     const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
     if (idx !== -1) {
-      if (!targetUser) targetUser = fallbackStore.users[idx];
       fallbackStore.users.splice(idx, 1);
     }
 
@@ -272,6 +337,7 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       summary: `Menghapus pengguna '${userName}' dari sistem POS`,
       details: {
         userId: id,
+        vendorId: userVendor,
         deletedUser: targetUser ? {
           name: targetUser.name,
           email: targetUser.email,

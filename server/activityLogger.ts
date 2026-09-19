@@ -22,6 +22,7 @@ export interface PerformedByUser {
 export interface ActivityLogEntry {
   id: string;
   _id?: any;
+  vendorId?: string;
   action: ActivityAction;
   entity: ActivityEntity;
   entityId?: string;
@@ -43,6 +44,7 @@ interface RecordActivityParams {
   details?: Record<string, any>;
   req?: Request;
   user?: Partial<PerformedByUser>;
+  vendorId?: string;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -98,9 +100,12 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
   const now = new Date();
   const generatedId = new ObjectId().toString();
 
+  const resolvedVendorId = (req as any)?.vendorId || (req?.user as any)?.vendorId || (params as any)?.vendorId || 'vnd_sipspot_central';
+
   const logDoc: ActivityLogEntry = {
     id: generatedId,
     _id: generatedId,
+    vendorId: resolvedVendorId,
     action,
     entity,
     entityId: entityId ? String(entityId) : undefined,
@@ -150,6 +155,7 @@ export interface ActivityFilterOptions {
   action?: string;
   entity?: string;
   userId?: string;
+  vendorId?: string;
   search?: string;
   startDate?: string;
   endDate?: string;
@@ -165,6 +171,7 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
     action,
     entity,
     userId,
+    vendorId,
     search,
     startDate,
     endDate,
@@ -179,6 +186,9 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
     try {
       const filter: any = {};
 
+      if (vendorId && vendorId !== 'ALL') {
+        filter.vendorId = vendorId;
+      }
       if (action && action !== 'ALL') {
         filter.action = action.toUpperCase();
       }
@@ -226,6 +236,9 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
   // Fallback to in-memory store if db returns empty or is disconnected
   if (allLogs.length === 0 && fallbackStore.activity_logs.length > 0) {
     allLogs = fallbackStore.activity_logs.filter(log => {
+      if (vendorId && vendorId !== 'ALL' && (log.vendorId || 'vnd_sipspot_central') !== vendorId) {
+        return false;
+      }
       if (action && action !== 'ALL' && log.action !== action.toUpperCase()) {
         return false;
       }

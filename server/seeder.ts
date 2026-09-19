@@ -8,12 +8,58 @@ export async function seedDatabase() {
   const managerPassword = await hashPassword('Password123!');
   const cashierPassword = await hashPassword('Password123!');
 
+  const initialVendors = [
+    {
+      id: 'vnd_sipspot_central',
+      name: 'SipSpot Coffee & Boba (Pusat)',
+      code: 'SIPSPOT',
+      clientId: 'client_sipspot_central_01',
+      clientSecret: 'sec_sipspot_central_8872a91e4f',
+      status: 'ACTIVE',
+      email: 'pusat@sipspot.com',
+      phone: '+628123456789',
+      address: 'Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan',
+      currency: 'IDR',
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date()
+    },
+    {
+      id: 'vnd_kopi_kulo_kemang',
+      name: 'Kopi Kulo & Toast (Kemang)',
+      code: 'KULO',
+      clientId: 'client_kopikulo_kemang_02',
+      clientSecret: 'sec_kopikulo_kemang_c14b09e27a',
+      status: 'ACTIVE',
+      email: 'kemang@kopikulo.co.id',
+      phone: '+628219876543',
+      address: 'Jl. Kemang Raya No. 12B, Jakarta Selatan',
+      currency: 'IDR',
+      createdAt: new Date('2026-02-15'),
+      updatedAt: new Date()
+    },
+    {
+      id: 'vnd_tehpoci_nusantara',
+      name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
+      code: 'TEHPOCI',
+      clientId: 'client_tehpoci_nusantara_03',
+      clientSecret: 'sec_tehpoci_nusantara_d39f77218b',
+      status: 'ACTIVE',
+      email: 'admin@tehpoci-nusantara.id',
+      phone: '+628571234987',
+      address: 'Grand Mall Bekasi Lt. Ground No. 18',
+      currency: 'IDR',
+      createdAt: new Date('2026-03-01'),
+      updatedAt: new Date()
+    }
+  ];
+
   const initialUsers = [
     {
       email: 'manager@beverage.com',
       password: managerPassword,
       name: 'Ferry Manager',
       role: 'MANAGER',
+      vendorId: 'vnd_sipspot_central',
       pin: '123456',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
@@ -24,8 +70,53 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Sarah Barista',
       role: 'CASHIER',
+      vendorId: 'vnd_sipspot_central',
       pin: '849201',
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      email: 'kulo.manager@beverage.com',
+      password: managerPassword,
+      name: 'Budi Manager (Kulo)',
+      role: 'MANAGER',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      pin: '223344',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      email: 'kulo.cashier@beverage.com',
+      password: cashierPassword,
+      name: 'Dewi Kasir (Kulo)',
+      role: 'CASHIER',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      pin: '556677',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      email: 'poci.manager@beverage.com',
+      password: managerPassword,
+      name: 'Hendra Manager (Teh Poci)',
+      role: 'MANAGER',
+      vendorId: 'vnd_tehpoci_nusantara',
+      pin: '334455',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      email: 'poci.cashier@beverage.com',
+      password: cashierPassword,
+      name: 'Rina Kasir (Teh Poci)',
+      role: 'CASHIER',
+      vendorId: 'vnd_tehpoci_nusantara',
+      pin: '667788',
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
     }
@@ -181,7 +272,8 @@ export async function seedDatabase() {
       subCategory: 'Finger Food',
       tag: 'Tradisional',
       image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&auto=format&fit=crop&q=80',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_sipspot_central'
     },
     {
       name: 'Red Velvet Pastry',
@@ -193,7 +285,127 @@ export async function seedDatabase() {
       subCategory: 'Bakery',
       tag: 'Habis / Out of Stock',
       image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&auto=format&fit=crop&q=80',
-      isAvailable: false
+      isAvailable: false,
+      vendorId: 'vnd_sipspot_central'
+    },
+    // Vendor 2: Kopi Kulo (Kemang)
+    {
+      name: 'Kulo Avocatto Chocolate',
+      category: 'kopi',
+      price: 32000,
+      stock: 35,
+      lowStockThreshold: 10,
+      description: 'Signature Jus alpukat murni berpadu espresso mantap dengan topping es krim cokelat lezat',
+      subCategory: 'Signature Kulo',
+      tag: 'Best Seller',
+      image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_kopi_kulo_kemang'
+    },
+    {
+      name: 'Kulo Baileys Cream Latte',
+      category: 'kopi',
+      price: 30000,
+      stock: 25,
+      lowStockThreshold: 8,
+      description: 'Espresso double shot harum berpadu sirup Baileys non-alkohol dan krim susu gurih',
+      subCategory: 'Spesial Kopi',
+      tag: 'Artisan',
+      image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_kopi_kulo_kemang'
+    },
+    {
+      name: 'Kopi Kulo Gula Aren',
+      category: 'kopi',
+      price: 24000,
+      stock: 45,
+      lowStockThreshold: 12,
+      description: 'Perpaduan biji kopi pilihan, susu segar creamy dan gula aren organik murni',
+      subCategory: 'Kopi Favorit',
+      tag: 'Favorit Pelanggan',
+      image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_kopi_kulo_kemang'
+    },
+    {
+      name: 'Toast Keju Melted Spesial',
+      category: 'cemilan',
+      price: 26000,
+      stock: 20,
+      lowStockThreshold: 5,
+      description: 'Roti bakar tebal panggang renyah dengan lelehan keju mozarella & cheddar gurih',
+      subCategory: 'Kulo Toast',
+      tag: 'Cemilan Hangat',
+      image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_kopi_kulo_kemang'
+    },
+    {
+      name: 'Croffle Gula Palem Karamel',
+      category: 'cemilan',
+      price: 28000,
+      stock: 18,
+      lowStockThreshold: 5,
+      description: 'Croissant waffle renyah di luar lembut di dalam dengan taburan karamel wangi',
+      subCategory: 'Kulo Bakery',
+      tag: 'Manis Gurih',
+      image: 'https://images.unsplash.com/photo-1588685912170-07e0c7e2b7e5?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_kopi_kulo_kemang'
+    },
+    // Vendor 3: Teh Poci & Dimsum (Bekasi)
+    {
+      name: 'Teh Poci Seduh Gula Batu Asli',
+      category: 'teh',
+      price: 15000,
+      stock: 50,
+      lowStockThreshold: 15,
+      description: 'Teh melati wangi sepat legit khas seduh tanah liat dengan bongkahan gula batu asli',
+      subCategory: 'Teh Tradisional',
+      tag: 'Khas Poci',
+      image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_tehpoci_nusantara'
+    },
+    {
+      name: 'Es Teh Melati Jumbo Segar',
+      category: 'teh',
+      price: 10000,
+      stock: 80,
+      lowStockThreshold: 20,
+      description: 'Es teh melati jumbo 22oz segar pelepas dahaga harum alami',
+      subCategory: 'Teh Dingin',
+      tag: 'Super Segar',
+      image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_tehpoci_nusantara'
+    },
+    {
+      name: 'Dimsum Hakau Udang Kukus (4 Pcs)',
+      category: 'cemilan',
+      price: 25000,
+      stock: 30,
+      lowStockThreshold: 8,
+      description: 'Dimsum kulit transparan dengan isian udang utuh segar kenyal manis gurih',
+      subCategory: 'Dimsum Kukus',
+      tag: 'Chef Choice',
+      image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_tehpoci_nusantara'
+    },
+    {
+      name: 'Siomay Dimsum Ayam Udang (4 Pcs)',
+      category: 'cemilan',
+      price: 22000,
+      stock: 40,
+      lowStockThreshold: 10,
+      description: 'Siomay daging ayam dan udang padat dengan saus cocolan cabai merah gurih pedas',
+      subCategory: 'Dimsum Kukus',
+      tag: 'Terlaris',
+      image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400&auto=format&fit=crop&q=80',
+      isAvailable: true,
+      vendorId: 'vnd_tehpoci_nusantara'
     }
   ];
 
@@ -231,10 +443,12 @@ export async function seedDatabase() {
   ];
 
   // Populate local fallback store first
+  fallbackStore.vendors = initialVendors.map(v => ({ ...v }));
   fallbackStore.users = initialUsers.map((u, i) => ({ ...u, _id: `user_${i + 1}` }));
   fallbackStore.categories = initialCategories.map((c, i) => ({ ...c, _id: `cat_${i + 1}` }));
   fallbackStore.products = initialProducts.map((p, i) => ({
     ...p,
+    vendorId: (p as any).vendorId || 'vnd_sipspot_central',
     lowStockThreshold: typeof (p as any).lowStockThreshold === 'number' ? (p as any).lowStockThreshold : 15,
     _id: `prod_${i + 1}`
   }));
@@ -555,6 +769,13 @@ export async function seedDatabase() {
   const db = getDB();
   if (db) {
     try {
+      // 0. Vendors
+      const vendorCount = await db.collection('vendors').countDocuments();
+      if (vendorCount === 0) {
+        await db.collection('vendors').insertMany(initialVendors);
+        console.log('[Seeder] Vendors seeded in MongoDB successfully.');
+      }
+
       // 1. Users
       const userCount = await db.collection('users').countDocuments();
       if (userCount === 0) {
@@ -564,6 +785,8 @@ export async function seedDatabase() {
         // Migrate legacy 4-digit PINs to 6-digit PINs
         await db.collection('users').updateMany({ pin: '1234' }, { $set: { pin: '123456' } });
         await db.collection('users').updateMany({ pin: '8492' }, { $set: { pin: '849201' } });
+        // Ensure vendorId is set on legacy users
+        await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       }
 
       // 2. Categories
@@ -578,6 +801,9 @@ export async function seedDatabase() {
       if (prodCount === 0) {
         await db.collection('products').insertMany(initialProducts);
         console.log('[Seeder] Products seeded in MongoDB successfully.');
+      } else {
+        // Ensure vendorId is set on legacy products
+        await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       }
 
       // 4. Email Templates

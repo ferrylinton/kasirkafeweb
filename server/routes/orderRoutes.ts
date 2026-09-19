@@ -67,15 +67,16 @@ export function getTodayDateString(): string {
  * Generates a sequential order number (as queue number) that resets to 1 each day.
  * Example format: "001", "002", "003"...
  */
-export async function getNextDailyOrderSequence(): Promise<{ orderNumber: string; queueNumber: number; date: string }> {
+export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ orderNumber: string; queueNumber: number; date: string }> {
   const today = getTodayDateString();
+  const activeVendorId = vendorId || 'vnd_sipspot_central';
   const db = getDB();
   let seq = 1;
 
   if (db) {
     try {
       const counterResult: any = await db.collection('daily_counters').findOneAndUpdate(
-        { date: today },
+        { date: today, vendorId: activeVendorId },
         { $inc: { seq: 1 } },
         { upsert: true, returnDocument: 'after' }
       );
@@ -86,13 +87,15 @@ export async function getNextDailyOrderSequence(): Promise<{ orderNumber: string
     } catch (e) {
       console.warn('[Orders] Could not get daily counter from DB, using fallback memory store:', e);
       fallbackStore.daily_counters = fallbackStore.daily_counters || {};
-      fallbackStore.daily_counters[today] = (fallbackStore.daily_counters[today] || 0) + 1;
-      seq = fallbackStore.daily_counters[today];
+      const key = `${today}_${activeVendorId}`;
+      fallbackStore.daily_counters[key] = (fallbackStore.daily_counters[key] || 0) + 1;
+      seq = fallbackStore.daily_counters[key];
     }
   } else {
     fallbackStore.daily_counters = fallbackStore.daily_counters || {};
-    fallbackStore.daily_counters[today] = (fallbackStore.daily_counters[today] || 0) + 1;
-    seq = fallbackStore.daily_counters[today];
+    const key = `${today}_${activeVendorId}`;
+    fallbackStore.daily_counters[key] = (fallbackStore.daily_counters[key] || 0) + 1;
+    seq = fallbackStore.daily_counters[key];
   }
 
   const orderNumber = String(seq).padStart(3, '0');
@@ -109,19 +112,21 @@ export async function getNextDailyOrderSequence(): Promise<{ orderNumber: string
  */
 orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Response) => {
   const today = getTodayDateString();
+  const activeVendorId = req.vendorId || 'vnd_sipspot_central';
   const db = getDB();
   let currentSeq = 0;
 
   if (db) {
     try {
-      const doc = await db.collection('daily_counters').findOne({ date: today });
+      const doc = await db.collection('daily_counters').findOne({ date: today, vendorId: activeVendorId });
       if (doc && typeof doc.seq === 'number') {
         currentSeq = doc.seq;
       }
     } catch (e) {}
   }
-  if (!currentSeq && fallbackStore.daily_counters && fallbackStore.daily_counters[today]) {
-    currentSeq = fallbackStore.daily_counters[today];
+  const key = `${today}_${activeVendorId}`;
+  if (!currentSeq && fallbackStore.daily_counters && (fallbackStore.daily_counters[key] || fallbackStore.daily_counters[today])) {
+    currentSeq = fallbackStore.daily_counters[key] || fallbackStore.daily_counters[today];
   }
 
   const nextSeq = currentSeq + 1;
@@ -129,6 +134,7 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
 
   return res.json({
     success: true,
+    vendorId: activeVendorId,
     today,
     currentQueueNumber: currentSeq,
     nextQueueNumber: nextSeq,
@@ -210,10 +216,12 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     const change = paymentMethod === 'CASH' ? Math.max(0, cashReceived - totalAmount) : 0;
 
     // Sequential order number resetting daily as queue number
-    const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence();
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence(activeVendorId);
     const cashierName = req.user?.name || 'Kasir SipSpot';
 
     const orderDoc: any = {
+      vendorId: activeVendorId,
       orderNumber,
       queueNumber,
       orderDate: date,
@@ -468,23 +476,29 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
  */
 orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let orders: any[] = [];
 
     if (db) {
       try {
-        orders = await db.collection('orders').find({}).sort({ createdAt: -1 }).limit(100).toArray();
+        const query = activeVendorId === 'vnd_sipspot_central'
+          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
+        orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(100).toArray();
       } catch (e) {}
     }
 
     if (orders.length === 0) {
-      orders = fallbackStore.orders;
+      orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === activeVendorId);
     }
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       orders: orders.map(o => ({
         id: o._id ? o._id.toString() : o.id,
+        vendorId: o.vendorId || activeVendorId,
         orderNumber: o.orderNumber,
         queueNumber: o.queueNumber,
         items: o.items,

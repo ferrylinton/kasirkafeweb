@@ -60,12 +60,19 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
 
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let products: any[] = [];
 
     if (db) {
       try {
         const filter: any = {};
+        if (activeVendorId === 'vnd_sipspot_central') {
+          filter.$or = [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+        } else {
+          filter.vendorId = activeVendorId;
+        }
+
         if (category && category !== 'all') {
           filter.category = category.toLowerCase();
         }
@@ -78,16 +85,20 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
     if (products.length === 0) {
       products = fallbackStore.products.filter(p => {
+        const pVendor = p.vendorId || 'vnd_sipspot_central';
+        const matchVendor = pVendor === activeVendorId;
         const matchCategory = !category || category === 'all' || p.category.toLowerCase() === category.toLowerCase();
         const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-        return matchCategory && matchSearch;
+        return matchVendor && matchCategory && matchSearch;
       });
     }
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       products: products.map(p => ({
         id: p._id ? p._id.toString() : p.id,
+        vendorId: p.vendorId || activeVendorId,
         name: p.name,
         category: p.category,
         subCategory: p.subCategory,
@@ -111,15 +122,19 @@ productRouter.get('/', async (req: Request, res: Response) => {
  */
 productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let products: any[] = [];
     if (db) {
       try {
-        products = await db.collection('products').find({}).toArray();
+        const query = activeVendorId === 'vnd_sipspot_central'
+          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
+        products = await db.collection('products').find(query).toArray();
       } catch (e) {}
     }
     if (products.length === 0) {
-      products = fallbackStore.products;
+      products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
     }
 
     const mapped = products.map(p => {
@@ -655,8 +670,10 @@ productRouter.post('/', authMiddleware, requireManager, async (req: Request, res
       });
     }
 
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const newProd = {
       ...parsed.data,
+      vendorId: activeVendorId,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -712,6 +729,7 @@ productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) =>
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: new Date() };
 
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let existingProd: any = null;
 
@@ -719,13 +737,34 @@ productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) =>
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         existingProd = await db.collection('products').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!existingProd) {
+      existingProd = fallbackStore.products.find(p => (p._id && p._id.toString() === id) || p.id === id);
+    }
+
+    if (!existingProd) {
+      return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
+    }
+
+    const prodVendorId = existingProd.vendorId || 'vnd_sipspot_central';
+    if (prodVendorId !== activeVendorId && req.user?.role !== 'SUPERADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Akses Ditolak: Anda tidak berhak mengubah produk milik vendor lain.'
+      });
+    }
+
+    if (db) {
+      try {
+        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         await db.collection('products').updateOne(query, { $set: updateData });
       } catch (e) {}
     }
 
     const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
     if (idx !== -1) {
-      if (!existingProd) existingProd = fallbackStore.products[idx];
       fallbackStore.products[idx] = { ...fallbackStore.products[idx], ...updateData };
     }
 
@@ -757,6 +796,7 @@ productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) =>
 productRouter.delete('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let targetProd: any = null;
 
@@ -764,13 +804,34 @@ productRouter.delete('/:id', authMiddleware, requireManager, async (req: Request
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         targetProd = await db.collection('products').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!targetProd) {
+      targetProd = fallbackStore.products.find(p => (p._id && p._id.toString() === id) || p.id === id);
+    }
+
+    if (!targetProd) {
+      return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
+    }
+
+    const prodVendorId = targetProd.vendorId || 'vnd_sipspot_central';
+    if (prodVendorId !== activeVendorId && req.user?.role !== 'SUPERADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Akses Ditolak: Anda tidak berhak menghapus produk milik vendor lain.'
+      });
+    }
+
+    if (db) {
+      try {
+        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
         await db.collection('products').deleteOne(query);
       } catch (e) {}
     }
 
     const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
     if (idx !== -1) {
-      if (!targetProd) targetProd = fallbackStore.products[idx];
       fallbackStore.products.splice(idx, 1);
     }
 

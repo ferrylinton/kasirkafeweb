@@ -14,6 +14,8 @@ import { discountRouter } from './server/routes/discountRoutes';
 import { orderRouter } from './server/routes/orderRoutes';
 import { templateRouter } from './server/routes/templateRoutes';
 import { activityLogRouter } from './server/routes/activityLogRoutes';
+import { vendorRouter } from './server/routes/vendorRoutes';
+import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
 
 dotenv.config();
@@ -32,6 +34,9 @@ async function startServer() {
   // Token Bucket Rate Limiting Middleware (connected to Upstash Redis)
   app.use('/api', tokenBucketRateLimiter({ capacity: 80, refillRate: 5 }));
 
+  // Multi-Vendor Resolution & Isolation Middleware
+  app.use('/api', vendorMiddleware);
+
   // API Health Check
   app.get('/api/health', (req, res) => {
     res.json({
@@ -43,6 +48,7 @@ async function startServer() {
 
   // API Routes
   app.use('/api/auth', authRouter);
+  app.use('/api/vendors', vendorRouter);
   app.use('/api/users', userRouter);
   app.use('/api/products', productRouter);
   app.use('/api/discounts', discountRouter);

@@ -12,9 +12,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'beverage_pos_jwt_secret_key_2026';
 export interface TokenPayload {
   userId: string;
   email: string;
-  role: 'MANAGER' | 'CASHIER';
+  role: 'SUPERADMIN' | 'MANAGER' | 'CASHIER';
   name: string;
   sessionId?: string;
+  vendorId?: string;
+  clientId?: string;
 }
 
 // In-memory set of revoked session IDs for O(1) instantaneous lookup
@@ -164,7 +166,7 @@ export function requireManager(req: Request, res: Response, next: NextFunction) 
     });
   }
 
-  if (req.user.role !== 'MANAGER') {
+  if (req.user.role !== 'MANAGER' && req.user.role !== 'SUPERADMIN') {
     const msg = req.t ? req.t('auth.managerOnly') : 'Akses ditolak. Fitur ini khusus untuk role MANAGER.';
     return res.status(403).json({
       success: false,

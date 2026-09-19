@@ -98,21 +98,31 @@ discountRouter.post('/calculate', async (req: Request, res: Response) => {
  */
 discountRouter.get('/rules', async (req: Request, res: Response) => {
   try {
+    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
+
     const db = getDB();
     let rules: any[] = [];
     if (db) {
       try {
-        rules = await db.collection('discount_rules').find({}).toArray();
+        const filter = isSuperAdmin
+          ? {}
+          : { $or: [{ vendorId: activeVendorId }, { vendorId: { $exists: false } }] };
+        rules = await db.collection('discount_rules').find(filter).toArray();
       } catch (e) {}
     }
     if (rules.length === 0) {
-      rules = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
+      const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
+      rules = isSuperAdmin
+        ? source
+        : source.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId || !r.vendorId);
     }
 
     return res.json({
       success: true,
       rules: rules.map(r => ({
         id: r._id ? r._id.toString() : r.code,
+        vendorId: r.vendorId || 'vnd_sipspot_central',
         code: r.code,
         name: r.name,
         description: r.description,
@@ -177,7 +187,10 @@ discountRouter.post('/rules', authMiddleware, requireManager, async (req: Reques
       });
     }
 
+    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+
     const newRuleData = {
+      vendorId: activeVendorId,
       code: formattedCode,
       name: name.trim(),
       description: description.trim(),
@@ -311,10 +324,16 @@ discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Req
     const db = getDB();
     let existingRule: any = null;
 
+    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
+
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         existingRule = await db.collection('discount_rules').findOne(query);
+        if (existingRule && !isSuperAdmin && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
+          return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
+        }
         await db.collection('discount_rules').updateOne(query, { $set: updateData });
       } catch (e) {}
     }
@@ -322,6 +341,9 @@ discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Req
     const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
     if (idx !== -1) {
       if (!existingRule) existingRule = fallbackStore.discount_rules[idx];
+      if (existingRule && !isSuperAdmin && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
+        return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
+      }
       fallbackStore.discount_rules[idx] = { ...fallbackStore.discount_rules[idx], ...updateData };
     }
 
@@ -357,10 +379,16 @@ discountRouter.delete('/rules/:id', authMiddleware, requireManager, async (req: 
     const db = getDB();
     let targetRule: any = null;
 
+    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
+
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         targetRule = await db.collection('discount_rules').findOne(query);
+        if (targetRule && !isSuperAdmin && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
+          return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
+        }
         await db.collection('discount_rules').deleteOne(query);
       } catch (e) {}
     }
@@ -368,6 +396,9 @@ discountRouter.delete('/rules/:id', authMiddleware, requireManager, async (req: 
     const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
     if (idx !== -1) {
       if (!targetRule) targetRule = fallbackStore.discount_rules[idx];
+      if (targetRule && !isSuperAdmin && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
+        return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
+      }
     }
 
     fallbackStore.discount_rules = fallbackStore.discount_rules.filter(

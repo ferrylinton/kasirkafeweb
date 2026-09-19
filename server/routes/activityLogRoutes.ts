@@ -25,6 +25,7 @@ activityLogRouter.get('/', async (req: Request, res: Response) => {
     }
 
     const result = await queryActivityLogs({
+      vendorId: req.vendorId,
       action: action as string,
       entity: entity as string,
       userId: userId as string,
@@ -53,7 +54,7 @@ activityLogRouter.get('/', async (req: Request, res: Response) => {
  */
 activityLogRouter.get('/stats', async (req: Request, res: Response) => {
   try {
-    const result = await queryActivityLogs({ limit: 1 });
+    const result = await queryActivityLogs({ vendorId: req.vendorId, limit: 1 });
     return res.json({
       success: true,
       stats: result.stats

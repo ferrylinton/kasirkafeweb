@@ -13,6 +13,7 @@ let isConnected = false;
 // In-memory fallback database to guarantee 100% uptime and resilience
 // if external Atlas MongoDB connection experiences network throttling
 export const fallbackStore: {
+  vendors: any[];
   users: any[];
   categories: any[];
   products: any[];
@@ -26,6 +27,7 @@ export const fallbackStore: {
   daily_counters: Record<string, number>;
   activity_logs: any[];
 } = {
+  vendors: [],
   users: [],
   categories: [],
   products: [],

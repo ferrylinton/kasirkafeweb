@@ -1,7 +1,23 @@
-export type UserRole = 'MANAGER' | 'CASHIER';
+export type UserRole = 'SUPERADMIN' | 'MANAGER' | 'CASHIER';
+
+export interface Vendor {
+  id: string;
+  name: string;
+  code: string;
+  clientId: string;
+  clientSecret?: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  email?: string;
+  phone?: string;
+  address?: string;
+  currency?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface User {
   id: string;
+  vendorId?: string;
   email: string;
   name: string;
   role: UserRole;
@@ -20,6 +36,7 @@ export interface Category {
 
 export interface Product {
   id: string;
+  vendorId?: string;
   name: string;
   category: 'kopi' | 'teh' | 'jus' | 'cemilan' | string;
   subCategory?: string;
@@ -128,6 +145,7 @@ export interface OrderCustomer {
 
 export interface Order {
   id: string;
+  vendorId?: string;
   orderNumber: string;
   queueNumber?: number;
   items: {
@@ -221,10 +239,12 @@ export type ActivityEntity =
   | 'USER'
   | 'ORDER'
   | 'EMAIL_TEMPLATE'
-  | 'CATEGORY';
+  | 'CATEGORY'
+  | 'VENDOR';
 
 export interface ActivityLogEntry {
   id: string;
+  vendorId?: string;
   action: ActivityAction;
   entity: ActivityEntity;
   entityId?: string;

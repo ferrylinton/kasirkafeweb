@@ -20,6 +20,7 @@ import { InventoryScreen } from './components/screens/InventoryScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
 import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
+import { VendorClientScreen } from './components/screens/VendorClientScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 
 const MainLayout: React.FC = () => {
@@ -48,9 +49,9 @@ const MainLayout: React.FC = () => {
   }
 
   // Route protection: Manager only tabs
-  const isManager = user.role === 'MANAGER';
+  const isManager = user.role === 'MANAGER' || user.role === 'SUPERADMIN';
   let activeView = currentTab;
-  if (!isManager && (currentTab === 'users' || currentTab === 'diskon' || currentTab === 'templates' || currentTab === 'inventaris' || currentTab === 'login-history')) {
+  if (!isManager && (currentTab === 'users' || currentTab === 'diskon' || currentTab === 'templates' || currentTab === 'inventaris' || currentTab === 'login-history' || currentTab === 'activity-logs' || currentTab === 'vendor-client')) {
     activeView = 'katalog';
   }
 
@@ -116,6 +117,7 @@ const MainLayout: React.FC = () => {
 
           {isManager && activeView === 'login-history' && <LoginHistoryScreen />}
           {isManager && activeView === 'activity-logs' && <ActivityLogScreen />}
+          {isManager && activeView === 'vendor-client' && <VendorClientScreen />}
         </main>
       </div>
 
