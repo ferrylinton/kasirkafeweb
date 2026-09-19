@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>SipSpot POS - Kasir Minuman & Snack</title>
+    <meta name="description" content="Aplikasi POS Toko Minuman & Snack dengan nomor antrean urut harian otomatis reset tiap hari, manajemen stok, peringatan stok rendah, pemilihan profil pengguna kasir/manager interaktif, PIN 6-digit, proteksi lockout 15 menit setelah 3 percobaan login gagal, idle timer 15-menit, riwayat login, email notifikasi keamanan & remote logout." />
+    <meta property="og:title" content="SipSpot POS - Kasir Minuman & Snack" />
+    <meta property="og:description" content="Aplikasi POS Toko Minuman & Snack dengan nomor antrean urut harian otomatis reset tiap hari, manajemen stok, peringatan stok rendah, pemilihan profil pengguna kasir/manager interaktif, PIN 6-digit, proteksi lockout 15 menit setelah 3 percobaan login gagal, idle timer 15-menit, riwayat login, email notifikasi keamanan & remote logout." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      (function() {
+        try {
+          var isDark = localStorage.getItem('sipspot_theme_dark') === 'true';
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.body && document.body.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-[#fff8f6] dark:bg-[#1a1412] text-[#221a18] dark:text-[#f0dfdb] antialiased transition-colors duration-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
