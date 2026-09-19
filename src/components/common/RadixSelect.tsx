@@ -20,6 +20,7 @@ interface RadixSelectProps {
   prefixIcon?: React.ReactNode;
   ariaLabel?: string;
   className?: string;
+  contentClassName?: string;
   disabled?: boolean;
 }
 
@@ -32,6 +33,7 @@ export const RadixSelect: React.FC<RadixSelectProps> = ({
   prefixIcon,
   ariaLabel,
   className = '',
+  contentClassName = '',
   disabled = false
 }) => {
   const selectedOption = options.find(opt => opt.value === value);
@@ -77,7 +79,7 @@ export const RadixSelect: React.FC<RadixSelectProps> = ({
         <Select.Content
           position="popper"
           sideOffset={6}
-          className="z-50 min-w-[220px] max-h-[320px] overflow-hidden rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#251e1c] p-1.5 shadow-xl animate-in fade-in-80 zoom-in-95"
+          className={`z-[100] min-w-[240px] max-h-[320px] overflow-hidden rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#251e1c] p-1.5 shadow-2xl animate-in fade-in-80 zoom-in-95 ${contentClassName}`}
         >
           <Select.ScrollUpButton className="flex items-center justify-center h-6 text-stone-400 cursor-default">
             <ChevronUp className="w-4 h-4" />

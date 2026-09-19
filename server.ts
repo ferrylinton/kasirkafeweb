@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -24,6 +25,7 @@ const PORT = 3000;
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
 
   // Basic Middlewares
   app.use(cors({ origin: true, credentials: true }));
@@ -58,8 +60,12 @@ async function startServer() {
 
   // Vite Middleware / Static Serving
   if (process.env.NODE_ENV !== 'production') {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : { server: httpServer }
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);
@@ -74,8 +80,24 @@ async function startServer() {
   // Populate in-memory database immediately so all endpoints have data from moment one
   await seedDatabase();
 
+  httpServer.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Server] Port ${PORT} is already in use.`);
+    } else {
+      console.error('[Server] Server error:', err);
+    }
+  });
+
+  const cleanup = () => {
+    httpServer.close(() => {
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', cleanup);
+
   // Bind to 0.0.0.0:3000
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] SipSpot POS running on http://0.0.0.0:${PORT}`);
   });
 

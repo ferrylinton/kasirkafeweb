@@ -15,7 +15,9 @@ import {
   ShieldAlert,
   AlertTriangle,
   Clock,
-  X
+  X,
+  Building2,
+  Store
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -24,6 +26,21 @@ import { useToast } from '../common/Toast';
 import { SelectUserModal, SelectableUser } from '../modals/SelectUserModal';
 import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
+import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
+
+interface VendorItem {
+  id: string;
+  name: string;
+  code: string;
+  clientId?: string;
+  status?: string;
+}
+
+const DEFAULT_VENDORS: VendorItem[] = [
+  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT' },
+  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO' },
+  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI' }
+];
 
 interface AlreadyLoggedInInfo {
   userName: string;
@@ -71,10 +88,40 @@ export const LoginScreen: React.FC = () => {
     };
   });
 
+  // Vendor management state
+  const [vendors, setVendors] = useState<VendorItem[]>(DEFAULT_VENDORS);
+  const [allUsers, setAllUsers] = useState<SelectableUser[]>([]);
+  const [selectedVendorId, setSelectedVendorId] = useState<string>(() => {
+    try {
+      const savedVendor = localStorage.getItem('sipspot_selected_vendor');
+      if (savedVendor) return savedVendor;
+    } catch (e) {}
+    return selectedUser.vendorId || 'vnd_sipspot_central';
+  });
+
   const [isSelectModalOpen, setIsSelectModalOpen] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
   const [email, setEmail] = useState<string>(selectedUser.email || 'manager@beverage.com');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Fetch selectable users & vendors from backend API
+  useEffect(() => {
+    const fetchSelectable = async () => {
+      try {
+        const res = await fetch('/api/auth/selectable-users');
+        const data = await res.json();
+        if (data.success) {
+          if (Array.isArray(data.vendors) && data.vendors.length > 0) {
+            setVendors(data.vendors);
+          }
+          if (Array.isArray(data.users) && data.users.length > 0) {
+            setAllUsers(data.users);
+          }
+        }
+      } catch (e) {}
+    };
+    fetchSelectable();
+  }, []);
 
   // Concurrent Login State (Single active browser enforcement & Manager Force Logout)
   const [alreadyLoggedInData, setAlreadyLoggedInData] = useState<AlreadyLoggedInInfo | null>(null);
@@ -204,12 +251,47 @@ export const LoginScreen: React.FC = () => {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
+  const handleVendorChange = useCallback((newVendorId: string) => {
+    setSelectedVendorId(newVendorId);
+    try {
+      localStorage.setItem('sipspot_selected_vendor', newVendorId);
+    } catch (e) {}
+
+    // Find the users of this vendor (from allUsers or fallback list)
+    const matchingUsers = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === newVendorId);
+    if (matchingUsers.length > 0) {
+      // Pick manager first if available, else first user
+      const preferred = matchingUsers.find(u => u.role.toUpperCase() === 'MANAGER') || matchingUsers[0];
+      const updatedUser: SelectableUser = {
+        ...preferred,
+        pin: preferred.pin === '1234' ? '123456' : (preferred.pin === '8492' ? '849201' : preferred.pin || '123456')
+      };
+      setSelectedUser(updatedUser);
+      setEmail(updatedUser.email);
+      setPin('');
+      try {
+        localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
+      } catch (e) {}
+      checkLockoutStatus(updatedUser.email);
+      const targetVendor = vendors.find(v => v.id === newVendorId);
+      if (targetVendor) {
+        showToast(`Vendor dialihkan ke ${targetVendor.name}`, 'info');
+      }
+    }
+  }, [allUsers, vendors, checkLockoutStatus, showToast]);
+
   const handleSelectUser = (user: SelectableUser) => {
     const updatedUser = {
       ...user,
       pin: user.pin === '1234' ? '123456' : (user.pin === '8492' ? '849201' : user.pin || '123456')
     };
     setSelectedUser(updatedUser);
+    if (user.vendorId) {
+      setSelectedVendorId(user.vendorId);
+      try {
+        localStorage.setItem('sipspot_selected_vendor', user.vendorId);
+      } catch (e) {}
+    }
     setEmail(updatedUser.email);
     setPin(''); // Reset PIN input so user can type cleanly
     try {
@@ -396,6 +478,19 @@ export const LoginScreen: React.FC = () => {
   };
 
   const isManagerRole = selectedUser.role?.toUpperCase() === 'MANAGER';
+  const currentVendorData = vendors.find(v => v.id === selectedVendorId);
+
+  const vendorSelectOptions: RadixSelectOption[] = vendors.map(v => {
+    const staffCount = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === v.id).length;
+    return {
+      value: v.id,
+      label: v.name,
+      sublabel: `${v.code}${staffCount > 0 ? ` • ${staffCount} staf` : ''}`,
+      badge: v.code,
+      badgeColor: 'bg-orange-100 dark:bg-orange-950/60 text-accent',
+      icon: <Store className="w-4 h-4 text-accent" />
+    };
+  });
 
   return (
     <div
@@ -412,7 +507,9 @@ export const LoginScreen: React.FC = () => {
         isOpen={isSelectModalOpen}
         onClose={() => setIsSelectModalOpen(false)}
         selectedUserId={selectedUser.id}
+        selectedVendorId={selectedVendorId}
         onSelectUser={handleSelectUser}
+        onSelectVendor={handleVendorChange}
       />
 
       {/* Concurrent Login Alert Modal */}
@@ -447,18 +544,28 @@ export const LoginScreen: React.FC = () => {
 
       {/* Top Header Bar */}
       <div className="flex items-center justify-between w-full max-w-md mx-auto">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center font-bold shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center font-bold shadow-xs shrink-0">
             <Coffee className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-base font-heading">SipSpot</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
                 {t('online')}
               </span>
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400">{t('terminal')}</p>
+            {/* Selected Vendor Name */}
+            <div
+              id="top-bar-selected-vendor"
+              className="flex items-center gap-1 text-[11px] text-stone-600 dark:text-stone-300 mt-0.5 min-w-0"
+              title={currentVendorData ? `Vendor Aktif: ${currentVendorData.name}` : undefined}
+            >
+              <Store className="w-3 h-3 text-accent shrink-0" />
+              <span className="truncate max-w-[140px] sm:max-w-[180px] font-medium text-stone-700 dark:text-stone-300">
+                {currentVendorData?.name || 'SipSpot Coffee & Boba'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -545,6 +652,31 @@ export const LoginScreen: React.FC = () => {
           </div>
         )}
 
+        {/* Vendor / Branch Selector Dropdown (Radix UI Select) */}
+        <div className="w-full mb-5 p-3 sm:p-3.5 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/90 dark:border-stone-800 shadow-2xs">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <label htmlFor="login-vendor-select" className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+              <Store className="w-3.5 h-3.5 text-accent" />
+              <span>{t('selectVendorLabel')}</span>
+            </label>
+            {currentVendorData && (
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200 dark:border-orange-800/60">
+                {currentVendorData.code}
+              </span>
+            )}
+          </div>
+          <RadixSelect
+            id="login-vendor-select"
+            value={selectedVendorId}
+            onValueChange={handleVendorChange}
+            options={vendorSelectOptions}
+            placeholder="Pilih Vendor / Cabang..."
+            prefixIcon={<Building2 className="w-4 h-4 text-accent" />}
+            ariaLabel="Pilih Vendor atau Cabang Toko"
+            className="bg-stone-50 dark:bg-stone-900 border-stone-200 dark:border-stone-700 py-2.5 text-xs font-semibold"
+          />
+        </div>
+
         {/* Selected User Profile Header (Foto Profil & Nama yang dipilih) */}
         <div className="flex flex-col items-center text-center mb-6 w-full">
           {/* Clickable Profile Photo */}
@@ -613,6 +745,14 @@ export const LoginScreen: React.FC = () => {
           <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-xs">
             {selectedUser.email}
           </p>
+
+          {/* Vendor Affiliation Badge */}
+          {currentVendorData && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200/80 dark:border-stone-700">
+              <Store className="w-3 h-3 text-accent shrink-0" />
+              <span className="truncate max-w-[200px]">{currentVendorData.name}</span>
+            </div>
+          )}
 
           {/* Explicit "Ganti Pengguna" Trigger Button */}
           <button

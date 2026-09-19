@@ -7,6 +7,7 @@ import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent } from
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
+import { getAllVendors } from '../vendorMiddleware';
 
 export const authRouter = Router();
 
@@ -263,6 +264,8 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
   try {
     const db = getDB();
     let usersList: any[] = [];
+    const vendors = await getAllVendors();
+    const vendorMap = new Map(vendors.map(v => [v.id, v]));
 
     if (db) {
       try {
@@ -283,18 +286,31 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
       else if (pin === '8492') pin = '849201';
       else if (!pin) pin = '123456';
 
+      const vId = u.vendorId || 'vnd_sipspot_central';
+      const vendor = vendorMap.get(vId);
+
       return {
         id: u._id ? u._id.toString() : (u.id || u.email),
         name: u.name || 'Staff POS',
         email: u.email,
         role: u.role || 'CASHIER',
         avatar: u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        pin
+        pin,
+        vendorId: vId,
+        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)',
+        vendorCode: vendor?.code || 'SIPSPOT'
       };
     });
 
     return res.json({
       success: true,
+      vendors: vendors.map(v => ({
+        id: v.id,
+        name: v.name,
+        code: v.code,
+        clientId: v.clientId,
+        status: v.status
+      })),
       users: safeUsers
     });
   } catch (err: any) {

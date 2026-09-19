@@ -10,9 +10,12 @@ import {
   Sparkles,
   KeyRound,
   RefreshCw,
-  Mail
+  Mail,
+  Building2,
+  Store
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
 
 export interface SelectableUser {
   id: string;
@@ -21,14 +24,33 @@ export interface SelectableUser {
   role: 'MANAGER' | 'CASHIER' | string;
   avatar?: string;
   pin?: string;
+  vendorId?: string;
+  vendorName?: string;
+  vendorCode?: string;
+}
+
+export interface ModalVendor {
+  id: string;
+  name: string;
+  code: string;
+  clientId?: string;
+  status?: string;
 }
 
 interface SelectUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedUserId?: string;
+  selectedVendorId?: string;
   onSelectUser: (user: SelectableUser) => void;
+  onSelectVendor?: (vendorId: string) => void;
 }
+
+const FALLBACK_VENDORS: ModalVendor[] = [
+  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT', clientId: 'client_sipspot_central_01', status: 'ACTIVE' },
+  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', clientId: 'client_kopikulo_kemang_02', status: 'ACTIVE' },
+  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', clientId: 'client_tehpoci_nusantara_03', status: 'ACTIVE' }
+];
 
 const FALLBACK_USERS: SelectableUser[] = [
   {
@@ -37,7 +59,10 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'manager@beverage.com',
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    pin: '123456'
+    pin: '123456',
+    vendorId: 'vnd_sipspot_central',
+    vendorName: 'SipSpot Coffee & Boba (Pusat)',
+    vendorCode: 'SIPSPOT'
   },
   {
     id: 'cashier_1',
@@ -45,7 +70,54 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'cashier@beverage.com',
     role: 'CASHIER',
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
-    pin: '849201'
+    pin: '849201',
+    vendorId: 'vnd_sipspot_central',
+    vendorName: 'SipSpot Coffee & Boba (Pusat)',
+    vendorCode: 'SIPSPOT'
+  },
+  {
+    id: 'manager_2',
+    name: 'Budi Manager (Kulo)',
+    email: 'kulo.manager@beverage.com',
+    role: 'MANAGER',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    pin: '223344',
+    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorName: 'Kopi Kulo & Toast (Kemang)',
+    vendorCode: 'KULO'
+  },
+  {
+    id: 'cashier_2',
+    name: 'Dewi Kasir (Kulo)',
+    email: 'kulo.cashier@beverage.com',
+    role: 'CASHIER',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    pin: '556677',
+    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorName: 'Kopi Kulo & Toast (Kemang)',
+    vendorCode: 'KULO'
+  },
+  {
+    id: 'manager_3',
+    name: 'Hendra Manager (Teh Poci)',
+    email: 'poci.manager@beverage.com',
+    role: 'MANAGER',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    pin: '334455',
+    vendorId: 'vnd_tehpoci_nusantara',
+    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
+    vendorCode: 'TEHPOCI'
+  },
+  {
+    id: 'cashier_3',
+    name: 'Rina Kasir (Teh Poci)',
+    email: 'poci.cashier@beverage.com',
+    role: 'CASHIER',
+    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
+    pin: '667788',
+    vendorId: 'vnd_tehpoci_nusantara',
+    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
+    vendorCode: 'TEHPOCI'
   }
 ];
 
@@ -53,15 +125,26 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
   isOpen,
   onClose,
   selectedUserId,
-  onSelectUser
+  selectedVendorId,
+  onSelectUser,
+  onSelectVendor
 }) => {
   const { t } = useLanguage();
   const [users, setUsers] = useState<SelectableUser[]>(FALLBACK_USERS);
+  const [vendors, setVendors] = useState<ModalVendor[]>(FALLBACK_VENDORS);
+  const [selectedVendor, setSelectedVendor] = useState<string>(selectedVendorId || 'ALL');
   const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterRole, setFilterRole] = useState<'ALL' | 'MANAGER' | 'CASHIER'>('ALL');
 
-  // Fetch users from API when modal opens
+  // Keep selectedVendor synced with prop when modal opens
+  useEffect(() => {
+    if (selectedVendorId) {
+      setSelectedVendor(selectedVendorId);
+    }
+  }, [selectedVendorId, isOpen]);
+
+  // Fetch users & vendors from API when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
@@ -72,6 +155,9 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
         const data = await res.json();
         if (data.success && Array.isArray(data.users) && data.users.length > 0) {
           setUsers(data.users);
+          if (Array.isArray(data.vendors) && data.vendors.length > 0) {
+            setVendors(data.vendors);
+          }
         } else {
           setUsers(FALLBACK_USERS);
         }
@@ -98,15 +184,53 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Filter users based on vendor, search query, and role
   const filteredUsers = users.filter(user => {
+    // 1. Vendor Filter
+    if (selectedVendor !== 'ALL') {
+      const uVendorId = user.vendorId || 'vnd_sipspot_central';
+      if (uVendorId !== selectedVendor) {
+        return false;
+      }
+    }
+
+    // 2. Search query filter
     const matchQuery =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchQuery.toLowerCase());
+      user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.vendorName && user.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (user.vendorCode && user.vendorCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
+    // 3. Role filter
     if (filterRole === 'ALL') return matchQuery;
     return matchQuery && user.role.toUpperCase() === filterRole;
   });
+
+  // Prepare Radix Select options for Vendor choosing
+  const vendorOptions: RadixSelectOption[] = [
+    {
+      value: 'ALL',
+      label: t('allVendors'),
+      sublabel: `Tampilkan seluruh staf (${users.length} akun)`,
+      badge: 'SEMUA',
+      badgeColor: 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300',
+      icon: <Building2 className="w-4 h-4 text-stone-400" />
+    },
+    ...vendors.map(v => {
+      const staffCount = users.filter(u => (u.vendorId || 'vnd_sipspot_central') === v.id).length;
+      return {
+        value: v.id,
+        label: v.name,
+        sublabel: `${v.code} • ${staffCount} staf terdaftar`,
+        badge: v.code,
+        badgeColor: 'bg-orange-100 dark:bg-orange-950/60 text-accent',
+        icon: <Store className="w-4 h-4 text-accent" />
+      };
+    })
+  ];
+
+  const currentVendorData = vendors.find(v => v.id === selectedVendor);
 
   return (
     <AnimatePresence>
@@ -146,7 +270,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                 <h3 className="text-lg font-bold font-heading text-stone-900 dark:text-stone-100 flex items-center gap-2">
                   <span>{t('selectUserModalTitle')}</span>
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
-                    {users.length} Akun
+                    {filteredUsers.length} Akun
                   </span>
                 </h3>
                 <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
@@ -157,11 +281,42 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 flex items-center justify-center transition-colors cursor-pointer"
               title="Tutup"
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+
+          {/* Radix UI Vendor Select Section */}
+          <div className="px-5 sm:px-6 py-3.5 border-b border-stone-100 dark:border-stone-800/80 bg-[#fdfcfb] dark:bg-[#1a1412] flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="modal-vendor-select" className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-accent" />
+                <span>{t('selectVendorLabel')}</span>
+              </label>
+              {currentVendorData && selectedVendor !== 'ALL' && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200 dark:border-orange-800/60">
+                  {currentVendorData.code}
+                </span>
+              )}
+            </div>
+
+            <RadixSelect
+              id="modal-vendor-select"
+              value={selectedVendor}
+              onValueChange={(val) => {
+                setSelectedVendor(val);
+                if (onSelectVendor && val !== 'ALL') {
+                  onSelectVendor(val);
+                }
+              }}
+              options={vendorOptions}
+              placeholder="Pilih Vendor / Cabang..."
+              prefixIcon={<Building2 className="w-4 h-4 text-accent" />}
+              ariaLabel="Pilih Vendor atau Cabang Pengguna"
+              className="bg-white dark:bg-stone-900 shadow-2xs border-stone-200 dark:border-stone-700 py-2.5 text-xs font-semibold"
+            />
           </div>
 
           {/* Search & Filter Bar */}
@@ -180,7 +335,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs p-1"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs p-1 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -192,7 +347,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterRole('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   filterRole === 'ALL'
                     ? 'bg-accent text-white shadow-xs'
                     : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
@@ -203,7 +358,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterRole('MANAGER')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   filterRole === 'MANAGER'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
@@ -214,7 +369,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterRole('CASHIER')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   filterRole === 'CASHIER'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
@@ -239,8 +394,20 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                   Tidak ada pengguna yang cocok
                 </p>
                 <p className="text-xs text-stone-400 mt-1">
-                  Coba kata kunci pencarian atau ganti filter peran
+                  {selectedVendor !== 'ALL'
+                    ? `Tidak ada akun pada vendor ini yang cocok dengan filter.`
+                    : 'Coba kata kunci pencarian atau ganti filter peran'}
                 </p>
+                {selectedVendor !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVendor('ALL')}
+                    className="mt-3 px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-100 dark:bg-orange-950/60 text-accent hover:bg-orange-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Tampilkan Semua Vendor</span>
+                  </button>
+                )}
               </div>
             ) : (
               filteredUsers.map(user => {
@@ -252,6 +419,9 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                     key={user.id}
                     onClick={() => {
                       onSelectUser(user);
+                      if (onSelectVendor && user.vendorId) {
+                        onSelectVendor(user.vendorId);
+                      }
                       onClose();
                     }}
                     className={`group relative p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -281,7 +451,6 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                             alt={user.name}
                             className="w-full h-full object-cover rounded-xl"
                             onError={e => {
-                              // Fallback image if broken
                               (e.target as HTMLImageElement).src =
                                 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
                             }}
@@ -302,7 +471,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Name, Email, & Role */}
+                      {/* Name, Email, Vendor & Role */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-heading truncate">
@@ -319,11 +488,18 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3 mt-1 text-xs text-stone-500 dark:text-stone-400 flex-wrap">
+                        <div className="flex items-center gap-2 mt-1 text-xs text-stone-500 dark:text-stone-400 flex-wrap">
                           <span className="flex items-center gap-1 truncate">
                             <Mail className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                             <span className="truncate">{user.email}</span>
                           </span>
+
+                          {user.vendorName && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-[10px] text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-md border border-stone-200/80 dark:border-stone-700">
+                              <Store className="w-3 h-3 text-accent shrink-0" />
+                              <span className="truncate max-w-[140px]">{user.vendorName}</span>
+                            </span>
+                          )}
 
                           {user.pin && (
                             <span className="flex items-center gap-1 font-mono font-semibold text-[11px] text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-md">
@@ -348,9 +524,12 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           onClick={e => {
                             e.stopPropagation();
                             onSelectUser(user);
+                            if (onSelectVendor && user.vendorId) {
+                              onSelectVendor(user.vendorId);
+                            }
                             onClose();
                           }}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 group-hover:bg-accent group-hover:text-white transition-all shadow-2xs"
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 group-hover:bg-accent group-hover:text-white transition-all shadow-2xs cursor-pointer"
                         >
                           {t('chooseThisUser')}
                         </button>
@@ -366,12 +545,12 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
           <div className="p-4 sm:px-6 bg-stone-50 dark:bg-[#201917] border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
             <span className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
-              <span>Pilih akun untuk mengisi otomatis nama, foto, dan kredensial login</span>
+              <span>Pilih akun untuk mengisi otomatis nama, foto, vendor, dan kredensial login</span>
             </span>
             <button
               type="button"
               onClick={onClose}
-              className="text-xs font-semibold text-stone-600 dark:text-stone-300 hover:underline"
+              className="text-xs font-semibold text-stone-600 dark:text-stone-300 hover:underline cursor-pointer"
             >
               Tutup
             </button>

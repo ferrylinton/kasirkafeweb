@@ -777,17 +777,20 @@ export async function seedDatabase() {
       }
 
       // 1. Users
-      const userCount = await db.collection('users').countDocuments();
-      if (userCount === 0) {
-        await db.collection('users').insertMany(initialUsers);
-        console.log('[Seeder] Users seeded in MongoDB successfully.');
-      } else {
-        // Migrate legacy 4-digit PINs to 6-digit PINs
-        await db.collection('users').updateMany({ pin: '1234' }, { $set: { pin: '123456' } });
-        await db.collection('users').updateMany({ pin: '8492' }, { $set: { pin: '849201' } });
-        // Ensure vendorId is set on legacy users
-        await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      // 1. Users - upsert each by email so all vendors have their staff accounts
+      for (const u of initialUsers) {
+        await db.collection('users').updateOne(
+          { email: u.email },
+          { $setOnInsert: u },
+          { upsert: true }
+        );
       }
+      // Migrate legacy 4-digit PINs to 6-digit PINs
+      await db.collection('users').updateMany({ pin: '1234' }, { $set: { pin: '123456' } });
+      await db.collection('users').updateMany({ pin: '8492' }, { $set: { pin: '849201' } });
+      // Ensure vendorId is set on legacy users
+      await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      console.log('[Seeder] Users verified and synced in MongoDB.');
 
       // 2. Categories
       const catCount = await db.collection('categories').countDocuments();
@@ -796,15 +799,16 @@ export async function seedDatabase() {
         console.log('[Seeder] Categories seeded in MongoDB successfully.');
       }
 
-      // 3. Products
-      const prodCount = await db.collection('products').countDocuments();
-      if (prodCount === 0) {
-        await db.collection('products').insertMany(initialProducts);
-        console.log('[Seeder] Products seeded in MongoDB successfully.');
-      } else {
-        // Ensure vendorId is set on legacy products
-        await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      // 3. Products - ensure all vendor products are present
+      for (const p of initialProducts) {
+        await db.collection('products').updateOne(
+          { name: p.name, vendorId: p.vendorId },
+          { $setOnInsert: p },
+          { upsert: true }
+        );
       }
+      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      console.log('[Seeder] Products verified and synced in MongoDB.');
 
       // 4. Email Templates
       const tmplCount = await db.collection('email_templates').countDocuments();
