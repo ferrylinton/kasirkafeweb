@@ -495,8 +495,60 @@ export async function seedDatabase() {
     }
   ];
 
+  const initialActivityLogs = [
+    {
+      action: 'CREATE',
+      entity: 'USER',
+      entityName: 'Ferry Manager (MANAGER)',
+      summary: 'Inisialisasi sistem: Mendaftarkan akun Manajer Toko Utama (manager@beverage.com)',
+      performedBy: { id: 'system', name: 'Sistem POS', email: 'system@sipspot.local', role: 'SYSTEM' },
+      ipAddress: '127.0.0.1',
+      createdAt: new Date(now - 1000 * 3600 * 72)
+    },
+    {
+      action: 'CREATE',
+      entity: 'USER',
+      entityName: 'Sarah Barista (CASHIER)',
+      summary: 'Mendaftarkan akun staf kasir baru: Sarah Barista (cashier@beverage.com)',
+      performedBy: { id: 'user_1', name: 'Ferry Manager', email: 'manager@beverage.com', role: 'MANAGER' },
+      ipAddress: '192.168.1.101',
+      createdAt: new Date(now - 1000 * 3600 * 48)
+    },
+    {
+      action: 'CREATE',
+      entity: 'DISCOUNT_RULE',
+      entityName: 'Diskon Akhir Pekan (WEEKEND_VIBE)',
+      summary: 'Menambahkan aturan diskon promosi akhir pekan 15%',
+      performedBy: { id: 'user_1', name: 'Ferry Manager', email: 'manager@beverage.com', role: 'MANAGER' },
+      ipAddress: '192.168.1.101',
+      createdAt: new Date(now - 1000 * 3600 * 24)
+    },
+    {
+      action: 'UPDATE',
+      entity: 'INVENTORY',
+      entityName: 'Espresso Latte',
+      summary: 'Penyesuaian stok Espresso Latte: 20 -> 28 unit (+8 unit) - Restock supplier pagi',
+      performedBy: { id: 'user_1', name: 'Ferry Manager', email: 'manager@beverage.com', role: 'MANAGER' },
+      ipAddress: '192.168.1.101',
+      createdAt: new Date(now - 1000 * 3600 * 6)
+    },
+    {
+      action: 'UPDATE',
+      entity: 'EMAIL_TEMPLATE',
+      entityName: 'Struk Belanja Digital',
+      summary: 'Memperbarui template email struk digital dan gaya visual',
+      performedBy: { id: 'user_1', name: 'Ferry Manager', email: 'manager@beverage.com', role: 'MANAGER' },
+      ipAddress: '192.168.1.101',
+      createdAt: new Date(now - 1000 * 3600 * 2)
+    }
+  ];
+
   if (fallbackStore.login_history.length === 0) {
     fallbackStore.login_history = [...initialLoginHistory];
+  }
+
+  if (!fallbackStore.activity_logs || fallbackStore.activity_logs.length === 0) {
+    fallbackStore.activity_logs = [...initialActivityLogs];
   }
 
   // Seed MongoDB if connected
@@ -547,6 +599,13 @@ export async function seedDatabase() {
       if (historyCount === 0) {
         await db.collection('login_history').insertMany(initialLoginHistory);
         console.log('[Seeder] Login history seeded in MongoDB successfully.');
+      }
+
+      // 7. Activity Logs
+      const activityCount = await db.collection('activity_logs').countDocuments();
+      if (activityCount === 0) {
+        await db.collection('activity_logs').insertMany(initialActivityLogs);
+        console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
       }
     } catch (err: any) {
       console.warn('[Seeder] MongoDB insert warning, using initialized fallback store:', err.message);

@@ -15,6 +15,7 @@ import {
   Settings,
   PanelLeftClose,
   ShieldCheck,
+  ClipboardList,
   X
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -321,6 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 {/* Login Histori (Khusus Manajer) */}
                 <button
                   type="button"
+                  id="nav-login-history-btn"
                   onClick={() => handleNavClick('login-history')}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
                     currentTab === 'login-history'
@@ -334,6 +336,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
                     Audit
+                  </span>
+                </button>
+
+                {/* Log Aktivitas Database (Khusus Manajer) */}
+                <button
+                  type="button"
+                  id="nav-activity-logs-btn"
+                  onClick={() => handleNavClick('activity-logs')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                    currentTab === 'activity-logs'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ClipboardList className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t('navActivityLogs')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                    DB Log
                   </span>
                 </button>
               </div>

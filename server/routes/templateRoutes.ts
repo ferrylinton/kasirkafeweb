@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
+import { recordActivityLog } from '../activityLogger';
 
 export const templateRouter = Router();
 
@@ -67,17 +68,38 @@ templateRouter.put('/:id', authMiddleware, requireManager, async (req: Request, 
     };
 
     const db = getDB();
+    let targetTemplate: any = null;
+
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+        targetTemplate = await db.collection('email_templates').findOne(query);
         await db.collection('email_templates').updateOne(query, { $set: updateData });
       } catch (e) {}
     }
 
     const idx = fallbackStore.email_templates.findIndex(t => (t._id && t._id.toString() === id) || t.code === id);
     if (idx !== -1) {
+      if (!targetTemplate) targetTemplate = fallbackStore.email_templates[idx];
       fallbackStore.email_templates[idx] = { ...fallbackStore.email_templates[idx], ...updateData };
     }
+
+    const templateName = targetTemplate?.name || id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'EMAIL_TEMPLATE',
+      entityId: id,
+      entityName: templateName,
+      summary: `Memperbarui template email '${templateName}' [Subjek: ${parsed.data.subject}]`,
+      details: {
+        templateId: id,
+        subject: parsed.data.subject,
+        isActive: parsed.data.isActive
+      },
+      req
+    });
 
     return res.json({
       success: true,

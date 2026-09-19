@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ferrylinton:ferry27071983@myatlasdb.7wiaa0e.mongodb.net/beverage_app_db?appName=MyAtlasDb';
-const DB_NAME = 'beverage_app_db';
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = process.env.MONGODB_DB_NAME || 'beverage_app_db';
 
 let client: MongoClient | null = null;
 let dbInstance: Db | null = null;
@@ -24,6 +24,7 @@ export const fallbackStore: {
   login_history: any[];
   revoked_sessions: string[];
   daily_counters: Record<string, number>;
+  activity_logs: any[];
 } = {
   users: [],
   categories: [],
@@ -35,7 +36,8 @@ export const fallbackStore: {
   inventory_logs: [],
   login_history: [],
   revoked_sessions: [],
-  daily_counters: {}
+  daily_counters: {},
+  activity_logs: []
 };
 
 export async function connectDB(): Promise<Db | null> {
@@ -43,11 +45,17 @@ export async function connectDB(): Promise<Db | null> {
     return dbInstance;
   }
 
+  if (!MONGODB_URI) {
+    console.log('[MongoDB] No MONGODB_URI provided; operating seamlessly with in-memory persistence layer.');
+    isConnected = false;
+    return null;
+  }
+
   try {
-    console.log('[MongoDB] Connecting to MongoDB Atlas...');
+    console.log('[MongoDB] Connecting to MongoDB...');
     client = new MongoClient(MONGODB_URI, {
-      connectTimeoutMS: 8000,
-      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 3000,
+      serverSelectionTimeoutMS: 3000,
     });
 
     await client.connect();

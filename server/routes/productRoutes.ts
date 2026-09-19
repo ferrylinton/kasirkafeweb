@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
+import { recordActivityLog } from '../activityLogger';
 
 export const productRouter = Router();
 
@@ -264,6 +265,17 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, 
     }
     fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...logDoc });
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'INVENTORY',
+      entityId: 'BULK',
+      entityName: category && category !== 'all' ? `Kategori ${category}` : 'Semua Produk',
+      summary: `Mengatur batas peringatan stok menjadi ${thresholdNum} untuk ${category && category !== 'all' ? `kategori ${category}` : 'seluruh produk'}`,
+      details: { threshold: thresholdNum, category: category || 'all' },
+      req
+    });
+
     return res.json({
       success: true,
       message: `Batas peringatan stok berhasil diubah ke ${thresholdNum}!`
@@ -479,6 +491,20 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
       }
     }
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: createdCount > 0 && updatedCount > 0 ? 'UPDATE' : createdCount > 0 ? 'CREATE' : 'UPDATE',
+      entity: 'INVENTORY',
+      summary: `Import CSV katalog: ${createdCount} produk baru ditambahkan, ${updatedCount} produk diperbarui (Total: ${updatedCount + createdCount} item)`,
+      details: {
+        updatedCount,
+        createdCount,
+        totalProcessed: updatedCount + createdCount,
+        stockMode
+      },
+      req
+    });
+
     return res.json({
       success: true,
       message: `Import CSV berhasil: ${updatedCount} produk diperbarui, ${createdCount} produk baru ditambahkan.`,
@@ -580,6 +606,25 @@ productRouter.patch('/:id/stock', authMiddleware, requireManager, async (req: Re
     }
     fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...logDoc });
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'INVENTORY',
+      entityId: id,
+      entityName: product.name,
+      summary: `Penyesuaian stok '${product.name}': ${currentStock} -> ${newStock} (${stockChange >= 0 ? '+' : ''}${stockChange} unit)${reason ? ` - ${reason}` : ''}`,
+      details: {
+        productId: id,
+        productName: product.name,
+        previousStock: currentStock,
+        newStock,
+        change: stockChange,
+        lowStockThreshold: updateFields.lowStockThreshold,
+        reason
+      },
+      req
+    });
+
     return res.json({
       success: true,
       message: `Stok ${product.name} berhasil diperbarui menjadi ${newStock}!`,
@@ -630,6 +675,25 @@ productRouter.post('/', authMiddleware, requireManager, async (req: Request, res
       fallbackStore.products.push({ ...newProd, _id: insertedId });
     }
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'PRODUCT',
+      entityId: insertedId,
+      entityName: newProd.name,
+      summary: `Menambahkan produk baru '${newProd.name}' (${newProd.category}) - Rp ${newProd.price.toLocaleString('id-ID')} (Stok: ${newProd.stock})`,
+      details: {
+        id: insertedId,
+        name: newProd.name,
+        category: newProd.category,
+        subCategory: newProd.subCategory,
+        price: newProd.price,
+        stock: newProd.stock,
+        lowStockThreshold: newProd.lowStockThreshold
+      },
+      req
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Produk berhasil ditambahkan!',
@@ -649,17 +713,37 @@ productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) =>
     const updateData = { ...req.body, updatedAt: new Date() };
 
     const db = getDB();
+    let existingProd: any = null;
+
     if (db) {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+        existingProd = await db.collection('products').findOne(query);
         await db.collection('products').updateOne(query, { $set: updateData });
       } catch (e) {}
     }
 
     const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
     if (idx !== -1) {
+      if (!existingProd) existingProd = fallbackStore.products[idx];
       fallbackStore.products[idx] = { ...fallbackStore.products[idx], ...updateData };
     }
+
+    const prodName = existingProd?.name || updateData.name || id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'PRODUCT',
+      entityId: id,
+      entityName: prodName,
+      summary: `Memperbarui data produk '${prodName}'`,
+      details: {
+        productId: id,
+        updates: updateData
+      },
+      req
+    });
 
     return res.json({ success: true, message: 'Produk / Stok berhasil diperbarui!' });
   } catch (err: any) {
@@ -674,17 +758,37 @@ productRouter.delete('/:id', authMiddleware, requireManager, async (req: Request
   try {
     const { id } = req.params;
     const db = getDB();
+    let targetProd: any = null;
+
     if (db) {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+        targetProd = await db.collection('products').findOne(query);
         await db.collection('products').deleteOne(query);
       } catch (e) {}
     }
 
     const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
     if (idx !== -1) {
+      if (!targetProd) targetProd = fallbackStore.products[idx];
       fallbackStore.products.splice(idx, 1);
     }
+
+    const prodName = targetProd?.name || id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'PRODUCT',
+      entityId: id,
+      entityName: prodName,
+      summary: `Menghapus produk '${prodName}' dari katalog database`,
+      details: {
+        productId: id,
+        deletedProduct: targetProd
+      },
+      req
+    });
 
     return res.json({ success: true, message: 'Produk berhasil dihapus.' });
   } catch (err: any) {

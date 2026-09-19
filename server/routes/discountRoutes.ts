@@ -10,6 +10,7 @@ import {
 import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
+import { recordActivityLog } from '../activityLogger';
 
 export const discountRouter = Router();
 
@@ -205,6 +206,26 @@ discountRouter.post('/rules', authMiddleware, requireManager, async (req: Reques
 
     fallbackStore.discount_rules.push(createdRule);
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'DISCOUNT_RULE',
+      entityId: insertedId,
+      entityName: `${name} (${formattedCode})`,
+      summary: `Menambahkan aturan diskon baru '${name}' [${formattedCode}] - ${rewardType}`,
+      details: {
+        id: insertedId,
+        code: formattedCode,
+        name,
+        type,
+        threshold,
+        rewardType,
+        rewardValue,
+        isActive
+      },
+      req
+    });
+
     return res.status(201).json({
       success: true,
       rule: {
@@ -288,17 +309,37 @@ discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Req
     }
 
     const db = getDB();
+    let existingRule: any = null;
+
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+        existingRule = await db.collection('discount_rules').findOne(query);
         await db.collection('discount_rules').updateOne(query, { $set: updateData });
       } catch (e) {}
     }
 
     const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
     if (idx !== -1) {
+      if (!existingRule) existingRule = fallbackStore.discount_rules[idx];
       fallbackStore.discount_rules[idx] = { ...fallbackStore.discount_rules[idx], ...updateData };
     }
+
+    const ruleLabel = existingRule?.name || updateData.name || id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'DISCOUNT_RULE',
+      entityId: id,
+      entityName: ruleLabel,
+      summary: `Memperbarui aturan diskon '${ruleLabel}'`,
+      details: {
+        ruleId: id,
+        updates: updateData
+      },
+      req
+    });
 
     return res.json({ success: true, message: 'Aturan diskon berhasil diperbarui!' });
   } catch (err: any) {
@@ -314,18 +355,40 @@ discountRouter.delete('/rules/:id', authMiddleware, requireManager, async (req: 
   try {
     const { id } = req.params;
     const db = getDB();
+    let targetRule: any = null;
 
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+        targetRule = await db.collection('discount_rules').findOne(query);
         await db.collection('discount_rules').deleteOne(query);
       } catch (e) {}
     }
 
-    const beforeLen = fallbackStore.discount_rules.length;
+    const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
+    if (idx !== -1) {
+      if (!targetRule) targetRule = fallbackStore.discount_rules[idx];
+    }
+
     fallbackStore.discount_rules = fallbackStore.discount_rules.filter(
       r => !(r._id && r._id.toString() === id) && r.code !== id
     );
+
+    const ruleLabel = targetRule?.name ? `${targetRule.name} [${targetRule.code}]` : id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'DISCOUNT_RULE',
+      entityId: id,
+      entityName: ruleLabel,
+      summary: `Menghapus aturan diskon '${ruleLabel}' dari database`,
+      details: {
+        ruleId: id,
+        deletedRule: targetRule
+      },
+      req
+    });
 
     return res.json({ success: true, message: 'Aturan diskon berhasil dihapus!' });
   } catch (err: any) {

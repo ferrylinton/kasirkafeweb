@@ -6,6 +6,7 @@ import { comparePassword, hashPassword, signToken, authMiddleware, revokedSessio
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis } from '../sessionStore';
+import { recordActivityLog } from '../activityLogger';
 
 export const authRouter = Router();
 
@@ -770,6 +771,22 @@ authRouter.put('/profile', authMiddleware, async (req: Request, res: Response) =
     if (fallbackIdx !== -1) {
       fallbackStore.users[fallbackIdx] = { ...fallbackStore.users[fallbackIdx], ...updates };
     }
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'USER',
+      entityId: userPayload.userId,
+      entityName: updates.name,
+      summary: `Pengguna '${updates.name}' memperbarui data profil${newPassword ? ' dan mengganti password' : ''}`,
+      details: {
+        userId: userPayload.userId,
+        nameChanged: updates.name !== user.name,
+        avatarChanged: updates.avatar !== user.avatar,
+        passwordChanged: !!newPassword
+      },
+      req
+    });
 
     return res.json({
       success: true,

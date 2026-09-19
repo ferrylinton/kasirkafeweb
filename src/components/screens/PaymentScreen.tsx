@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Banknote, QrCode, CreditCard, Landmark, Check, Mail, Printer, Share2, AlertCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Banknote, QrCode, CreditCard, Landmark, Check, Mail, Printer, Share2, AlertCircle, Sparkles, X } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -366,6 +366,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
       {/* Success Receipt Modal */}
       {completedOrder && (
         <div
+          id="receipt-modal-backdrop"
+          onClick={handleFinishTransaction}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
           style={{
             paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
@@ -374,7 +376,23 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
             paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
           }}
         >
-          <div className="w-full max-w-md bg-white dark:bg-[#251e1c] rounded-3xl p-6 shadow-2xl border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+          <div
+            id="receipt-content-box"
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-[#251e1c] rounded-3xl p-6 shadow-2xl border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto relative"
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              id="close-receipt-modal-button"
+              onClick={handleFinishTransaction}
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-100 flex items-center justify-center transition-all cursor-pointer z-10 shadow-xs active:scale-95"
+              title={language === 'en' ? 'Close Receipt' : 'Tutup Struk'}
+              aria-label={language === 'en' ? 'Close Receipt' : 'Tutup Struk'}
+            >
+              <X className="w-4 h-4" />
+            </button>
+
             {/* Header */}
             <div className="text-center pb-3 border-b border-dashed border-stone-200 dark:border-stone-700">
               <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto mb-2">

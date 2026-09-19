@@ -5,6 +5,7 @@ import { calculateDiscounts, getActiveDiscountRules } from '../discounts';
 import { sendReceiptEmail } from '../mail';
 import { authMiddleware } from '../auth';
 import { ObjectId } from 'mongodb';
+import { recordActivityLog } from '../activityLogger';
 
 export const orderRouter = Router();
 
@@ -349,6 +350,33 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     } else {
       fallbackStore.orders.unshift({ ...orderDoc, _id: orderId });
     }
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'ORDER',
+      entityId: orderId,
+      entityName: `Order #${orderNumber}`,
+      summary: `Transaksi kasir #${orderNumber}: Total Rp ${totalAmount.toLocaleString('id-ID')} (${paymentMethod}) - ${customerName || 'Pelanggan Umum'}`,
+      details: {
+        orderId,
+        orderNumber,
+        queueNumber,
+        totalAmount,
+        subtotal,
+        discountAmount,
+        paymentMethod,
+        itemCount: items.length,
+        customerName: customerName || 'Umum',
+        discountItem: discountItem ? discountItem.name : null
+      },
+      req,
+      user: {
+        id: req.user?.userId,
+        name: cashierName,
+        role: req.user?.role || 'CASHIER'
+      }
+    });
 
     // 3. Send email receipt if email was provided
     let emailResult = null;

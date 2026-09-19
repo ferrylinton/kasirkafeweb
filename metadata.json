@@ -1,6 +1,6 @@
 {
   "name": "SipSpot POS - Kasir Minuman & Snack",
-  "description": "Aplikasi POS Toko Minuman & Snack dengan nomor antrean urut harian otomatis reset tiap hari, manajemen stok, peringatan stok rendah, pemilihan profil pengguna kasir/manager interaktif, PIN 6-digit, proteksi lockout 15 menit setelah 3 percobaan login gagal, idle timer 15-menit, riwayat login, email notifikasi keamanan & remote logout.",
+  "description": "Aplikasi POS Toko Minuman & Snack dengan nomor antrean urut harian otomatis reset tiap hari, manajemen stok, peringatan stok rendah, pemilihan profil pengguna kasir/manager interaktif, PIN 6-digit, proteksi lockout 15 menit setelah 3 percobaan login gagal, idle timer 15-menit, riwayat login, email notifikasi keamanan, remote logout, dan log aktivitas database (audit trail penambahan, modifikasi, dan penghapusan data).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

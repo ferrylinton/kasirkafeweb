@@ -19,6 +19,7 @@ import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
 import { InventoryScreen } from './components/screens/InventoryScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
+import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 
 const MainLayout: React.FC = () => {
@@ -114,6 +115,7 @@ const MainLayout: React.FC = () => {
           {isManager && activeView === 'templates' && <EmailTemplateScreen />}
 
           {isManager && activeView === 'login-history' && <LoginHistoryScreen />}
+          {isManager && activeView === 'activity-logs' && <ActivityLogScreen />}
         </main>
       </div>
 

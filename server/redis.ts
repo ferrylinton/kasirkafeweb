@@ -4,31 +4,35 @@ import { Request, Response, NextFunction } from 'express';
 
 dotenv.config();
 
-const REDIS_URL = process.env.REDIS_URL || 'rediss://default:gQAAAAAAApl_AAIgcDExYTAzY2Q0YjM0NjI0YWVhODgxODY5OTJhN2QyYWZlNA@funny-swift-170367.upstash.io:6379';
+const REDIS_URL = process.env.REDIS_URL;
 
 let redisClient: Redis | null = null;
 let isRedisReady = false;
 
-try {
-  redisClient = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 2,
-    connectTimeout: 5000,
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
+if (REDIS_URL) {
+  try {
+    redisClient = new Redis(REDIS_URL, {
+      maxRetriesPerRequest: 2,
+      connectTimeout: 3000,
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
 
-  redisClient.on('connect', () => {
-    isRedisReady = true;
-    console.log('[Redis] Connected successfully to Upstash Redis!');
-  });
+    redisClient.on('connect', () => {
+      isRedisReady = true;
+      console.log('[Redis] Connected successfully to Redis!');
+    });
 
-  redisClient.on('error', (err) => {
-    isRedisReady = false;
-    // Keep log clean, fallback will handle requests
-  });
-} catch (e: any) {
-  console.warn('[Redis] Initialization warning, using fallback token bucket');
+    redisClient.on('error', () => {
+      isRedisReady = false;
+      // Keep log clean, fallback will handle requests
+    });
+  } catch (e: any) {
+    console.warn('[Redis] Initialization warning, using fallback token bucket');
+  }
+} else {
+  console.log('[Redis] No REDIS_URL configured. Operating with in-memory token bucket & session store.');
 }
 
 // In-memory token bucket fallback

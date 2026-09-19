@@ -213,3 +213,41 @@ export interface LoginHistoryEntry {
   revokeReason?: string;
 }
 
+export type ActivityAction = 'CREATE' | 'UPDATE' | 'DELETE';
+export type ActivityEntity =
+  | 'PRODUCT'
+  | 'INVENTORY'
+  | 'DISCOUNT_RULE'
+  | 'USER'
+  | 'ORDER'
+  | 'EMAIL_TEMPLATE'
+  | 'CATEGORY';
+
+export interface ActivityLogEntry {
+  id: string;
+  action: ActivityAction;
+  entity: ActivityEntity;
+  entityId?: string;
+  entityName?: string;
+  summary: string;
+  details?: Record<string, any>;
+  performedBy: {
+    id: string;
+    name: string;
+    email?: string;
+    role: string;
+  };
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface ActivityLogStats {
+  totalLogs: number;
+  createCount: number;
+  updateCount: number;
+  deleteCount: number;
+  todayCount: number;
+  entityBreakdown: Record<string, number>;
+}
+

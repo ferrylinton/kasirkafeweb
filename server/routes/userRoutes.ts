@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDB, fallbackStore } from '../db';
 import { hashPassword, authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
+import { recordActivityLog } from '../activityLogger';
 
 export const userRouter = Router();
 
@@ -125,6 +126,22 @@ userRouter.post('/', async (req: Request, res: Response) => {
       fallbackStore.users.push({ ...newUser, _id: insertedId });
     }
 
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'USER',
+      entityId: insertedId,
+      entityName: `${name} (${role})`,
+      summary: `Mendaftarkan pengguna baru '${name}' dengan peran ${role} (${email})`,
+      details: {
+        userId: insertedId,
+        name,
+        email,
+        role
+      },
+      req
+    });
+
     return res.status(201).json({
       success: true,
       message: `User ${name} (${role}) berhasil didaftarkan!`,
@@ -168,9 +185,12 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
+    let existingUser: any = null;
+
     if (db) {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+        existingUser = await db.collection('users').findOne(query);
         await db.collection('users').updateOne(query, { $set: updateFields });
       } catch (e) {}
     }
@@ -178,8 +198,26 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     // Update fallback store
     const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
     if (idx !== -1) {
+      if (!existingUser) existingUser = fallbackStore.users[idx];
       fallbackStore.users[idx] = { ...fallbackStore.users[idx], ...updateFields };
     }
+
+    const userName = existingUser?.name || updateFields.name || id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'USER',
+      entityId: id,
+      entityName: userName,
+      summary: `Memperbarui data akun pengguna '${userName}'${parsed.data.newPassword ? ' (termasuk reset password)' : ''}`,
+      details: {
+        userId: id,
+        updatedFields: Object.keys(updateFields).filter(k => k !== 'password'),
+        passwordChanged: !!parsed.data.newPassword
+      },
+      req
+    });
 
     return res.json({
       success: true,
@@ -207,17 +245,41 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
+    let targetUser: any = null;
+
     if (db) {
       try {
         const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+        targetUser = await db.collection('users').findOne(query);
         await db.collection('users').deleteOne(query);
       } catch (e) {}
     }
 
     const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
     if (idx !== -1) {
+      if (!targetUser) targetUser = fallbackStore.users[idx];
       fallbackStore.users.splice(idx, 1);
     }
+
+    const userName = targetUser?.name ? `${targetUser.name} (${targetUser.role || 'User'})` : id;
+
+    // Record system-wide activity log
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'USER',
+      entityId: id,
+      entityName: userName,
+      summary: `Menghapus pengguna '${userName}' dari sistem POS`,
+      details: {
+        userId: id,
+        deletedUser: targetUser ? {
+          name: targetUser.name,
+          email: targetUser.email,
+          role: targetUser.role
+        } : null
+      },
+      req
+    });
 
     return res.json({
       success: true,
