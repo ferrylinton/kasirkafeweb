@@ -752,6 +752,17 @@ export const LoginScreen: React.FC = () => {
             </span>
           </div>
 
+          {/* Role Access Scope Badge */}
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300">
+              {isAdminRole
+                ? 'Hak Akses: Administrasi Sistem (Semua Vendor)'
+                : isManagerRole
+                ? 'Hak Akses: Operasional Kasir & Manajemen Toko'
+                : 'Hak Akses: Operasional Kasir'}
+            </span>
+          </div>
+
           <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-xs">
             {selectedUser.email}
           </p>

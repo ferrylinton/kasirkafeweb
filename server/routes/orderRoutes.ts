@@ -109,8 +109,18 @@ export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ or
 /**
  * GET /api/orders/next-queue
  * Preview current queue count and next queue number for today
+ * RBAC: Operasional Kasir hanya boleh diakses role CASHIER dan role MANAGER
  */
 orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Response) => {
+  const userRole = (req as any).user?.role;
+  if (userRole !== 'CASHIER' && userRole !== 'MANAGER') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses ditolak. Operasional Kasir hanya boleh diakses role CASHIER dan role MANAGER.'
+    });
+  }
+
   const today = getTodayDateString();
   const activeVendorId = req.vendorId || 'vnd_sipspot_central';
   const db = getDB();
@@ -145,9 +155,19 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
 /**
  * POST /api/orders
  * Create new order, process payment, deduct stock, send email receipt
+ * RBAC: Operasional Kasir hanya boleh diakses role CASHIER dan role MANAGER
  */
 orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak. Operasional Kasir hanya boleh diakses role CASHIER dan role MANAGER.'
+      });
+    }
+
     const parsed = createOrderSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({

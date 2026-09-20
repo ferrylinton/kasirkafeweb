@@ -32,7 +32,7 @@ async function computeVendorStats(vendorId: string) {
       userCount = await db.collection('users').countDocuments({ vendorId });
       const orders = await db.collection('orders').find({ vendorId }).toArray();
       orderCount = orders.length;
-      totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.total) || 0), 0);
+      totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.totalAmount ?? o.total ?? 0)), 0);
     } catch (e) {
       console.error('[AdminVendor] Error counting stats from MongoDB:', e);
     }
@@ -41,7 +41,7 @@ async function computeVendorStats(vendorId: string) {
     userCount = fallbackStore.users?.filter(u => (u as any).vendorId === vendorId).length || 0;
     const orders = fallbackStore.orders?.filter(o => (o as any).vendorId === vendorId) || [];
     orderCount = orders.length;
-    totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.total) || 0), 0);
+    totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.totalAmount ?? o.total ?? 0)), 0);
   }
 
   return { productCount, orderCount, userCount, totalRevenue };

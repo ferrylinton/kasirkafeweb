@@ -22,13 +22,14 @@ import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
 import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
 import { VendorClientScreen } from './components/screens/VendorClientScreen';
 import { VendorManagementScreen } from './components/screens/VendorManagementScreen';
+import { AdminDashboardScreen } from './components/screens/AdminDashboardScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>(() => {
     if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
-      return 'admin-orders';
+      return 'admin-dashboard';
     }
     return 'katalog';
   });
@@ -56,6 +57,7 @@ const MainLayout: React.FC = () => {
 
   // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN dan SUPERADMIN
   const adminTabs = [
+    'admin-dashboard',
     'vendor-management',
     'admin-orders',
     'admin-riwayat',
@@ -77,14 +79,15 @@ const MainLayout: React.FC = () => {
     const role = user.role;
     if (role === 'ADMIN' || role === 'SUPERADMIN') {
       if (!adminTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
-        setCurrentTab('admin-orders');
+        setCurrentTab('admin-dashboard');
       }
     } else if (role === 'MANAGER') {
-      if (adminTabs.includes(currentTab)) {
+      // MANAGER boleh Operasional Kasir (cashierTabs) & Manajemen Toko (managerTabs) & accountTabs
+      if (!cashierTabs.includes(currentTab) && !managerTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
         setCurrentTab('katalog');
       }
     } else {
-      // CASHIER
+      // CASHIER: Hanya boleh Operasional Kasir (cashierTabs) & accountTabs
       if (!cashierTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
         setCurrentTab('katalog');
       }
@@ -110,7 +113,9 @@ const MainLayout: React.FC = () => {
   const isCashierOrManager = user.role === 'CASHIER' || user.role === 'MANAGER';
   const isManager = user.role === 'MANAGER';
   const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+  const isCashier = user.role === 'CASHIER';
 
+  // Strict activeView validation
   let activeView = currentTab;
   if (isAdmin) {
     // Role ADMIN dilarang mengakses Operasional Kasir & Manajemen Toko lokal
@@ -119,22 +124,55 @@ const MainLayout: React.FC = () => {
     }
   } else if (isManager) {
     // Role MANAGER boleh Operasional Kasir & Manajemen Toko, dilarang Administrasi Sistem
-    if (adminTabs.includes(activeView)) {
+    if (!cashierTabs.includes(activeView) && !managerTabs.includes(activeView) && !accountTabs.includes(activeView)) {
       activeView = 'katalog';
     }
-  } else {
+  } else if (isCashier) {
     // Role CASHIER hanya boleh Operasional Kasir & Akun/Setting. Dilarang Manajemen Toko & Administrasi Sistem
     if (!cashierTabs.includes(activeView) && !accountTabs.includes(activeView)) {
       activeView = 'katalog';
     }
+  } else {
+    if (!accountTabs.includes(activeView)) {
+      activeView = 'profile';
+    }
   }
+
+  // Handler navigasi dengan pengamanan hak akses berlapis
+  const handleNavigateTab = (targetTab: string) => {
+    if (isAdmin) {
+      if (adminTabs.includes(targetTab) || accountTabs.includes(targetTab)) {
+        setCurrentTab(targetTab);
+      } else {
+        setCurrentTab('admin-orders');
+      }
+    } else if (isManager) {
+      // MANAGER boleh Operasional Kasir dan Manajemen Toko
+      if (cashierTabs.includes(targetTab) || managerTabs.includes(targetTab) || accountTabs.includes(targetTab)) {
+        setCurrentTab(targetTab);
+      } else {
+        setCurrentTab('katalog');
+      }
+    } else if (isCashier) {
+      // CASHIER hanya boleh Operasional Kasir dan Akun/Setting
+      if (cashierTabs.includes(targetTab) || accountTabs.includes(targetTab)) {
+        setCurrentTab(targetTab);
+      } else {
+        setCurrentTab('katalog');
+      }
+    } else {
+      if (accountTabs.includes(targetTab)) {
+        setCurrentTab(targetTab);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fff8f6] dark:bg-[#1f1917] text-stone-900 dark:text-stone-100 transition-colors selection:bg-orange-500/20 selection:text-orange-900 font-sans">
       {/* Sidebar navigation: drawer on mobile/tablet, dockable/collapsible on desktop */}
       <Sidebar
         currentTab={activeView}
-        onSelectTab={tab => setCurrentTab(tab)}
+        onSelectTab={handleNavigateTab}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -150,7 +188,7 @@ const MainLayout: React.FC = () => {
         {/* Top Navbar with sidebar toggle button */}
         <Navbar
           currentTab={activeView}
-          onNavigateTab={tab => setCurrentTab(tab)}
+          onNavigateTab={handleNavigateTab}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
         />
@@ -159,20 +197,20 @@ const MainLayout: React.FC = () => {
         <main className="w-full flex-1">
           {/* Operasional Kasir (Hanya role CASHIER dan role MANAGER) */}
           {isCashierOrManager && activeView === 'katalog' && (
-            <CatalogScreen onNavigateToCart={() => setCurrentTab('pesanan')} />
+            <CatalogScreen onNavigateToCart={() => handleNavigateTab('pesanan')} />
           )}
 
           {isCashierOrManager && activeView === 'pesanan' && (
             <CartScreen
-              onProceedToPayment={() => setCurrentTab('pembayaran')}
-              onNavigateToCatalog={() => setCurrentTab('katalog')}
+              onProceedToPayment={() => handleNavigateTab('pembayaran')}
+              onNavigateToCatalog={() => handleNavigateTab('katalog')}
             />
           )}
 
           {isCashierOrManager && activeView === 'pembayaran' && (
             <PaymentScreen
-              onBackToCart={() => setCurrentTab('pesanan')}
-              onPaymentComplete={() => setCurrentTab('katalog')}
+              onBackToCart={() => handleNavigateTab('pesanan')}
+              onPaymentComplete={() => handleNavigateTab('katalog')}
             />
           )}
 
@@ -192,6 +230,9 @@ const MainLayout: React.FC = () => {
           {isManager && activeView === 'vendor-client' && <VendorClientScreen />}
 
           {/* Administrasi Sistem Lintas Vendor (HANYA role ADMIN / SUPERADMIN) */}
+          {isAdmin && activeView === 'admin-dashboard' && (
+            <AdminDashboardScreen />
+          )}
           {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
             <OrderHistoryScreen allVendorsMode={true} />
           )}

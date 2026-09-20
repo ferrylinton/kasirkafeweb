@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   ClipboardList,
   Building2,
+  BarChart3,
   X
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -38,11 +39,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isCashier = user?.role === 'CASHIER';
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [alertCount, setAlertCount] = useState<number>(0);
 
+  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
+  const managerTabs = ['inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const adminTabs = ['vendor-management', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs'];
+  const accountTabs = ['profile', 'settings'];
+
   const handleNavClick = (tab: string) => {
+    // Role protection guard
+    if (isAdmin && !adminTabs.includes(tab) && !accountTabs.includes(tab)) return;
+    if (isManager && !cashierTabs.includes(tab) && !managerTabs.includes(tab) && !accountTabs.includes(tab)) return;
+    if (isCashier && !cashierTabs.includes(tab) && !accountTabs.includes(tab)) return;
+
     onSelectTab(tab);
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       onClose();
@@ -158,7 +170,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   {user?.name || 'Kasir'}
                 </div>
                 <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
-                  {user?.email || 'user@beverage.com'}
+                  {isAdmin
+                    ? 'Akses: Administrasi Sistem'
+                    : isManager
+                    ? 'Akses: Kasir & Toko'
+                    : 'Akses: Operasional Kasir'}
                 </div>
               </div>
             </div>
@@ -402,6 +418,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 </span>
               </div>
               <div className="space-y-1">
+                {/* 0. Dashboard Grafik Transaksi Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-dashboard-btn"
+                  onClick={() => handleNavClick('admin-dashboard')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-dashboard'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <BarChart3 className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminDashboard') || 'Dashboard Grafik Transaksi'}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    GRAFIK
+                  </span>
+                </button>
+
                 {/* 1. Riwayat Pesanan Semua Vendor */}
                 <button
                   type="button"

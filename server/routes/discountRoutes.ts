@@ -14,6 +14,42 @@ import { recordActivityLog } from '../activityLogger';
 
 export const discountRouter = Router();
 
+/**
+ * RBAC Rule: Role ADMIN HANYA bisa melihat Aturan Diskon (Read-Only).
+ * ADMIN TIDAK BISA menambah, mengubah, atau menghapus aturan diskon.
+ * Hak menambah, mengubah, dan menghapus aturan diskon dipegang khusus oleh role MANAGER (dan SUPERADMIN).
+ */
+function requireDiscountWriteAccess(req: Request, res: Response, next: () => void) {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Autentikasi diperlukan.'
+    });
+  }
+
+  // Khusus role ADMIN: tolak akses mutasi aturan diskon secara eksplisit
+  if (user.role === 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Role ADMIN hanya memiliki hak akses melihat Aturan Diskon (Read-Only). Tidak diizinkan menambah, mengubah, atau menghapus aturan diskon.'
+    });
+  }
+
+  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola diskon
+  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Pengelolaan aturan diskon (tambah, ubah, hapus) hanya dapat dilakukan oleh role MANAGER.'
+    });
+  }
+
+  next();
+}
+
 const evaluateSchema = z.object({
   items: z.array(z.object({
     productId: z.string(),
@@ -174,7 +210,7 @@ const ruleInputSchema = z.object({
   isActive: z.boolean().default(true)
 });
 
-discountRouter.post('/rules', authMiddleware, requireManager, async (req: Request, res: Response) => {
+discountRouter.post('/rules', authMiddleware, requireDiscountWriteAccess, async (req: Request, res: Response) => {
   try {
     const parsed = ruleInputSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -327,7 +363,7 @@ discountRouter.get('/rules/:id', async (req: Request, res: Response) => {
  * PUT /api/discounts/rules/:id
  * Manager can toggle or edit discount rules
  */
-discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
+discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: new Date() };
@@ -394,7 +430,7 @@ discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Req
  * DELETE /api/discounts/rules/:id
  * Manager can delete discount rules
  */
-discountRouter.delete('/rules/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
+discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const db = getDB();

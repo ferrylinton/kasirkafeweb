@@ -7,6 +7,42 @@ import { recordActivityLog } from '../activityLogger';
 
 export const templateRouter = Router();
 
+/**
+ * RBAC Rule: Role ADMIN HANYA bisa melihat Template Email (Read-Only).
+ * ADMIN TIDAK BISA menambah, mengubah, atau menghapus template email.
+ * Hak menambah, mengubah, dan menghapus template email dipegang khusus oleh role MANAGER (dan SUPERADMIN).
+ */
+function requireTemplateWriteAccess(req: Request, res: Response, next: () => void) {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Autentikasi diperlukan.'
+    });
+  }
+
+  // Khusus role ADMIN: tolak akses mutasi template email secara eksplisit
+  if (user.role === 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Role ADMIN hanya memiliki hak akses melihat Template Email (Read-Only). Tidak diizinkan menambah, mengubah, atau menghapus template email.'
+    });
+  }
+
+  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola template
+  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Pengelolaan template email (tambah, ubah, hapus) hanya dapat dilakukan oleh role MANAGER.'
+    });
+  }
+
+  next();
+}
+
 const updateTemplateSchema = z.object({
   subject: z.string().min(3, 'Subject minimal 3 karakter'),
   bodyHtml: z.string().min(10, 'Body HTML minimal 10 karakter'),
@@ -15,8 +51,9 @@ const updateTemplateSchema = z.object({
 
 /**
  * GET /api/templates
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-templateRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
+templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
@@ -129,10 +166,77 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
 });
 
 /**
+ * POST /api/templates
+ * Manager only: create new dynamic email template
+ */
+templateRouter.post('/', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const parsed = updateTemplateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: parsed.error.format()
+      });
+    }
+
+    const { code, name, description } = req.body;
+    if (!code || !name) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        message: 'Kode dan nama template wajib diisi.'
+      });
+    }
+
+    const newTemplate = {
+      code: code.trim().toUpperCase().replace(/\s+/g, '_'),
+      name: name.trim(),
+      description: (description || '').trim(),
+      subject: parsed.data.subject,
+      bodyHtml: parsed.data.bodyHtml,
+      isActive: parsed.data.isActive !== false,
+      vendorId: activeVendorId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const db = getDB();
+    if (db) {
+      try {
+        const result = await db.collection('email_templates').insertOne(newTemplate);
+        (newTemplate as any)._id = result.insertedId;
+      } catch (e) {}
+    }
+
+    fallbackStore.email_templates.push(newTemplate);
+
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'EMAIL_TEMPLATE',
+      entityId: (newTemplate as any)._id?.toString() || newTemplate.code,
+      entityName: newTemplate.name,
+      summary: `Menambahkan template email baru '${newTemplate.name}'`,
+      details: newTemplate,
+      req
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Template email baru berhasil dibuat!',
+      template: newTemplate
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
  * PUT /api/templates/:id
  * Manager only: update dynamic email template in MongoDB
  */
-templateRouter.put('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
+templateRouter.put('/:id', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
@@ -188,6 +292,51 @@ templateRouter.put('/:id', authMiddleware, requireManager, async (req: Request, 
     return res.json({
       success: true,
       message: 'Template email berhasil diperbarui di database!'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * DELETE /api/templates/:id
+ * Manager only: delete dynamic email template
+ */
+templateRouter.delete('/:id', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = getDB();
+    let targetTemplate: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+        targetTemplate = await db.collection('email_templates').findOne(query);
+        await db.collection('email_templates').deleteOne(query);
+      } catch (e) {}
+    }
+
+    const idx = fallbackStore.email_templates.findIndex(t => (t._id && t._id.toString() === id) || t.code === id);
+    if (idx !== -1) {
+      if (!targetTemplate) targetTemplate = fallbackStore.email_templates[idx];
+      fallbackStore.email_templates.splice(idx, 1);
+    }
+
+    const templateName = targetTemplate?.name || id;
+
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'EMAIL_TEMPLATE',
+      entityId: id,
+      entityName: templateName,
+      summary: `Menghapus template email '${templateName}'`,
+      details: { templateId: id },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: 'Template email berhasil dihapus!'
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });

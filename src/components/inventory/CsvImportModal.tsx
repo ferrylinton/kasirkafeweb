@@ -338,6 +338,11 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
 
   // Submit parsed valid items to server
   const handleSubmitImport = async () => {
+    if (user?.role === 'ADMIN') {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat data inventaris (Read-Only).', 'error');
+      return;
+    }
+
     if (validRows.length === 0) {
       showToast('Tidak ada baris data valid untuk diimpor', 'error');
       return;

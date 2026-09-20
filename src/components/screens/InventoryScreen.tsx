@@ -20,7 +20,9 @@ import {
   ShieldCheck,
   Layers,
   FileSpreadsheet,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  Lock
 } from 'lucide-react';
 import { Product, InventoryLog, InventoryAlertSummary } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -38,6 +40,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   const { user, token } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
+
+  // Role Rule: Role ADMIN hanya bisa melihat Data Inventaris (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
+  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER');
 
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<InventoryAlertSummary | null>(null);
@@ -116,6 +121,11 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
 
   // Quick delta adjustment (+/-)
   const handleQuickAdjust = async (product: Product, delta: number) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat data inventaris (Read-Only).', 'info');
+      return;
+    }
+
     const newStock = Math.max(0, product.stock + delta);
     setQuickAdjustingId(product.id);
 
@@ -156,6 +166,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
 
   // Open modal for manual edit
   const openEditModal = (product: Product) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat data inventaris (Read-Only).', 'info');
+      return;
+    }
     setSelectedProductForEdit(product);
     setManualStockValue(product.stock);
     setManualThresholdValue(product.lowStockThreshold || 10);
@@ -165,6 +179,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   // Submit manual stock & threshold updates
   const handleSaveManualStock = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN tidak memiliki izin mengubah stok atau inventaris.', 'error');
+      return;
+    }
     if (!selectedProductForEdit) return;
 
     setIsSubmitting(true);
@@ -178,7 +196,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         body: JSON.stringify({
           stock: manualStockValue,
           lowStockThreshold: manualThresholdValue,
-          reason: manualReason || 'Pembaruan manual melalui admin panel'
+          reason: manualReason || 'Pembaruan manual melalui panel inventaris'
         })
       });
 
@@ -200,6 +218,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   // Submit bulk threshold update
   const handleSaveBulkThreshold = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN tidak memiliki izin mengubah batas threshold.', 'error');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -350,6 +372,15 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Read-Only Access Badge for ADMIN */}
+          {isReadOnly && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold shadow-2xs">
+              <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden sm:inline">Hak Akses:</span>
+              <span>Lihat Saja (Read-Only)</span>
+            </div>
+          )}
+
           {/* Refresh Button */}
           <button
             onClick={fetchInventoryData}
@@ -361,24 +392,28 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
             <span className="hidden sm:inline">Refresh</span>
           </button>
 
-          {/* Bulk Threshold Button */}
-          <button
-            onClick={() => setShowBulkModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 shadow-2xs transition-colors"
-          >
-            <Sliders className="w-3.5 h-3.5 text-accent" />
-            <span>{t('configureThreshold')}</span>
-          </button>
+          {/* Bulk Threshold Button (Hanya untuk Manager) */}
+          {!isReadOnly && (
+            <button
+              onClick={() => setShowBulkModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 shadow-2xs transition-colors"
+            >
+              <Sliders className="w-3.5 h-3.5 text-accent" />
+              <span>{t('configureThreshold')}</span>
+            </button>
+          )}
 
-          {/* Import CSV Button */}
-          <button
-            onClick={() => setShowCsvImportModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent/90 shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
-            title="Import CSV untuk perbarui stok & harga atau tambah produk baru"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{t('importCsv')}</span>
-          </button>
+          {/* Import CSV Button (Hanya untuk Manager) */}
+          {!isReadOnly && (
+            <button
+              onClick={() => setShowCsvImportModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent/90 shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+              title="Import CSV untuk perbarui stok & harga atau tambah produk baru"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{t('importCsv')}</span>
+            </button>
+          )}
 
           {/* Toggle View: Products / Logs */}
           <div className="flex bg-stone-100 dark:bg-stone-800 p-1 rounded-xl">
@@ -406,6 +441,18 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
           </div>
         </div>
       </div>
+
+      {/* Read-Only Notice Banner for Role ADMIN */}
+      {isReadOnly && (
+        <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 p-3.5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <Eye className="w-4 h-4" />
+          </div>
+          <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+            <span className="font-bold text-stone-900 dark:text-stone-100">Hak Akses Role ADMIN: Mode Lihat (Read-Only)</span> — Administrator hanya berwenang memantau ketersediaan stok, ambang batas minimum, dan audit riwayat mutasi. Penambahan menu baru, restock/pengurangan stok, dan penghapusan produk dikelola secara eksklusif oleh role Manager.
+          </div>
+        </div>
+      )}
 
       {/* 2. Key Metric KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -826,68 +873,85 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
                             <span>Batas Peringatan (Min):</span>
                             <strong className="text-stone-700 dark:text-stone-300">{threshold} unit</strong>
                           </span>
-                          <button
-                            onClick={() => openEditModal(product)}
-                            className="text-accent hover:underline font-semibold flex items-center gap-0.5"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            <span>Ubah</span>
-                          </button>
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => openEditModal(product)}
+                              className="text-accent hover:underline font-semibold flex items-center gap-0.5"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Ubah</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Bottom row: Quick +/- Adjusters & Detail Action */}
+                    {/* Bottom row: Quick +/- Adjusters & Detail Action (Hanya untuk Manager) */}
                     <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
-                      {/* Quick Adjust Buttons */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          disabled={product.stock <= 0 || isBusy}
-                          onClick={() => handleQuickAdjust(product, -1)}
-                          className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all disabled:opacity-30 active:scale-95"
-                          title="Kurangi 1"
-                        >
-                          -1
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => handleQuickAdjust(product, 1)}
-                          className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
-                          title="Tambah 1"
-                        >
-                          +1
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => handleQuickAdjust(product, 5)}
-                          className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
-                          title="Tambah 5"
-                        >
-                          +5
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => handleQuickAdjust(product, 10)}
-                          className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
-                          title="Tambah 10"
-                        >
-                          +10
-                        </button>
-                      </div>
+                      {!isReadOnly ? (
+                        <>
+                          {/* Quick Adjust Buttons */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={product.stock <= 0 || isBusy}
+                              onClick={() => handleQuickAdjust(product, -1)}
+                              className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all disabled:opacity-30 active:scale-95"
+                              title="Kurangi 1"
+                            >
+                              -1
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickAdjust(product, 1)}
+                              className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
+                              title="Tambah 1"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickAdjust(product, 5)}
+                              className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
+                              title="Tambah 5"
+                            >
+                              +5
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleQuickAdjust(product, 10)}
+                              className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
+                              title="Tambah 10"
+                            >
+                              +10
+                            </button>
+                          </div>
 
-                      {/* Open Full Edit Modal */}
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(product)}
-                        className="px-3 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1 shrink-0"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Restock</span>
-                      </button>
+                          {/* Open Full Edit Modal */}
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(product)}
+                            className="px-3 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1 shrink-0"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Restock</span>
+                          </button>
+                        </>
+                      ) : (
+                        /* Read-Only Status Indicator for ADMIN */
+                        <div className="flex items-center justify-between w-full text-xs text-stone-500 dark:text-stone-400">
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-stone-400 dark:text-stone-500">
+                            <Eye className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Mode Lihat Saja</span>
+                          </span>
+                          <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                            SKU: {product.id}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1003,8 +1067,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         </div>
       )}
 
-      {/* 6. Modal: Manual Stock Update & Threshold Configuration */}
-      {selectedProductForEdit && (
+      {/* 6. Modal: Manual Stock Update & Threshold Configuration (Hanya Manager) */}
+      {!isReadOnly && selectedProductForEdit && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
           style={{
@@ -1209,8 +1273,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         </div>
       )}
 
-      {/* 7. Modal: Bulk Threshold Configuration */}
-      {showBulkModal && (
+      {/* 7. Modal: Bulk Threshold Configuration (Hanya Manager) */}
+      {!isReadOnly && showBulkModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
           style={{
@@ -1317,13 +1381,15 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         </div>
       )}
 
-      {/* CSV Import Modal */}
-      <CsvImportModal
-        isOpen={showCsvImportModal}
-        onClose={() => setShowCsvImportModal(false)}
-        existingProducts={products}
-        onSuccess={fetchInventoryData}
-      />
+      {/* CSV Import Modal (Hanya Manager) */}
+      {!isReadOnly && (
+        <CsvImportModal
+          isOpen={showCsvImportModal}
+          onClose={() => setShowCsvImportModal(false)}
+          existingProducts={products}
+          onSuccess={fetchInventoryData}
+        />
+      )}
     </div>
   );
 };

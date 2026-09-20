@@ -17,6 +17,7 @@ import { templateRouter } from './server/routes/templateRoutes';
 import { activityLogRouter } from './server/routes/activityLogRoutes';
 import { vendorRouter } from './server/routes/vendorRoutes';
 import { adminVendorRouter } from './server/routes/adminVendorRoutes';
+import { adminAnalyticsRouter } from './server/routes/adminAnalyticsRoutes';
 import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
 
@@ -59,6 +60,7 @@ async function startServer() {
   app.use('/api/templates', templateRouter);
   app.use('/api/activity-logs', activityLogRouter);
   app.use('/api/admin/vendors', adminVendorRouter);
+  app.use('/api/admin/analytics', adminAnalyticsRouter);
 
   // Vite Middleware / Static Serving
   if (process.env.NODE_ENV !== 'production') {

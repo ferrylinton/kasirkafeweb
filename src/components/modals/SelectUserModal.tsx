@@ -517,6 +517,9 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           >
                             {isAdmin ? 'ADMIN' : isManager ? t('roleManager') : t('roleCashier')}
                           </span>
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium hidden sm:inline">
+                            • {isAdmin ? 'Akses Admin Sistem' : isManager ? 'Akses Kasir & Toko' : 'Akses Operasional Kasir'}
+                          </span>
                         </div>
 
                         <div className="flex items-center gap-2 mt-1 text-xs text-stone-500 dark:text-stone-400 flex-wrap">

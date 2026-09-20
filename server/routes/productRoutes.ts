@@ -7,6 +7,42 @@ import { recordActivityLog } from '../activityLogger';
 
 export const productRouter = Router();
 
+/**
+ * RBAC Rule: Role ADMIN HANYA bisa melihat Data Inventaris (Read-Only).
+ * ADMIN TIDAK BISA menambah, mengubah, atau menghapus inventaris atau produk.
+ * Hak menambah, mengubah, dan menghapus inventaris khusus dipegang oleh role MANAGER (dan SUPERADMIN).
+ */
+function requireInventoryWriteAccess(req: Request, res: Response, next: () => void) {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Autentikasi diperlukan.'
+    });
+  }
+
+  // Khusus role ADMIN: tolak akses mutasi inventaris secara eksplisit
+  if (user.role === 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Role ADMIN hanya memiliki hak akses melihat Data Inventaris (Read-Only). Tidak diizinkan menambah, mengubah, atau menghapus.'
+    });
+  }
+
+  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola inventaris
+  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Pengelolaan data inventaris (tambah, ubah, hapus) hanya dapat dilakukan oleh role MANAGER.'
+    });
+  }
+
+  next();
+}
+
 const productSchema = z.object({
   name: z.string().min(2, 'Nama produk minimal 2 karakter'),
   category: z.string().min(1, 'Kategori wajib dipilih'),
@@ -82,7 +118,7 @@ const categorySchema = z.object({
   description: z.string().optional()
 });
 
-productRouter.post('/categories', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const parsed = categorySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -217,8 +253,9 @@ productRouter.get('/', async (req: Request, res: Response) => {
 /**
  * GET /api/products/inventory/alerts
  * Summary statistics and low-stock products below configurable threshold
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res: Response) => {
+productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
@@ -310,8 +347,9 @@ productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res:
 /**
  * GET /api/products/inventory/logs
  * Audit history of stock restocks and adjustments partitioned by vendor
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-productRouter.get('/inventory/logs', authMiddleware, async (req: Request, res: Response) => {
+productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
@@ -373,9 +411,9 @@ productRouter.get('/inventory/logs', authMiddleware, async (req: Request, res: R
 
 /**
  * POST /api/products/inventory/bulk-threshold
- * Configure threshold globally or by category for active vendor
+ * Configure threshold globally or by category for active vendor (Manager only - ADMIN Read-Only)
  */
-productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { threshold, category } = req.body;
     const thresholdNum = Number(threshold);
@@ -459,9 +497,9 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, 
 
 /**
  * POST /api/products/inventory/import-csv
- * Bulk import CSV to update prices & stock or add new products (Manager only)
+ * Bulk import CSV to update prices & stock or add new products (Manager only - ADMIN Read-Only)
  */
-productRouter.post('/inventory/import-csv', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { items, stockMode = 'set' } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
@@ -706,9 +744,9 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
 
 /**
  * PATCH /api/products/:id/stock
- * Manual stock update & threshold configuration (Manager only)
+ * Manual stock update & threshold configuration (Manager only - ADMIN Read-Only)
  */
-productRouter.patch('/:id/stock', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { stock, adjustment, lowStockThreshold, reason } = req.body;
@@ -828,9 +866,9 @@ productRouter.patch('/:id/stock', authMiddleware, requireManager, async (req: Re
 
 /**
  * POST /api/products
- * Create product (Manager only)
+ * Create product (Manager only - ADMIN Read-Only)
  */
-productRouter.post('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const parsed = productSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -894,8 +932,9 @@ productRouter.post('/', authMiddleware, requireManager, async (req: Request, res
 
 /**
  * PUT /api/products/:id
+ * Update product (Manager only - ADMIN Read-Only)
  */
-productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: new Date() };
@@ -963,8 +1002,9 @@ productRouter.put('/:id', authMiddleware, async (req: Request, res: Response) =>
 
 /**
  * DELETE /api/products/:id
+ * Delete product (Manager only - ADMIN Read-Only)
  */
-productRouter.delete('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
+productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';

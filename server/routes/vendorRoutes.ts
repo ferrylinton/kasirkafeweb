@@ -9,7 +9,7 @@ import {
   generateClientSecret,
   VendorRecord
 } from '../vendorMiddleware';
-import { signToken, requireManager } from '../auth';
+import { signToken, authMiddleware, requireManager } from '../auth';
 import { recordActivityLog } from '../activityLogger';
 
 export const vendorRouter = Router();
@@ -132,8 +132,9 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
 /**
  * POST /api/vendors
  * Register a new Vendor / Client with unique Client ID and Client Secret
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-vendorRouter.post('/', async (req: Request, res: Response) => {
+vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const parsed = vendorCreateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -248,8 +249,9 @@ vendorRouter.post('/', async (req: Request, res: Response) => {
 /**
  * PUT /api/vendors/:id
  * Update vendor profile / status
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-vendorRouter.put('/:id', async (req: Request, res: Response) => {
+vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const vendor = await findVendorById(id);
@@ -307,8 +309,9 @@ vendorRouter.put('/:id', async (req: Request, res: Response) => {
 /**
  * POST /api/vendors/:id/regenerate-secret
  * Generates a new cryptographically secure Client Secret for the vendor
+ * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
-vendorRouter.post('/:id/regenerate-secret', async (req: Request, res: Response) => {
+vendorRouter.post('/:id/regenerate-secret', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const vendor = await findVendorById(id);

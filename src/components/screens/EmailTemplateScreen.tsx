@@ -11,9 +11,12 @@ interface EmailTemplateScreenProps {
 }
 
 export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVendorsMode = false }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
+
+  // Role Rule: Role ADMIN hanya bisa melihat Template Email (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
+  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER' && user?.role !== 'SUPERADMIN');
 
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
@@ -62,6 +65,11 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
   };
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat template email (Read-Only).', 'error');
+      return;
+    }
+
     if (!selectedTemplate) return;
     setIsSaving(true);
     try {
@@ -137,15 +145,34 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
-          >
-            <Save className="w-4 h-4" />
-            <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-          </button>
+          {!isReadOnly ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold shadow-2xs">
+              <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Lihat Saja (Read-Only)</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Read-Only Notice Banner for Role ADMIN */}
+      {isReadOnly && (
+        <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 p-3.5 flex items-center gap-3 shadow-2xs">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <Eye className="w-4 h-4" />
+          </div>
+          <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+            <span className="font-bold text-stone-900 dark:text-stone-100">Hak Akses Role ADMIN: Mode Lihat (Read-Only)</span> — Administrator hanya memiliki izin untuk melihat format, susunan HTML, dan pratinjau template email struk/notifikasi. Penambahan, pengubahan, atau penghapusan template email dikelola secara eksklusif oleh role Manager.
+          </div>
         </div>
       )}
 
@@ -185,29 +212,49 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
             )}
           </div>
           {allVendorsMode && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="py-1.5 px-3 rounded-xl bg-accent text-white font-bold text-xs shadow-xs hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? 'Menyimpan...' : 'Simpan'}</span>
-            </button>
+            !isReadOnly ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="py-1.5 px-3 rounded-xl bg-accent text-white font-bold text-xs shadow-xs hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Menyimpan...' : 'Simpan'}</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 text-xs font-medium">
+                <Eye className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-[11px]">Mode Pratinjau (Read-Only)</span>
+              </div>
+            )
           )}
         </div>
       )}
 
       {/* Subject Input */}
       <div className="p-4 rounded-2xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-        <label className="text-xs font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-          Subject Email
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-semibold text-stone-600 dark:text-stone-400">
+            Subject Email
+          </label>
+          {isReadOnly && (
+            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+              <Eye className="w-3 h-3" />
+              Read-Only
+            </span>
+          )}
+        </div>
         <input
           type="text"
           value={subject}
-          onChange={e => setSubject(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accent"
+          onChange={e => !isReadOnly && setSubject(e.target.value)}
+          readOnly={isReadOnly}
+          className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none transition-colors ${
+            isReadOnly
+              ? 'bg-stone-100/80 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 cursor-default'
+              : 'bg-stone-50 dark:bg-stone-900 border-stone-200 dark:border-stone-700 focus:ring-2 focus:ring-accent'
+          }`}
         />
       </div>
 
@@ -245,9 +292,14 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
         <div className="space-y-2">
           <textarea
             value={bodyHtml}
-            onChange={e => setBodyHtml(e.target.value)}
+            onChange={e => !isReadOnly && setBodyHtml(e.target.value)}
+            readOnly={isReadOnly}
             rows={14}
-            className="w-full p-4 rounded-3xl bg-stone-900 text-stone-100 font-mono text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-accent shadow-inner"
+            className={`w-full p-4 rounded-3xl font-mono text-xs leading-relaxed focus:outline-none shadow-inner ${
+              isReadOnly
+                ? 'bg-stone-900/90 text-stone-300 cursor-default select-text'
+                : 'bg-stone-900 text-stone-100 focus:ring-2 focus:ring-accent'
+            }`}
           />
           <div className="p-3 rounded-2xl bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-900/40 text-[11px] text-stone-700 dark:text-stone-300">
             <span className="font-bold text-accent block mb-1">Variabel Dinamis yang Tersedia:</span>

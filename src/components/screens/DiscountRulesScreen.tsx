@@ -16,7 +16,9 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DiscountRule } from '../../types';
@@ -34,6 +36,9 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   const { token, user } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
+
+  // Role Rule: Role ADMIN hanya bisa melihat Aturan Diskon (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
+  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER' && user?.role !== 'SUPERADMIN');
 
   const [rules, setRules] = useState<DiscountRule[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -92,6 +97,10 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   }, [allVendorsMode, selectedVendor, token]);
 
   const openCreateModal = () => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat aturan diskon (Read-Only).', 'info');
+      return;
+    }
     setEditingRule(null);
     setFormCode('');
     setFormName('');
@@ -105,6 +114,10 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   };
 
   const openEditModal = (rule: DiscountRule) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat aturan diskon (Read-Only).', 'info');
+      return;
+    }
     setEditingRule(rule);
     setFormCode(rule.code);
     setFormName(rule.name);
@@ -118,6 +131,10 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   };
 
   const handleToggleRule = async (rule: DiscountRule) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN tidak memiliki izin mengubah status aturan diskon.', 'error');
+      return;
+    }
     const updatedStatus = !rule.isActive;
     const ruleTargetId = rule.id || rule.code;
 
@@ -149,6 +166,11 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
 
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN tidak memiliki izin menambah atau mengubah aturan diskon.', 'error');
+      return;
+    }
 
     if (!formCode.trim()) {
       showToast('Kode aturan tidak boleh kosong!', 'error');
@@ -228,6 +250,11 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   };
 
   const handleDeleteRule = async () => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN tidak memiliki izin menghapus aturan diskon.', 'error');
+      return;
+    }
+
     if (!deletingRule) return;
 
     const targetId = deletingRule.id || deletingRule.code;
@@ -328,6 +355,15 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Read-Only Access Badge for ADMIN */}
+          {isReadOnly && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold shadow-2xs">
+              <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden sm:inline">Hak Akses:</span>
+              <span>Lihat Saja (Read-Only)</span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => fetchRules(true)}
@@ -338,16 +374,30 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-accent' : ''}`} />
           </button>
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white font-bold text-xs sm:text-sm shadow-xs hover:opacity-95 active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t('addDiscountRule')}</span>
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white font-bold text-xs sm:text-sm shadow-xs hover:opacity-95 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{t('addDiscountRule')}</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Read-Only Notice Banner for Role ADMIN */}
+      {isReadOnly && (
+        <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 p-3.5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <Eye className="w-4 h-4" />
+          </div>
+          <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+            <span className="font-bold text-stone-900 dark:text-stone-100">Hak Akses Role ADMIN: Mode Lihat (Read-Only)</span> — Administrator hanya berwenang memantau aturan diskon, syarat promosi, dan besaran reward yang aktif di sistem. Penambahan promo baru, pengubahan kriteria diskon, pengaktifan/penonaktifan, dan penghapusan aturan diskon dikelola secara eksklusif oleh role Manager.
+          </div>
+        </div>
+      )}
 
       {/* Metrics Bento Stats */}
       <div className="grid grid-cols-3 gap-3">
@@ -588,41 +638,62 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
 
                   {/* Right: Actions & Switch */}
                   <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-100 dark:border-stone-800/80 shrink-0">
-                    {/* Edit Button */}
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(rule)}
-                      className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors"
-                      title={t('editDiscountRule')}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    {!isReadOnly ? (
+                      <>
+                        {/* Edit Button */}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(rule)}
+                          className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors"
+                          title={t('editDiscountRule')}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
 
-                    {/* Delete Button */}
-                    <button
-                      type="button"
-                      onClick={() => setDeletingRule(rule)}
-                      className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 transition-colors"
-                      title={t('deleteDiscountRule')}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => setDeletingRule(rule)}
+                          className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 transition-colors"
+                          title={t('deleteDiscountRule')}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
 
-                    {/* Status Toggle Switch */}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRule(rule)}
-                      className={`w-12 h-7 rounded-full transition-colors relative shrink-0 p-0.5 ml-1 ${
-                        rule.isActive ? 'bg-accent' : 'bg-stone-300 dark:bg-stone-700'
-                      }`}
-                      title={rule.isActive ? 'Klik untuk non-aktifkan' : 'Klik untuk aktifkan'}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-full bg-white shadow-xs transition-transform ${
-                          rule.isActive ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
+                        {/* Status Toggle Switch */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRule(rule)}
+                          className={`w-12 h-7 rounded-full transition-colors relative shrink-0 p-0.5 ml-1 ${
+                            rule.isActive ? 'bg-accent' : 'bg-stone-300 dark:bg-stone-700'
+                          }`}
+                          title={rule.isActive ? 'Klik untuk non-aktifkan' : 'Klik untuk aktifkan'}
+                        >
+                          <div
+                            className={`w-6 h-6 rounded-full bg-white shadow-xs transition-transform ${
+                              rule.isActive ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </>
+                    ) : (
+                      /* Read-Only Status Indicator for ADMIN */
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 text-xs font-medium">
+                          <Eye className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="text-[11px]">Lihat Saja</span>
+                        </div>
+                        <span
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                            rule.isActive
+                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40'
+                              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 border border-stone-200 dark:border-stone-700'
+                          }`}
+                        >
+                          {rule.isActive ? 'Aktif' : 'Non-Aktif'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -633,7 +704,7 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
 
       {/* Modal: Create / Edit Discount Rule */}
       <AnimatePresence>
-        {isModalOpen && (
+        {!isReadOnly && isModalOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
             style={{
@@ -850,16 +921,18 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
       </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={Boolean(deletingRule)}
-        title={t('deleteRuleConfirmTitle')}
-        message={`Apakah Anda yakin ingin menghapus aturan promo "${deletingRule?.name}" (${deletingRule?.code})? Tindakan ini tidak dapat dibatalkan.`}
-        confirmText={t('deleteDiscountRule')}
-        cancelText={t('cancelBtn')}
-        confirmVariant="danger"
-        onConfirm={handleDeleteRule}
-        onCancel={() => setDeletingRule(null)}
-      />
+      {!isReadOnly && (
+        <ConfirmationModal
+          isOpen={Boolean(deletingRule)}
+          title={t('deleteRuleConfirmTitle')}
+          message={`Apakah Anda yakin ingin menghapus aturan promo "${deletingRule?.name}" (${deletingRule?.code})? Tindakan ini tidak dapat dibatalkan.`}
+          confirmText={t('deleteDiscountRule')}
+          cancelText={t('cancelBtn')}
+          confirmVariant="danger"
+          onConfirm={handleDeleteRule}
+          onCancel={() => setDeletingRule(null)}
+        />
+      )}
     </div>
   );
 };

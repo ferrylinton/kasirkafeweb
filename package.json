@@ -32,6 +32,7 @@
     "react-date-picker": "^12.1.0",
     "react-dom": "^19.0.1",
     "react-i18next": "^17.0.14",
+    "recharts": "^3.10.1",
     "vite": "^6.2.3",
     "zod": "^4.6.5"
   },

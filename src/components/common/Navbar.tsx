@@ -20,6 +20,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const { totalItemsCount, subtotal } = useCart();
+  const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
+  const isManager = user?.role === 'MANAGER';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
 
   const toggleLanguage = () => {
     setLanguage(language === 'id' ? 'en' : 'id');
@@ -49,6 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'Vendor & Klien ID (M2M)';
       case 'vendor-management':
         return 'Manajemen Vendor (Admin)';
+      case 'admin-dashboard':
+        return t('navAdminDashboard') || 'Dashboard Grafik Transaksi';
       case 'admin-orders':
       case 'admin-riwayat':
         return t('navAdminOrders');
@@ -122,7 +127,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             </div>
             <span className="text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 truncate hidden xs:inline sm:inline">
-              {user?.role === 'MANAGER' ? t('roleManager') : `${t('shiftPagi')} • ${t('roleCashier')}`} • Senopati
+              {isAdmin
+                ? 'Administrasi Sistem Lintas Vendor'
+                : isManager
+                ? `${t('roleManager')} • Operasional & Manajemen Toko`
+                : `${t('shiftPagi')} • ${t('roleCashier')} • Operasional Kasir`} • Senopati
             </span>
           </div>
         </div>
@@ -144,8 +153,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span className="text-[10px] text-stone-400 hidden sm:inline">({language === 'id' ? 'ID' : 'EN'})</span>
         </button>
 
-        {/* Cart Summary Bar */}
-        {totalItemsCount > 0 && currentTab !== 'pembayaran' && (
+        {/* Cart Summary Bar - Hanya tampil untuk role yang punya akses Operasional Kasir (CASHIER & MANAGER) */}
+        {isCashierOrManager && totalItemsCount > 0 && currentTab !== 'pembayaran' && (
           <button
             type="button"
             id="navbar-cart-summary-btn"

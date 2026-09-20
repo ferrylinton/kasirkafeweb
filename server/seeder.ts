@@ -1,6 +1,7 @@
 import { getDB, fallbackStore } from './db';
 import { hashPassword } from './auth';
 import { DEFAULT_RULES } from './discounts';
+import { generateHistoricalOrders } from './orderGenerator';
 
 export async function seedDatabase() {
   console.log('[Seeder] Starting automated database seeding...');
@@ -891,6 +892,12 @@ export async function seedDatabase() {
     }));
   }
 
+  // Populate historical multi-vendor orders for rich analytics and dashboard
+  const historicalOrders = generateHistoricalOrders();
+  if (!fallbackStore.orders || fallbackStore.orders.length === 0) {
+    fallbackStore.orders = historicalOrders.map(o => ({ ...o }));
+  }
+
   // Seed MongoDB if connected
   const db = getDB();
   if (db) {
@@ -984,7 +991,14 @@ export async function seedDatabase() {
         console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
       }
 
-      // 8. Universal Vendor Partition Migration across all collections
+      // 8. Historical Orders for Multi-Vendor Dashboard
+      const orderCount = await db.collection('orders').countDocuments();
+      if (orderCount < 20) {
+        await db.collection('orders').insertMany(historicalOrders.map(o => ({ ...o })));
+        console.log('[Seeder] Historical multi-vendor orders seeded in MongoDB successfully.');
+      }
+
+      // 9. Universal Vendor Partition Migration across all collections
       await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
