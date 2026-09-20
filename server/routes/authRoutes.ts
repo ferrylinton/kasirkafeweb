@@ -8,6 +8,7 @@ import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
 import { getAllVendors } from '../vendorMiddleware';
+import { logLogin } from '../dailyRollingLogger';
 
 export const authRouter = Router();
 
@@ -371,6 +372,14 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const currentLockout = checkUserLockout(email, ipAddress);
     if (currentLockout.isLocked) {
       const remMin = Math.ceil(currentLockout.remainingSeconds / 60);
+      logLogin({
+        status: 'LOCKED',
+        email,
+        ipAddress,
+        req,
+        reason: `Akun masih terkunci selama ${remMin} menit karena percobaan login berulang`
+      }).catch(() => {});
+
       return res.status(423).json({
         success: false,
         error: 'Account Locked',
@@ -438,6 +447,16 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     if (!user) {
       const failStatus = recordUserFailedAttempt(email, ipAddress);
+      logLogin({
+        status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
+        email,
+        ipAddress,
+        userAgent: req.headers['user-agent'] as string,
+        req,
+        loginMethod: pin ? 'PIN' : 'PASSWORD',
+        reason: pin ? 'PIN kasir tidak cocok atau akun tidak ditemukan' : 'Email tidak terdaftar'
+      }).catch(() => {});
+
       if (failStatus.isLocked) {
         return res.status(423).json({
           success: false,
@@ -470,6 +489,19 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       const match = await comparePassword(password, user.password);
       if (!match) {
         const failStatus = recordUserFailedAttempt(email, ipAddress);
+        logLogin({
+          status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          userId: user._id?.toString() || user.id,
+          ipAddress,
+          userAgent: req.headers['user-agent'] as string,
+          req,
+          loginMethod: 'PASSWORD',
+          reason: 'Password akun salah'
+        }).catch(() => {});
+
         if (failStatus.isLocked) {
           return res.status(423).json({
             success: false,
@@ -512,6 +544,17 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         user.name,
         `Dipaksa logout otomatis karena akun berhasil login di browser/perangkat baru (${device})`
       );
+      logLogin({
+        status: 'REVOKED',
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        userId: user._id ? user._id.toString() : (user.id || 'mock_id'),
+        ipAddress,
+        userAgent,
+        req,
+        reason: `Dipaksa logout otomatis karena akun berhasil login di browser/perangkat baru (${device})`
+      }).catch(() => {});
     }
 
     const userId = user._id ? user._id.toString() : (user.id || 'mock_id');
@@ -527,6 +570,25 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       sessionId,
       vendorId: historyVendorId
     });
+
+    // Write login success to daily rolling log file!
+    logLogin({
+      status: 'SUCCESS',
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      userId,
+      vendorId: historyVendorId,
+      ipAddress,
+      userAgent,
+      loginMethod,
+      req,
+      details: {
+        sessionId,
+        device,
+        previousSessionsTerminated
+      }
+    }).catch(() => {});
 
     // Record login in history collection
     const historyEntry = {
@@ -847,6 +909,17 @@ authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) =
   }
 
   res.clearCookie('token');
+
+  logLogin({
+    status: 'LOGOUT',
+    email: req.user?.email,
+    name: req.user?.name,
+    role: req.user?.role,
+    userId: req.user?.userId,
+    req,
+    details: { sessionId }
+  }).catch(() => {});
+
   return res.json({ success: true, message: 'Berhasil logout' });
 });
 

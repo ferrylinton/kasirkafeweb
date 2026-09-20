@@ -535,3 +535,396 @@ managerAnalyticsRouter.post('/retention-run', async (req: Request, res: Response
     return res.status(500).json({ success: false, error: 'Internal Server Error' });
   }
 });
+
+/**
+ * GET /api/manager/analytics/top-products
+ * Returns Top 10 Best-Selling items for the Manager's assigned vendor ONLY
+ * Strictly scoped to manager's vendor and enforces 3-month (90 days) data retention policy
+ */
+managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) => {
+  try {
+    const { vendorId, vendor } = await resolveManagerVendor(req);
+    const period = ((req.query.period as string) || 'day').toLowerCase(); // 'day' | 'week' | 'month'
+    const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '10', 10), 1), 50);
+
+    const vendorName = vendor?.name || 'Vendor Toko';
+    const vendorCode = vendor?.code || 'VENDOR';
+
+    // Reference now: 2026-09-20 (or current runtime date)
+    const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
+    const cutoffDate = getCutoffDate(); // Enforce 3-month (90 days) retention policy
+
+    let startDate: Date;
+    let endDate = new Date(now.getTime());
+    endDate.setHours(23, 59, 59, 999);
+    let periodLabel = '';
+
+    if (period === 'day') {
+      startDate = new Date(now.getTime());
+      startDate.setHours(0, 0, 0, 0);
+      const dayName = INDONESIAN_DAYS[startDate.getDay()];
+      periodLabel = `Hari Ini (${dayName}, ${startDate.getDate()} ${INDONESIAN_MONTHS[startDate.getMonth()]} ${startDate.getFullYear()})`;
+    } else if (period === 'week') {
+      startDate = new Date(now.getTime() - 7 * 86400000);
+      startDate.setHours(0, 0, 0, 0);
+      periodLabel = `Per Minggu (7 Hari Terakhir: ${startDate.getDate()} ${INDONESIAN_MONTHS[startDate.getMonth()]} - ${now.getDate()} ${INDONESIAN_MONTHS[now.getMonth()]} ${now.getFullYear()})`;
+    } else {
+      // 'month' - last 30 days
+      startDate = new Date(now.getTime() - 30 * 86400000);
+      startDate.setHours(0, 0, 0, 0);
+      periodLabel = `Per Bulan (30 Hari Terakhir: ${startDate.getDate()} ${INDONESIAN_MONTHS[startDate.getMonth()]} - ${now.getDate()} ${INDONESIAN_MONTHS[now.getMonth()]} ${now.getFullYear()})`;
+    }
+
+    if (startDate < cutoffDate) {
+      startDate = new Date(cutoffDate.getTime());
+    }
+
+    // Fetch vendor orders strictly for this vendor within date range & retention window
+    const db = getDB();
+    let orders: any[] = [];
+    if (db) {
+      try {
+        orders = await db.collection('orders').find({
+          vendorId: vendorId,
+          createdAt: { $gte: startDate, $lte: endDate }
+        }).toArray();
+      } catch (e) {
+        console.error('[ManagerAnalytics] Mongo query error:', e);
+      }
+    }
+    if (orders.length === 0) {
+      orders = (fallbackStore.orders || []).filter((o: any) => {
+        const d = new Date(o.createdAt || o.date);
+        return o.vendorId === vendorId && d >= startDate && d <= endDate && d >= cutoffDate;
+      });
+    }
+
+    interface ProductAgg {
+      productId: string;
+      name: string;
+      category: string;
+      vendorId: string;
+      vendorName: string;
+      vendorCode: string;
+      quantitySold: number;
+      totalRevenue: number;
+      orderCount: number;
+    }
+
+    const productMap = new Map<string, ProductAgg>();
+    let totalItemsSoldAll = 0;
+    let totalRevenueAll = 0;
+    const categoryTotals: Record<string, { quantity: number; revenue: number }> = {};
+
+    orders.forEach((o: any) => {
+      const items = Array.isArray(o.items) ? o.items : [];
+      const seenInOrder = new Set<string>();
+
+      items.forEach((item: any) => {
+        const pId = item.productId || item.id || `prod_${item.name}`;
+        const name = item.name || 'Item Minuman';
+        const category = item.category || 'Minuman';
+        const qty = Number(item.quantity || 1);
+        const price = Number(item.price || 0);
+        const itemTotal = Number(item.itemTotal || (qty * price));
+
+        const aggKey = `${pId}_${name}`;
+        let agg = productMap.get(aggKey);
+        if (!agg) {
+          agg = {
+            productId: pId,
+            name,
+            category,
+            vendorId,
+            vendorName,
+            vendorCode,
+            quantitySold: 0,
+            totalRevenue: 0,
+            orderCount: 0
+          };
+          productMap.set(aggKey, agg);
+        }
+
+        agg.quantitySold += qty;
+        agg.totalRevenue += itemTotal;
+        if (!seenInOrder.has(aggKey)) {
+          agg.orderCount++;
+          seenInOrder.add(aggKey);
+        }
+
+        totalItemsSoldAll += qty;
+        totalRevenueAll += itemTotal;
+
+        if (!categoryTotals[category]) {
+          categoryTotals[category] = { quantity: 0, revenue: 0 };
+        }
+        categoryTotals[category].quantity += qty;
+        categoryTotals[category].revenue += itemTotal;
+      });
+    });
+
+    const sortedList = Array.from(productMap.values()).sort((a, b) => {
+      if (b.quantitySold !== a.quantitySold) {
+        return b.quantitySold - a.quantitySold;
+      }
+      return b.totalRevenue - a.totalRevenue;
+    });
+
+    const COLOR_PALETTE = [
+      '#ea580c', '#8b5cf6', '#10b981', '#0284c7', '#ec4899',
+      '#eab308', '#06b6d4', '#6366f1', '#14b8a6', '#f43f5e'
+    ];
+
+    const allRanked = sortedList.map((item, index) => {
+      const averagePrice = item.quantitySold > 0 ? Math.round(item.totalRevenue / item.quantitySold) : 0;
+      const percentageOfTotal = totalItemsSoldAll > 0 ? Number(((item.quantitySold / totalItemsSoldAll) * 100).toFixed(1)) : 0;
+      const percentageOfRevenue = totalRevenueAll > 0 ? Number(((item.totalRevenue / totalRevenueAll) * 100).toFixed(1)) : 0;
+
+      return {
+        rank: index + 1,
+        ...item,
+        averagePrice,
+        percentageOfTotal,
+        percentageOfRevenue,
+        color: COLOR_PALETTE[index % COLOR_PALETTE.length]
+      };
+    });
+
+    const top10 = allRanked.slice(0, limit);
+
+    let topCategoryObj = { name: '-', quantity: 0, revenue: 0 };
+    let maxCatQty = -1;
+    for (const [catName, cData] of Object.entries(categoryTotals)) {
+      if (cData.quantity > maxCatQty) {
+        maxCatQty = cData.quantity;
+        topCategoryObj = { name: catName, quantity: cData.quantity, revenue: cData.revenue };
+      }
+    }
+
+    const categoryBreakdown = Object.entries(categoryTotals).map(([cat, val]) => ({
+      category: cat,
+      quantity: val.quantity,
+      revenue: val.revenue,
+      percentage: totalItemsSoldAll > 0 ? Number(((val.quantity / totalItemsSoldAll) * 100).toFixed(1)) : 0
+    })).sort((a, b) => b.quantity - a.quantity);
+
+    const retentionStatus = await getRetentionStatus();
+
+    return res.json({
+      success: true,
+      period,
+      periodLabel,
+      dateRange: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        cutoffDate: cutoffDate.toISOString()
+      },
+      vendor: {
+        id: vendorId,
+        name: vendorName,
+        code: vendorCode,
+        address: vendor?.address || ''
+      },
+      topProducts: top10,
+      allProductsCount: allRanked.length,
+      summary: {
+        totalItemsSold: totalItemsSoldAll,
+        totalRevenue: totalRevenueAll,
+        totalTransactions: orders.length,
+        uniqueProductsCount: allRanked.length,
+        topCategory: topCategoryObj,
+        topProduct: top10.length > 0 ? {
+          name: top10[0].name,
+          category: top10[0].category,
+          vendorName: top10[0].vendorName,
+          quantitySold: top10[0].quantitySold,
+          totalRevenue: top10[0].totalRevenue
+        } : null
+      },
+      categoryBreakdown,
+      retention: {
+        ...retentionStatus,
+        vendorOrdersCount: orders.length,
+        retentionPolicy: `${RETENTION_MONTHS} Bulan (${RETENTION_DAYS} Hari Terakhir)`
+      }
+    });
+  } catch (err: any) {
+    console.error('[ManagerAnalytics] GET /top-products error:', err);
+    return res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * GET /api/manager/analytics/top-products/export
+ * Exports Top 10 Products for the Manager's assigned vendor in CSV or JSON format
+ */
+managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Response) => {
+  try {
+    const { vendorId, vendor } = await resolveManagerVendor(req);
+    const period = ((req.query.period as string) || 'day').toLowerCase();
+    const format = ((req.query.format as string) || 'csv').toLowerCase();
+
+    const vendorName = vendor?.name || 'Vendor Toko';
+    const vendorCode = vendor?.code || 'VENDOR';
+
+    const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
+    const cutoffDate = getCutoffDate();
+
+    let startDate: Date;
+    let endDate = new Date(now.getTime());
+    endDate.setHours(23, 59, 59, 999);
+    let periodTitle = '';
+
+    if (period === 'day') {
+      startDate = new Date(now.getTime());
+      startDate.setHours(0, 0, 0, 0);
+      periodTitle = `Hari Ini (${formatDateYMD(now)})`;
+    } else if (period === 'week') {
+      startDate = new Date(now.getTime() - 7 * 86400000);
+      startDate.setHours(0, 0, 0, 0);
+      periodTitle = `Mingguan (${formatDateYMD(startDate)} sd ${formatDateYMD(now)})`;
+    } else {
+      startDate = new Date(now.getTime() - 30 * 86400000);
+      startDate.setHours(0, 0, 0, 0);
+      periodTitle = `Bulanan (${formatDateYMD(startDate)} sd ${formatDateYMD(now)})`;
+    }
+
+    if (startDate < cutoffDate) {
+      startDate = new Date(cutoffDate.getTime());
+    }
+
+    const db = getDB();
+    let orders: any[] = [];
+    if (db) {
+      try {
+        orders = await db.collection('orders').find({
+          vendorId: vendorId,
+          createdAt: { $gte: startDate, $lte: endDate }
+        }).toArray();
+      } catch (e) {
+        console.error('[ManagerAnalytics] Export top-products Mongo error:', e);
+      }
+    }
+    if (orders.length === 0) {
+      orders = (fallbackStore.orders || []).filter((o: any) => {
+        const d = new Date(o.createdAt || o.date);
+        return o.vendorId === vendorId && d >= startDate && d <= endDate && d >= cutoffDate;
+      });
+    }
+
+    interface ProductAgg {
+      productId: string;
+      name: string;
+      category: string;
+      vendorId: string;
+      vendorName: string;
+      quantitySold: number;
+      totalRevenue: number;
+      orderCount: number;
+    }
+
+    const productMap = new Map<string, ProductAgg>();
+    let totalQtyAll = 0;
+
+    orders.forEach((o: any) => {
+      const items = Array.isArray(o.items) ? o.items : [];
+      const seen = new Set<string>();
+
+      items.forEach((item: any) => {
+        const pId = item.productId || item.id || `prod_${item.name}`;
+        const name = item.name || 'Item Minuman';
+        const category = item.category || 'Minuman';
+        const qty = Number(item.quantity || 1);
+        const price = Number(item.price || 0);
+        const itemTotal = Number(item.itemTotal || (qty * price));
+        const key = `${pId}_${name}`;
+
+        let agg = productMap.get(key);
+        if (!agg) {
+          agg = {
+            productId: pId,
+            name,
+            category,
+            vendorId,
+            vendorName,
+            quantitySold: 0,
+            totalRevenue: 0,
+            orderCount: 0
+          };
+          productMap.set(key, agg);
+        }
+
+        agg.quantitySold += qty;
+        agg.totalRevenue += itemTotal;
+        if (!seen.has(key)) {
+          agg.orderCount++;
+          seen.add(key);
+        }
+        totalQtyAll += qty;
+      });
+    });
+
+    const sortedList = Array.from(productMap.values()).sort((a, b) => b.quantitySold - a.quantitySold);
+    const top10 = sortedList.slice(0, 10).map((item, idx) => ({
+      rank: idx + 1,
+      ...item,
+      averagePrice: item.quantitySold > 0 ? Math.round(item.totalRevenue / item.quantitySold) : 0,
+      sharePercentage: totalQtyAll > 0 ? Number(((item.quantitySold / totalQtyAll) * 100).toFixed(1)) : 0
+    }));
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${vendorCode.toLowerCase()}_${period}_${formatDateYMD(now)}.json"`);
+      return res.json({
+        exportDate: new Date().toISOString(),
+        vendor: {
+          id: vendorId,
+          name: vendorName,
+          code: vendorCode
+        },
+        period: periodTitle,
+        retentionPolicy: `${RETENTION_MONTHS} Bulan (${RETENTION_DAYS} Hari Terakhir)`,
+        cutoffDate: cutoffDate.toISOString(),
+        topProducts: top10
+      });
+    }
+
+    // CSV format with UTF-8 BOM
+    const header = [
+      'Peringkat',
+      'Nama Produk',
+      'Kategori',
+      'Vendor / Cabang',
+      'Qty Terjual',
+      'Total Omzet (Rp)',
+      'Rata-rata Harga (Rp)',
+      'Jumlah Transaksi',
+      'Kontribusi Penjualan (%)',
+      'Periode Laporan',
+      'Kebijakan Retensi'
+    ];
+
+    const rows = top10.map(item => [
+      item.rank,
+      `"${item.name.replace(/"/g, '""')}"`,
+      `"${item.category}"`,
+      `"${item.vendorName}"`,
+      item.quantitySold,
+      item.totalRevenue,
+      item.averagePrice,
+      item.orderCount,
+      `${item.sharePercentage}%`,
+      `"${periodTitle}"`,
+      `"3 Bulan (${RETENTION_DAYS} Hari)"`
+    ]);
+
+    const csvContent = '\uFEFF' + [header.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${vendorCode.toLowerCase()}_${period}_${formatDateYMD(now)}.csv"`);
+    return res.status(200).send(csvContent);
+  } catch (err: any) {
+    console.error('[ManagerAnalytics] Export top-products error:', err);
+    return res.status(500).json({ success: false, error: 'Export failed' });
+  }
+});

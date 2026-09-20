@@ -47,8 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['manager-dashboard', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['vendor-management', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs'];
+  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'admin-dashboard', 'admin-top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -298,6 +298,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </span>
                 </button>
 
+                {/* Top 10 Produk Terlaris (Khusus Vendor Manager) */}
+                <button
+                  type="button"
+                  id="nav-manager-top-products"
+                  onClick={() => handleNavClick('manager-top-products')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'manager-top-products' || currentTab === 'top-products'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Trophy className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span className="truncate">Top 10 Produk</span>
+                  </div>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider ${
+                    currentTab === 'manager-top-products' || currentTab === 'top-products'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                  }`}>
+                    TERLARIS
+                  </span>
+                </button>
+
                 {/* Inventaris */}
                 <button
                   type="button"
@@ -431,8 +455,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
             </div>
           )}
 
-          {/* Group 3: Administrasi Sistem (Khusus Role ADMIN) */}
-          {isAdmin && (
+          {/* Group 3: Administrasi Sistem (Role ADMIN & Role MANAGER) */}
+          {(isAdmin || isManager) && (
             <div>
               <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
@@ -457,7 +481,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <BarChart3 className="w-4 h-4 shrink-0 text-purple-500" />
-                    <span className="truncate">{t('navAdminDashboard') || 'Dashboard Grafik Transaksi'}</span>
+                    <span className="truncate">{t('navAdminDashboard') || 'Dashboard Grafik Transaksi Semua Vendor'}</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     GRAFIK
@@ -477,13 +501,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Trophy className="w-4 h-4 shrink-0 text-amber-500" />
-                    <span className="truncate">{t('navAdminTopProducts') || 'Top 10 Produk Terlaris'}</span>
+                    <span className="truncate">{t('navAdminTopProducts') || 'Top 10 Produk Terlaris (Hari, Minggu, Bulan)'}</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                     TOP 10
                   </span>
                 </button>
 
+                {/* Khusus ADMIN: Akses Fitur Manajemen Sistem Semua Vendor Lainnya */}
+                {isAdmin && (
+                  <>
                 {/* 1. Riwayat Pesanan Semua Vendor */}
                 <button
                   type="button"
@@ -643,6 +670,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     ADMIN
                   </span>
                 </button>
+                  </>
+                )}
               </div>
             </div>
           )}

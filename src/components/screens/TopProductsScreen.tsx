@@ -69,9 +69,11 @@ interface RetentionInfo {
   lastDeletedCount: number;
   totalPurgedLifetime: number;
   activeOrdersCount: number;
+  vendorOrdersCount?: number;
   nextScheduledRun: string | null;
   schedulerStatus: string;
   intervalHours: number;
+  retentionPolicy?: string;
 }
 
 interface TopProductsApiResponse {
@@ -83,8 +85,9 @@ interface TopProductsApiResponse {
     endDate: string;
     cutoffDate: string;
   };
-  requestedVendorId: string;
-  vendors: Array<{ id: string; name: string; code: string; color: string }>;
+  requestedVendorId?: string;
+  vendors?: Array<{ id: string; name: string; code: string; color: string }>;
+  vendor?: { id: string; name: string; code: string; address?: string };
   topProducts: TopProductItem[];
   allProductsCount: number;
   summary: {
@@ -110,10 +113,17 @@ interface TopProductsApiResponse {
   retention: RetentionInfo;
 }
 
-export const TopProductsScreen: React.FC = () => {
+interface TopProductsScreenProps {
+  managerMode?: boolean;
+}
+
+export const TopProductsScreen: React.FC<TopProductsScreenProps> = ({ managerMode = false }) => {
   const { t } = useTranslation();
   const { token, user } = useAuth();
   const { showToast } = useToast();
+
+  const isManager = managerMode;
+  const isAdmin = !managerMode;
 
   const [period, setPeriod] = useState<TopProductPeriod>('day');
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
@@ -136,7 +146,10 @@ export const TopProductsScreen: React.FC = () => {
     setFetchError(null);
 
     try {
-      const url = `/api/admin/analytics/top-products?period=${period}&vendorId=${selectedVendor}&limit=10`;
+      const url = isManager
+        ? `/api/manager/analytics/top-products?period=${period}&limit=10`
+        : `/api/admin/analytics/top-products?period=${period}&vendorId=${selectedVendor}&limit=10`;
+
       const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token || ''}`,
@@ -173,13 +186,16 @@ export const TopProductsScreen: React.FC = () => {
     if (token) {
       fetchTopProducts(false);
     }
-  }, [token, period, selectedVendor]);
+  }, [token, period, selectedVendor, isManager]);
 
   // Export CSV handler
   const handleExportCSV = async () => {
     setIsExporting(true);
     try {
-      const url = `/api/admin/analytics/top-products/export?period=${period}&vendorId=${selectedVendor}&format=csv`;
+      const url = isManager
+        ? `/api/manager/analytics/top-products/export?period=${period}&format=csv`
+        : `/api/admin/analytics/top-products/export?period=${period}&vendorId=${selectedVendor}&format=csv`;
+
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token || ''}` }
       });
@@ -192,7 +208,10 @@ export const TopProductsScreen: React.FC = () => {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `sipspot_top10_produk_${period}_${selectedVendor}_${new Date().toISOString().split('T')[0]}.csv`;
+      const vendorTag = isManager
+        ? (data?.vendor?.code?.toLowerCase() || 'vendor')
+        : selectedVendor;
+      a.download = `top10_produk_${vendorTag}_${period}_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -211,23 +230,26 @@ export const TopProductsScreen: React.FC = () => {
   const handleExportJSON = async () => {
     setIsExporting(true);
     try {
-      const exportPayload = {
-        title: 'Laporan Top 10 Produk Terlaris - SipSpot POS',
-        generatedAt: new Date().toISOString(),
-        period,
-        periodLabel: data?.periodLabel,
-        vendorFilter: selectedVendor,
-        retentionPolicy: '3 Bulan (90 Hari)',
-        summary: data?.summary,
-        topProducts: data?.topProducts,
-        categoryBreakdown: data?.categoryBreakdown,
-        retentionStatus: data?.retention
-      };
+      const url = isManager
+        ? `/api/manager/analytics/top-products/export?period=${period}&format=json`
+        : `/api/admin/analytics/top-products/export?period=${period}&vendorId=${selectedVendor}&format=json`;
 
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token || ''}` }
+      });
+
+      if (!res.ok) {
+        throw new Error('Gagal mengunduh data JSON');
+      }
+
+      const jsonPayload = await res.json();
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(jsonPayload, null, 2));
       const a = document.createElement('a');
       a.href = dataStr;
-      a.download = `sipspot_top10_produk_${period}_${selectedVendor}.json`;
+      const vendorTag = isManager
+        ? (data?.vendor?.code?.toLowerCase() || 'vendor')
+        : selectedVendor;
+      a.download = `top10_produk_${vendorTag}_${period}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -256,7 +278,11 @@ export const TopProductsScreen: React.FC = () => {
 
     setIsTriggeringRetention(true);
     try {
-      const res = await fetch('/api/admin/analytics/retention-run', {
+      const url = isManager
+        ? '/api/manager/analytics/retention-run'
+        : '/api/admin/analytics/retention-run';
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token || ''}`,
@@ -266,7 +292,7 @@ export const TopProductsScreen: React.FC = () => {
       const json = await res.json();
       if (json.success) {
         showToast(
-          `Skeduler selesai: ${json.result?.deletedCount || 0} pesanan usang dibersihkan.`,
+          json.message || `Skeduler selesai: ${json.result?.deletedCount || 0} pesanan usang dibersihkan.`,
           'success'
         );
         fetchTopProducts(true);
@@ -290,7 +316,7 @@ export const TopProductsScreen: React.FC = () => {
       p =>
         p.name.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q) ||
-        p.vendorName.toLowerCase().includes(q)
+        (p.vendorName && p.vendorName.toLowerCase().includes(q))
     );
   }, [data?.topProducts, searchQuery]);
 
@@ -310,20 +336,32 @@ export const TopProductsScreen: React.FC = () => {
       qty: p.quantitySold,
       revenue: p.totalRevenue,
       category: p.category,
-      vendor: p.vendorName,
+      vendor: p.vendorName || data?.vendor?.name || 'Cabang',
       color: p.color
     }));
-  }, [data?.topProducts]);
+  }, [data?.topProducts, data?.vendor]);
+
+  // Styling theme helpers
+  const activeTabClass = isManager
+    ? 'bg-accent text-white shadow-xs'
+    : 'bg-purple-600 text-white shadow-xs';
+  const primaryBarFill = isManager ? '#ea580c' : '#9333ea';
 
   return (
     <div id="top-products-page" className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* 1. Page Header (Admin Only & Multi-Vendor) */}
+      {/* 1. Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-stone-200 dark:border-stone-800">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-              ROLE ADMIN • LINTAS VENDOR
-            </span>
+          <div className="flex items-center flex-wrap gap-2 mb-1">
+            {isManager ? (
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950/80 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                ROLE MANAGER • TRANSAKSI VENDOR USER SAJA
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                ROLE ADMIN • LINTAS VENDOR
+              </span>
+            )}
             <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 flex items-center gap-1">
               <Clock className="w-3 h-3 text-stone-500" />
               Retensi 3 Bulan (90 Hari)
@@ -334,7 +372,9 @@ export const TopProductsScreen: React.FC = () => {
             <span>Top 10 Produk Terlaris</span>
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-0.5">
-            Analisis peringkat 10 produk paling laku per Hari, Minggu, dan Bulan. Data usang otomatis dihapus oleh skeduler sistem.
+            {isManager
+              ? 'Analisis peringkat 10 produk paling laku untuk cabang vendor Anda per Hari, Minggu, dan Bulan. Data disimpan 3 bulan terakhir dan dibersihkan otomatis oleh skeduler.'
+              : 'Analisis peringkat 10 produk paling laku per Hari, Minggu, dan Bulan. Data usang otomatis dihapus oleh skeduler sistem.'}
           </p>
         </div>
 
@@ -348,7 +388,7 @@ export const TopProductsScreen: React.FC = () => {
             className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2 transition-all shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer"
             title="Muat ulang data terkini"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? (isManager ? 'animate-spin text-accent' : 'animate-spin text-purple-600') : ''}`} />
             <span>Segarkan</span>
           </button>
 
@@ -381,7 +421,9 @@ export const TopProductsScreen: React.FC = () => {
             id="print-report-btn"
             onClick={handlePrint}
             disabled={isLoading || !data?.topProducts?.length}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer ${
+              isManager ? 'bg-accent hover:bg-accent/90' : 'bg-purple-600 hover:bg-purple-700'
+            }`}
             title="Cetak Laporan Resmi"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -390,9 +432,9 @@ export const TopProductsScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Filter Bar: Period Selector (Hari, Per Minggu, Per Bulan) & Vendor Selector */}
+      {/* 2. Filter Bar: Period Selector (Hari, Per Minggu, Per Bulan) & Vendor Isolation */}
       <div className="bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 print:hidden">
-        {/* Period Selector Tabs */}
+        {/* Period Selector Tabs: Hari Ini, Per Minggu, Per Bulan */}
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900/80 rounded-xl overflow-x-auto">
           <button
             type="button"
@@ -400,7 +442,7 @@ export const TopProductsScreen: React.FC = () => {
             onClick={() => setPeriod('day')}
             className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               period === 'day'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? activeTabClass
                 : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/50 dark:hover:bg-stone-800'
             }`}
           >
@@ -414,7 +456,7 @@ export const TopProductsScreen: React.FC = () => {
             onClick={() => setPeriod('week')}
             className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               period === 'week'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? activeTabClass
                 : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/50 dark:hover:bg-stone-800'
             }`}
           >
@@ -428,7 +470,7 @@ export const TopProductsScreen: React.FC = () => {
             onClick={() => setPeriod('month')}
             className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               period === 'month'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? activeTabClass
                 : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/50 dark:hover:bg-stone-800'
             }`}
           >
@@ -437,25 +479,38 @@ export const TopProductsScreen: React.FC = () => {
           </button>
         </div>
 
-        {/* Vendor Selector & Search */}
+        {/* Vendor Isolation Display / Selector & Search */}
         <div className="flex items-center flex-wrap gap-2.5">
-          {/* Vendor Filter */}
-          <div className="flex items-center gap-2 min-w-[200px]">
-            <Building2 className="w-4 h-4 text-stone-400 shrink-0" />
-            <select
-              id="vendor-filter-select"
-              value={selectedVendor}
-              onChange={e => setSelectedVendor(e.target.value)}
-              className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-            >
-              <option value="all">Semua Vendor (Lintas Usaha)</option>
-              {KNOWN_VENDORS.filter(v => v.id !== 'vnd_admin').map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* If Manager: Show fixed vendor badge for strict isolation (transaksi vendor user saja) */}
+          {isManager ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 text-xs font-semibold text-orange-900 dark:text-orange-200">
+              <Store className="w-4 h-4 text-accent shrink-0" />
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold">{data?.vendor?.name || (user as any)?.vendorName || getVendorName(user?.vendorId) || 'Cabang Vendor Anda'}</span>
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase bg-accent text-white">
+                  {data?.vendor?.code || 'CABANG'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* If Admin: Multi-vendor dropdown */
+            <div className="flex items-center gap-2 min-w-[200px]">
+              <Building2 className="w-4 h-4 text-stone-400 shrink-0" />
+              <select
+                id="vendor-filter-select"
+                value={selectedVendor}
+                onChange={e => setSelectedVendor(e.target.value)}
+                className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+              >
+                <option value="all">Semua Vendor (Lintas Usaha)</option>
+                {KNOWN_VENDORS.filter(v => v.id !== 'vnd_admin').map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Quick Search in Top 10 */}
           <div className="relative min-w-[160px]">
@@ -466,7 +521,9 @@ export const TopProductsScreen: React.FC = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Cari item..."
-              className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className={`w-full bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:ring-2 ${
+                isManager ? 'focus:ring-accent' : 'focus:ring-purple-500'
+              }`}
             />
           </div>
         </div>
@@ -476,7 +533,7 @@ export const TopProductsScreen: React.FC = () => {
       {data?.periodLabel && (
         <div className="flex items-center justify-between text-xs text-stone-600 dark:text-stone-400 px-1">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+            <span className={`w-2 h-2 rounded-full animate-pulse ${isManager ? 'bg-accent' : 'bg-purple-500'}`} />
             <span className="font-semibold text-stone-800 dark:text-stone-200">
               Periode Analisis: {data.periodLabel}
             </span>
@@ -585,7 +642,11 @@ export const TopProductsScreen: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               Kategori Terlaris
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              isManager
+                ? 'bg-orange-100 dark:bg-orange-950/60 text-accent'
+                : 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
+            }`}>
               <Layers className="w-4 h-4" />
             </div>
           </div>
@@ -609,7 +670,7 @@ export const TopProductsScreen: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-purple-600" />
+              <BarChart3 className={`w-4 h-4 ${isManager ? 'text-accent' : 'text-purple-600'}`} />
               <span>Grafik Perbandingan Top 10 Produk</span>
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -624,7 +685,7 @@ export const TopProductsScreen: React.FC = () => {
               onClick={() => setChartMetric('qty')}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 chartMetric === 'qty'
-                  ? 'bg-purple-600 text-white shadow-2xs'
+                  ? (isManager ? 'bg-accent text-white shadow-2xs' : 'bg-purple-600 text-white shadow-2xs')
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
               }`}
             >
@@ -635,7 +696,7 @@ export const TopProductsScreen: React.FC = () => {
               onClick={() => setChartMetric('revenue')}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 chartMetric === 'revenue'
-                  ? 'bg-purple-600 text-white shadow-2xs'
+                  ? (isManager ? 'bg-accent text-white shadow-2xs' : 'bg-purple-600 text-white shadow-2xs')
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
               }`}
             >
@@ -687,9 +748,9 @@ export const TopProductsScreen: React.FC = () => {
                             Kategori: <span className="font-semibold text-stone-700 dark:text-stone-300">{item.category}</span>
                           </div>
                           <div className="text-[11px] text-stone-500">
-                            Vendor: <span className="font-semibold text-stone-700 dark:text-stone-300">{item.vendor}</span>
+                            Cabang: <span className="font-semibold text-stone-700 dark:text-stone-300">{item.vendor}</span>
                           </div>
-                          <div className="border-t border-stone-100 dark:border-stone-800 pt-1 mt-1 font-semibold text-purple-600 dark:text-purple-400">
+                          <div className={`border-t border-stone-100 dark:border-stone-800 pt-1 mt-1 font-semibold ${isManager ? 'text-accent' : 'text-purple-600 dark:text-purple-400'}`}>
                             {chartMetric === 'qty' ? `Terjual: ${item.qty} pcs` : `Omzet: ${formatIDR(item.revenue)}`}
                           </div>
                           <div className="text-[10px] text-stone-400">
@@ -703,7 +764,7 @@ export const TopProductsScreen: React.FC = () => {
                 />
                 <Bar dataKey={chartMetric} radius={[6, 6, 0, 0]}>
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#9333ea'} />
+                    <Cell key={`cell-${index}`} fill={entry.color || primaryBarFill} />
                   ))}
                 </Bar>
               </BarChart>
@@ -717,7 +778,7 @@ export const TopProductsScreen: React.FC = () => {
         <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2">
-              <Award className="w-4 h-4 text-purple-600" />
+              <Award className={`w-4 h-4 ${isManager ? 'text-accent' : 'text-purple-600'}`} />
               <span>Daftar Peringkat 10 Produk Terlaris</span>
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -813,7 +874,7 @@ export const TopProductsScreen: React.FC = () => {
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 border border-stone-200 dark:border-stone-700 whitespace-nowrap">
                           <Building2 className="w-3 h-3 opacity-60" />
-                          <span className="truncate max-w-[140px]">{item.vendorName}</span>
+                          <span className="truncate max-w-[140px]">{item.vendorName || data?.vendor?.name || 'Cabang'}</span>
                         </span>
                       </td>
 
@@ -849,7 +910,7 @@ export const TopProductsScreen: React.FC = () => {
                       </td>
 
                       {/* Percentage of Volume */}
-                      <td className="py-3 px-4 text-right font-semibold text-purple-700 dark:text-purple-300">
+                      <td className={`py-3 px-4 text-right font-semibold ${isManager ? 'text-orange-700 dark:text-orange-400' : 'text-purple-700 dark:text-purple-300'}`}>
                         {item.percentageOfTotal}%
                       </td>
                     </tr>
@@ -918,9 +979,13 @@ export const TopProductsScreen: React.FC = () => {
                 </div>
 
                 <div className="bg-stone-800/60 p-2 rounded-xl border border-stone-700/50">
-                  <span className="text-stone-400 block text-[10px]">Pesanan Aktif (3 Bulan):</span>
+                  <span className="text-stone-400 block text-[10px]">
+                    {isManager ? 'Pesanan Cabang (3 Bulan):' : 'Pesanan Aktif (3 Bulan):'}
+                  </span>
                   <span className="font-bold text-white">
-                    {data.retention.activeOrdersCount} pesanan
+                    {data.retention.vendorOrdersCount !== undefined
+                      ? `${data.retention.vendorOrdersCount} pesanan`
+                      : `${data.retention.activeOrdersCount} pesanan`}
                   </span>
                 </div>
               </div>

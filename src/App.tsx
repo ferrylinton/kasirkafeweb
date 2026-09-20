@@ -52,6 +52,10 @@ const MainLayout: React.FC = () => {
   // 2. Manajemen Toko: Hanya boleh diakses role MANAGER
   const managerTabs = [
     'manager-dashboard',
+    'manager-top-products',
+    'top-products',
+    'admin-dashboard',
+    'admin-top-products',
     'inventaris',
     'users',
     'diskon',
@@ -228,8 +232,11 @@ const MainLayout: React.FC = () => {
           {activeView === 'settings' && <SettingsScreen />}
 
           {/* Manajemen Toko (HANYA role MANAGER) */}
-          {isManager && activeView === 'manager-dashboard' && <ManagerDashboardScreen />}
-          {isAdmin && activeView === 'manager-dashboard' && <ManagerDashboardScreen />}
+          {isManager && activeView === 'manager-dashboard' && <ManagerDashboardScreen onNavigateTab={handleNavigateTab} />}
+          {isAdmin && activeView === 'manager-dashboard' && <ManagerDashboardScreen onNavigateTab={handleNavigateTab} />}
+          {isManager && (activeView === 'manager-top-products' || activeView === 'top-products') && (
+            <TopProductsScreen managerMode={true} />
+          )}
           {isManager && activeView === 'inventaris' && <InventoryScreen />}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
@@ -238,12 +245,12 @@ const MainLayout: React.FC = () => {
           {isManager && activeView === 'activity-logs' && <ActivityLogScreen />}
           {isManager && activeView === 'vendor-client' && <VendorClientScreen />}
 
-          {/* Administrasi Sistem Lintas Vendor (HANYA role ADMIN / SUPERADMIN) */}
-          {isAdmin && activeView === 'admin-dashboard' && (
+          {/* Administrasi Sistem Lintas Vendor */}
+          {(isAdmin || isManager) && activeView === 'admin-dashboard' && (
             <AdminDashboardScreen />
           )}
-          {isAdmin && activeView === 'admin-top-products' && (
-            <TopProductsScreen />
+          {(isAdmin || isManager) && activeView === 'admin-top-products' && (
+            <TopProductsScreen managerMode={false} />
           )}
           {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
             <OrderHistoryScreen allVendorsMode={true} />

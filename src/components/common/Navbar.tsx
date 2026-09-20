@@ -52,12 +52,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'Vendor & Klien ID (M2M)';
       case 'manager-dashboard':
         return 'Dashboard Transaksi Cabang';
+      case 'manager-top-products':
+      case 'top-products':
+        return 'Top 10 Produk Terlaris (Cabang)';
       case 'vendor-management':
         return 'Manajemen Vendor (Admin)';
       case 'admin-dashboard':
-        return t('navAdminDashboard') || 'Dashboard Grafik Transaksi';
+        return t('navAdminDashboard') || 'Dashboard Grafik Transaksi Semua Vendor';
       case 'admin-top-products':
-        return t('navAdminTopProducts') || 'Top 10 Produk Terlaris';
+        return t('navAdminTopProducts') || 'Top 10 Produk Terlaris (Hari, Minggu, Bulan)';
       case 'admin-orders':
       case 'admin-riwayat':
         return t('navAdminOrders');

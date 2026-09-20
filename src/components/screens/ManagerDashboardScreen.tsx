@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   Sparkles,
   Database,
-  Building2
+  Building2,
+  Trophy
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -120,7 +121,11 @@ interface ManagerAnalyticsData {
   }>;
 }
 
-export const ManagerDashboardScreen: React.FC = () => {
+interface ManagerDashboardScreenProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ onNavigateTab }) => {
   const { token, user } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
@@ -430,6 +435,20 @@ export const ManagerDashboardScreen: React.FC = () => {
 
         {/* Header Actions */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Quick link to Top 10 Products for Manager */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              id="goto-manager-top-products-btn"
+              onClick={() => onNavigateTab('manager-top-products')}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
+              title="Buka Peringkat 10 Produk Paling Laku Cabang"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-500" />
+              <span>Top 10 Produk</span>
+            </button>
+          )}
+
           {/* Refresh Button */}
           <button
             type="button"

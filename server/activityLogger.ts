@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDB, fallbackStore } from './db';
+import { logDataMutation } from './dailyRollingLogger';
 
 export type ActivityAction = 'CREATE' | 'UPDATE' | 'DELETE';
 export type ActivityEntity =
@@ -145,6 +146,23 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
   // Keep in-memory store bounded to prevent unlimited growth (keep latest 2000 entries)
   if (fallbackStore.activity_logs.length > 2000) {
     fallbackStore.activity_logs.pop();
+  }
+
+  // 3. Mirror data modifications to the daily rolling log file (DATA_MUTATION category)
+  if (entity !== 'ORDER') {
+    logDataMutation({
+      action: action as any,
+      entity,
+      entityId: entityId ? String(entityId) : undefined,
+      entityName,
+      summary,
+      performer,
+      vendorId: resolvedVendorId,
+      ipAddress: clientIp,
+      userAgent: clientAgent,
+      req,
+      details
+    }).catch(() => {});
   }
 
   console.log(`[ActivityLog] [${action}] ${entity}: ${summary} (by ${performer.name} - ${performer.role})`);

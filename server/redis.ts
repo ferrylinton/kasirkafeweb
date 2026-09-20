@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { Request, Response, NextFunction } from 'express';
+import { logRedis } from './dailyRollingLogger';
 
 dotenv.config();
 
@@ -11,6 +12,11 @@ let isRedisReady = false;
 
 if (REDIS_URL) {
   try {
+    logRedis({
+      event: 'CONNECTING',
+      message: 'Mencoba menghubungkan ke Redis cluster...'
+    }).catch(() => {});
+
     redisClient = new Redis(REDIS_URL, {
       maxRetriesPerRequest: 2,
       connectTimeout: 3000,
@@ -22,17 +28,34 @@ if (REDIS_URL) {
     redisClient.on('connect', () => {
       isRedisReady = true;
       console.log('[Redis] Connected successfully to Redis!');
+      logRedis({
+        event: 'CONNECTED',
+        message: 'Koneksi ke Redis berhasil terhubung!'
+      }).catch(() => {});
     });
 
-    redisClient.on('error', () => {
+    redisClient.on('error', (err: any) => {
       isRedisReady = false;
-      // Keep log clean, fallback will handle requests
+      logRedis({
+        event: 'ERROR',
+        message: `Koneksi Redis terputus atau gagal: ${err?.message || 'Unknown error'}. Beralih ke token bucket lokal.`,
+        error: err
+      }).catch(() => {});
     });
   } catch (e: any) {
     console.warn('[Redis] Initialization warning, using fallback token bucket');
+    logRedis({
+      event: 'FALLBACK_MODE',
+      message: `Peringatan inisialisasi Redis (${e?.message}). Beroperasi dengan local memory bucket.`,
+      error: e
+    }).catch(() => {});
   }
 } else {
   console.log('[Redis] No REDIS_URL configured. Operating with in-memory token bucket & session store.');
+  logRedis({
+    event: 'FALLBACK_MODE',
+    message: 'Tidak ada REDIS_URL yang dikonfigurasi. Beroperasi dengan in-memory token bucket & session store.'
+  }).catch(() => {});
 }
 
 // In-memory token bucket fallback
@@ -147,6 +170,17 @@ export function tokenBucketRateLimiter(config: TokenBucketConfig = DEFAULT_CONFI
 
     if (!result.allowed) {
       res.setHeader('Retry-After', result.retryAfterSec.toString());
+      logRedis({
+        event: 'RATE_LIMIT_EXCEEDED',
+        message: `Batas laju permintaan terlampaui untuk IP: ${ip}. Retry after: ${result.retryAfterSec}s`,
+        ipAddress: ip,
+        details: {
+          ip,
+          retryAfterSec: result.retryAfterSec,
+          capacity: config.capacity
+        }
+      }).catch(() => {});
+
       return res.status(429).json({
         success: false,
         error: 'Too Many Requests',

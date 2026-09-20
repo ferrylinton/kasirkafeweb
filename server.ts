@@ -19,9 +19,11 @@ import { vendorRouter } from './server/routes/vendorRoutes';
 import { adminVendorRouter } from './server/routes/adminVendorRoutes';
 import { adminAnalyticsRouter } from './server/routes/adminAnalyticsRoutes';
 import { managerAnalyticsRouter } from './server/routes/managerAnalyticsRoutes';
+import { systemLogRouter } from './server/routes/systemLogRoutes';
 import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
 import { initRetentionScheduler } from './server/retentionScheduler';
+import { initDailyRollingLogger, logError, writeDailyLog } from './server/dailyRollingLogger';
 
 dotenv.config();
 
@@ -64,6 +66,31 @@ async function startServer() {
   app.use('/api/admin/vendors', adminVendorRouter);
   app.use('/api/admin/analytics', adminAnalyticsRouter);
   app.use('/api/manager/analytics', managerAnalyticsRouter);
+  app.use('/api/admin/system-logs', systemLogRouter);
+
+  // Global Express API Error Handler (logs all 500s to Daily Rolling Logger)
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('[API Error]', err);
+    logError({
+      message: err.message || 'Internal Server API Error',
+      context: `${req.method} ${req.originalUrl || req.url}`,
+      error: err,
+      req,
+      statusCode: err.status || 500
+    }).catch(() => {});
+
+    if (res.headersSent) {
+      return next(err);
+    }
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.name || 'Internal Server Error',
+      message: err.message || 'Terjadi galat pada server'
+    });
+  });
+
+  // Initialize Daily Rolling Logger (creates /logs directory & prunes old archives)
+  await initDailyRollingLogger();
 
   // Vite Middleware / Static Serving
   if (process.env.NODE_ENV !== 'production') {
@@ -109,18 +136,26 @@ async function startServer() {
   // Bind to 0.0.0.0:3000
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] SipSpot POS running on http://0.0.0.0:${PORT}`);
+    writeDailyLog({
+      level: 'INFO',
+      category: 'SYSTEM',
+      message: `SipSpot POS Server berhasil dijalankan pada port ${PORT} (PID: ${process.pid})`
+    }).catch(() => {});
   });
 
-  // If external MongoDB URI is configured, connect and seed remote DB in background
-  if (process.env.MONGODB_URI) {
-    connectDB()
-      .then(() => seedDatabase())
-      .catch((err: any) => {
-        console.warn('[Bootstrap] Database setup warning:', err.message);
-      });
-  }
+  // Connect to MongoDB or establish resilient in-memory mode
+  connectDB()
+    .then(() => seedDatabase())
+    .catch((err: any) => {
+      console.warn('[Bootstrap] Database setup warning:', err.message);
+    });
 }
 
 startServer().catch(err => {
   console.error('[Server] Fatal bootstrap error:', err);
+  logError({
+    message: 'Fatal server bootstrap error',
+    context: 'startServer',
+    error: err
+  }).catch(() => {});
 });

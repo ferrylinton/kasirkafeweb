@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { authMiddleware, requireAdmin } from '../auth';
+import { authMiddleware, requireManager } from '../auth';
 import { getDB, fallbackStore } from '../db';
 import { getAllVendors, VendorRecord } from '../vendorMiddleware';
 import {
@@ -12,8 +12,8 @@ import {
 
 export const adminAnalyticsRouter = Router();
 
-// Guarded exclusively for ADMIN & SUPERADMIN
-adminAnalyticsRouter.use(authMiddleware, requireAdmin);
+// Guarded for ADMIN, SUPERADMIN & MANAGER
+adminAnalyticsRouter.use(authMiddleware, requireManager);
 
 const VENDOR_COLORS: Record<string, string> = {
   vnd_sipspot_central: '#ea580c', // Orange Amber

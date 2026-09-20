@@ -6,6 +6,7 @@ import { sendReceiptEmail } from '../mail';
 import { authMiddleware } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
+import { logOrder } from '../dailyRollingLogger';
 
 export const orderRouter = Router();
 
@@ -409,6 +410,32 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
         role: req.user?.role || 'CASHIER'
       }
     });
+
+    // Write to Daily Rolling Log File (ORDER category)
+    logOrder({
+      action: 'CREATED',
+      orderId,
+      orderNumber,
+      vendorId: activeVendorId,
+      totalAmount,
+      paymentMethod,
+      itemsCount: items.length,
+      cashierName,
+      cashierId: req.user?.userId,
+      customerName: customerName || 'Pelanggan Walk-In',
+      discountItemName: discountItem ? discountItem.name : undefined,
+      req,
+      details: {
+        queueNumber,
+        subtotal,
+        discountAmount,
+        pb1Tax,
+        cashReceived,
+        change,
+        customerEmail,
+        customerPhone
+      }
+    }).catch(() => {});
 
     // 3. Send email receipt if email was provided
     let emailResult = null;
