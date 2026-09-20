@@ -18,8 +18,10 @@ import { activityLogRouter } from './server/routes/activityLogRoutes';
 import { vendorRouter } from './server/routes/vendorRoutes';
 import { adminVendorRouter } from './server/routes/adminVendorRoutes';
 import { adminAnalyticsRouter } from './server/routes/adminAnalyticsRoutes';
+import { managerAnalyticsRouter } from './server/routes/managerAnalyticsRoutes';
 import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
+import { initRetentionScheduler } from './server/retentionScheduler';
 
 dotenv.config();
 
@@ -61,6 +63,7 @@ async function startServer() {
   app.use('/api/activity-logs', activityLogRouter);
   app.use('/api/admin/vendors', adminVendorRouter);
   app.use('/api/admin/analytics', adminAnalyticsRouter);
+  app.use('/api/manager/analytics', managerAnalyticsRouter);
 
   // Vite Middleware / Static Serving
   if (process.env.NODE_ENV !== 'production') {
@@ -83,6 +86,9 @@ async function startServer() {
 
   // Populate in-memory database immediately so all endpoints have data from moment one
   await seedDatabase();
+
+  // Initialize automated 3-month data retention background scheduler
+  initRetentionScheduler();
 
   httpServer.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

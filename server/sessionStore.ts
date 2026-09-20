@@ -22,6 +22,10 @@ export const SESSION_IDLE_TIMEOUT_SECONDS = 15 * 60; // 900 seconds
 const inMemorySessions = new Map<string, { data: RedisSessionData; expiresAt: number }>();
 // Map sessionId -> token for rapid lookups
 const inMemorySessionIdToToken = new Map<string, string>();
+// Map user email -> active token for single active browser enforcement
+const inMemoryUserToToken = new Map<string, string>();
+// Map user email -> active sessionId
+const inMemoryUserToSessionId = new Map<string, string>();
 
 // Clean up expired in-memory sessions periodically
 setInterval(() => {
@@ -32,12 +36,20 @@ setInterval(() => {
       if (item.data?.sessionId) {
         inMemorySessionIdToToken.delete(item.data.sessionId);
       }
+      if (item.data?.email) {
+        const uEmail = item.data.email.toLowerCase().trim();
+        if (inMemoryUserToToken.get(uEmail) === token) {
+          inMemoryUserToToken.delete(uEmail);
+          inMemoryUserToSessionId.delete(uEmail);
+        }
+      }
     }
   }
 }, 30 * 1000);
 
 /**
- * Store active session metadata in Redis with 15-minute TTL
+ * Store active session metadata in Redis with 15-minute TTL.
+ * Automatically invalidates previous active sessions for the same user.
  */
 export async function saveSessionToRedis(
   token: string,
@@ -46,8 +58,20 @@ export async function saveSessionToRedis(
 ): Promise<void> {
   const now = Date.now();
   sessionData.lastActive = now;
+  const userEmail = sessionData.email ? sessionData.email.toLowerCase().trim() : '';
 
-  // 1. Always maintain in-memory fallback
+  // 1. In-memory fallback & user session tracking
+  if (userEmail) {
+    const prevToken = inMemoryUserToToken.get(userEmail);
+    if (prevToken && prevToken !== token) {
+      inMemorySessions.delete(prevToken);
+    }
+    inMemoryUserToToken.set(userEmail, token);
+    if (sessionData.sessionId) {
+      inMemoryUserToSessionId.set(userEmail, sessionData.sessionId);
+    }
+  }
+
   inMemorySessions.set(token, {
     data: sessionData,
     expiresAt: now + ttlSeconds * 1000
@@ -65,6 +89,17 @@ export async function saveSessionToRedis(
       pipeline.set(tokenKey, JSON.stringify(sessionData), 'EX', ttlSeconds);
       if (sessionData.sessionId) {
         pipeline.set(`session:id:${sessionData.sessionId}`, token, 'EX', ttlSeconds);
+      }
+      if (userEmail) {
+        const userKey = `session:user:${userEmail}`;
+        const prevToken = await redis.get(userKey);
+        if (prevToken && prevToken !== token) {
+          pipeline.del(`session:token:${prevToken}`);
+        }
+        pipeline.set(userKey, token, 'EX', ttlSeconds);
+        if (sessionData.sessionId) {
+          pipeline.set(`session:usersess:${userEmail}`, sessionData.sessionId, 'EX', ttlSeconds);
+        }
       }
       await pipeline.exec();
     } catch (err: any) {
@@ -161,6 +196,13 @@ export async function removeSessionFromRedis(
   // Remove from memory
   inMemorySessions.delete(token);
   inMemorySessionIdToToken.delete(sessionId);
+  for (const [uEmail, tok] of inMemoryUserToToken.entries()) {
+    if (tok === token) {
+      inMemoryUserToToken.delete(uEmail);
+      inMemoryUserToSessionId.delete(uEmail);
+      break;
+    }
+  }
 
   // Remove from Redis
   if (redis) {
@@ -182,6 +224,67 @@ export async function removeSessionFromRedis(
     } catch (err: any) {
       console.warn('[Redis Session] Warning deleting session from Redis:', err?.message);
     }
+  }
+}
+
+/**
+ * Get active token for a user email
+ */
+export async function getActiveTokenForUser(email: string): Promise<string | null> {
+  const userEmail = email.toLowerCase().trim();
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const token = await redis.get(`session:user:${userEmail}`);
+      if (token) return token;
+    } catch (e) {}
+  }
+  return inMemoryUserToToken.get(userEmail) || null;
+}
+
+/**
+ * Get active sessionId for a user email
+ */
+export async function getActiveSessionIdForUser(email: string): Promise<string | null> {
+  const userEmail = email.toLowerCase().trim();
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const sessId = await redis.get(`session:usersess:${userEmail}`);
+      if (sessId) return sessId;
+    } catch (e) {}
+  }
+  return inMemoryUserToSessionId.get(userEmail) || null;
+}
+
+/**
+ * Invalidate and remove any active session for this user in session store
+ */
+export async function invalidateUserSessionInStore(email: string): Promise<void> {
+  const userEmail = email.toLowerCase().trim();
+  const memToken = inMemoryUserToToken.get(userEmail);
+  const memSessId = inMemoryUserToSessionId.get(userEmail);
+  if (memToken) {
+    inMemorySessions.delete(memToken);
+  }
+  if (memSessId) {
+    inMemorySessionIdToToken.delete(memSessId);
+  }
+  inMemoryUserToToken.delete(userEmail);
+  inMemoryUserToSessionId.delete(userEmail);
+
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const prevToken = await redis.get(`session:user:${userEmail}`);
+      const prevSessId = await redis.get(`session:usersess:${userEmail}`);
+      const pipeline = redis.pipeline();
+      if (prevToken) pipeline.del(`session:token:${prevToken}`);
+      if (prevSessId) pipeline.del(`session:id:${prevSessId}`);
+      pipeline.del(`session:user:${userEmail}`);
+      pipeline.del(`session:usersess:${userEmail}`);
+      await pipeline.exec();
+    } catch (e) {}
   }
 }
 

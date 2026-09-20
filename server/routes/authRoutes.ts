@@ -5,7 +5,7 @@ import { getDB, fallbackStore } from '../db';
 import { comparePassword, hashPassword, signToken, authMiddleware, revokedSessionIds, verifyToken } from '../auth';
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent } from '../mail';
 import { ObjectId } from 'mongodb';
-import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis } from '../sessionStore';
+import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
 import { getAllVendors } from '../vendorMiddleware';
 
@@ -61,15 +61,39 @@ export async function getActiveSessionsForUser(email: string) {
 export async function revokeAllActiveSessionsForUser(email: string, revokedBy: string, reason: string) {
   const normalizedEmail = email.toLowerCase().trim();
   const db = getDB();
-  const activeSessions = await getActiveSessionsForUser(normalizedEmail);
   const now = new Date();
 
-  for (const s of activeSessions) {
-    revokedSessionIds.add(s.sessionId);
-    if (!fallbackStore.revoked_sessions.includes(s.sessionId)) {
-      fallbackStore.revoked_sessions.push(s.sessionId);
+  // 1. Invalidate in session store (Redis user mappings and in-memory caches)
+  await invalidateUserSessionInStore(normalizedEmail);
+
+  // 2. Query all active sessions from DB & fallback store
+  let allActiveSessions: any[] = [];
+  if (db) {
+    try {
+      allActiveSessions = await db.collection('login_history')
+        .find({ email: normalizedEmail, status: 'ACTIVE' })
+        .toArray();
+    } catch (e) {}
+  }
+  if (!allActiveSessions || allActiveSessions.length === 0) {
+    allActiveSessions = fallbackStore.login_history.filter(
+      h => h.email.toLowerCase() === normalizedEmail && h.status === 'ACTIVE'
+    );
+  }
+
+  const redisActive = await getActiveSessionsForUser(normalizedEmail);
+  const combined = [...allActiveSessions, ...redisActive];
+  const uniqueSessionIds = new Set<string>();
+
+  for (const s of combined) {
+    if (s.sessionId && !uniqueSessionIds.has(s.sessionId)) {
+      uniqueSessionIds.add(s.sessionId);
+      revokedSessionIds.add(s.sessionId);
+      if (!fallbackStore.revoked_sessions.includes(s.sessionId)) {
+        fallbackStore.revoked_sessions.push(s.sessionId);
+      }
+      removeSessionFromRedis(s.sessionId).catch(() => {});
     }
-    removeSessionFromRedis(s.sessionId).catch(() => {});
   }
 
   const update = {
@@ -94,7 +118,7 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
     }
   }
 
-  return activeSessions.length;
+  return uniqueSessionIds.size;
 }
 
 // Helper to find manager by 6-digit PIN
@@ -473,101 +497,38 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     // Authentication Succeeded -> Clear Lockout!
     clearUserLockout(user.email, ipAddress);
 
-    // SINGLE ACTIVE SESSION CHECK: If user is already logged in on another browser/device
+    const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
+    const loginMethod: 'PIN' | 'PASSWORD' = pin ? 'PIN' : 'PASSWORD';
+    const device = parseUserAgent(userAgent);
+
+    // SINGLE ACTIVE BROWSER POLICY:
+    // User can only be active in ONE browser at a time.
+    // If user is currently logged in on another browser/device, force logout all previous sessions upon successful login.
     const activeSessions = await getActiveSessionsForUser(user.email);
+    let previousSessionsTerminated = 0;
     if (activeSessions.length > 0) {
-      if (req.body.forceLogout) {
-        let isAuthorized = false;
-        let authorizedBy = user.email;
-
-        // Role MANAGER can force logout directly
-        if (user.role === 'MANAGER') {
-          isAuthorized = true;
-          authorizedBy = `Manager ${user.name}`;
-        } else if (req.body.managerPin) {
-          // If cashier, requires valid Manager PIN authorization
-          const mgr = await findManagerByPin(req.body.managerPin);
-          if (mgr) {
-            isAuthorized = true;
-            authorizedBy = `Manager ${mgr.name}`;
-          } else {
-            return res.status(403).json({
-              success: false,
-              error: 'InvalidManagerPin',
-              message: 'PIN Manager tidak valid. Hanya role Manager yang dapat memaksa logout sesi aktif kasir.'
-            });
-          }
-        }
-
-        if (isAuthorized) {
-          await revokeAllActiveSessionsForUser(
-            user.email,
-            authorizedBy,
-            `Dipaksa logout oleh ${authorizedBy} dari perangkat/browser lain`
-          );
-        } else {
-          return res.status(403).json({
-            success: false,
-            error: 'ManagerAuthorizationRequired',
-            message: 'Hanya role Manager yang diizinkan untuk memaksa logout sesi pengguna yang sedang aktif.',
-            isAlreadyLoggedIn: true,
-            user: {
-              id: user._id ? user._id.toString() : user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role
-            },
-            activeSession: {
-              sessionId: activeSessions[0].sessionId,
-              device: activeSessions[0].device || 'Browser lain',
-              ipAddress: activeSessions[0].ipAddress || '127.0.0.1',
-              timestamp: activeSessions[0].timestamp
-            }
-          });
-        }
-      } else {
-        // Reject simultaneous login and return detailed active session info
-        const latestActive = activeSessions[0];
-        return res.status(409).json({
-          success: false,
-          error: 'UserAlreadyLoggedIn',
-          isAlreadyLoggedIn: true,
-          message: `Pengguna '${user.name}' saat ini sedang aktif login di browser atau perangkat lain. Akun yang sama tidak dapat digunakan login bersamaan.`,
-          user: {
-            id: user._id ? user._id.toString() : user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role
-          },
-          activeSession: {
-            sessionId: latestActive.sessionId,
-            device: latestActive.device || 'Browser lain',
-            ipAddress: latestActive.ipAddress || '127.0.0.1',
-            timestamp: latestActive.timestamp
-          },
-          canManagerForceLogout: true,
-          isSelfManager: user.role === 'MANAGER'
-        });
-      }
+      previousSessionsTerminated = await revokeAllActiveSessionsForUser(
+        user.email,
+        user.name,
+        `Dipaksa logout otomatis karena akun berhasil login di browser/perangkat baru (${device})`
+      );
     }
 
     const userId = user._id ? user._id.toString() : (user.id || 'mock_id');
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const revokeToken = crypto.randomBytes(24).toString('hex');
-    const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
-    const loginMethod: 'PIN' | 'PASSWORD' = pin ? 'PIN' : 'PASSWORD';
-    const device = parseUserAgent(userAgent);
 
+    const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_sipspot_central';
     const token = signToken({
       userId,
       email: user.email,
       role: user.role,
       name: user.name,
-      sessionId
+      sessionId,
+      vendorId: historyVendorId
     });
 
     // Record login in history collection
-    const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_sipspot_central';
     const historyEntry = {
       vendorId: historyVendorId,
       sessionId,
@@ -638,16 +599,20 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: `Selamat bertugas, ${user.name}!`,
+      message: previousSessionsTerminated > 0
+        ? `Selamat bertugas, ${user.name}! Sesi login di browser lain telah otomatis dipaksa keluar.`
+        : `Selamat bertugas, ${user.name}!`,
       token,
       sessionId,
+      previousSessionsTerminated: previousSessionsTerminated > 0,
       user: {
         id: userId,
         email: user.email,
         name: user.name,
         role: user.role,
         avatar: user.avatar,
-        pin: user.pin
+        pin: user.pin,
+        vendorId: historyVendorId
       }
     });
   } catch (err: any) {
@@ -692,6 +657,8 @@ authRouter.get('/me', authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
+    const resolvedVendorId = user.vendorId || userPayload.vendorId || 'vnd_sipspot_central';
+
     return res.json({
       success: true,
       user: {
@@ -700,7 +667,8 @@ authRouter.get('/me', authMiddleware, async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         avatar: user.avatar,
-        pin: user.pin
+        pin: user.pin,
+        vendorId: resolvedVendorId
       }
     });
   } catch (err: any) {

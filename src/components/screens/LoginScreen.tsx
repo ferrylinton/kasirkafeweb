@@ -342,7 +342,11 @@ export const LoginScreen: React.FC = () => {
       try {
         localStorage.removeItem(storageKey);
       } catch (e) {}
-      showToast(`Selamat datang, ${selectedUser.name}!`, 'success');
+      if (result.previousSessionsTerminated) {
+        showToast(`Selamat datang, ${selectedUser.name}! Sesi di browser lain telah otomatis dikeluarkan.`, 'info');
+      } else {
+        showToast(`Selamat datang, ${selectedUser.name}!`, 'success');
+      }
     } else if (result.isAlreadyLoggedIn) {
       setPin('');
       setAlreadyLoggedInData({

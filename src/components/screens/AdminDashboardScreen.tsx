@@ -17,7 +17,17 @@ import {
   Layers,
   Percent,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Download,
+  FileSpreadsheet,
+  FileCode,
+  Clock,
+  ShieldCheck,
+  Trash2,
+  CalendarCheck,
+  Sparkles,
+  Database,
+  ChevronDown
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -51,6 +61,24 @@ interface AnalyticsData {
   success: boolean;
   requestedVendorId: string;
   vendors: VendorMeta[];
+  retention?: {
+    retentionDays: number;
+    retentionMonths: number;
+    cutoffDate: string;
+    lastRunTime: string | null;
+    lastDeletedCount: number;
+    totalPurgedLifetime: number;
+    activeOrdersCount: number;
+    nextScheduledRun: string | null;
+    schedulerStatus: 'ACTIVE' | 'RUNNING';
+    intervalHours: number;
+  };
+  retentionPolicy?: {
+    months: number;
+    days: number;
+    cutoffDate: string;
+    description: string;
+  };
   summary: {
     totalOrders: number;
     totalRevenue: number;
@@ -98,6 +126,9 @@ export const AdminDashboardScreen: React.FC = () => {
   const [chartType, setChartType] = useState<ChartViewType>('area');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isPurging, setIsPurging] = useState<boolean>(false);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -146,6 +177,140 @@ export const AdminDashboardScreen: React.FC = () => {
       fetchAnalytics();
     }
   }, [token, selectedVendor]);
+
+  // Export full transaction dataset (within 3-month retention window)
+  const handleExportTransactions = async (format: 'csv' | 'json', targetPeriod = period) => {
+    setIsExporting(true);
+    setShowExportMenu(false);
+    try {
+      const res = await fetch(
+        `/api/admin/analytics/transactions/export?period=${encodeURIComponent(targetPeriod)}&vendorId=${encodeURIComponent(selectedVendor)}&format=${format}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Gagal mengekspor data (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sipspot_transaksi_3bulan_${targetPeriod}_${selectedVendor}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      showToast(`Data transaksi (${format.toUpperCase()}) 3 bulan berhasil diunduh!`, 'success');
+    } catch (err: any) {
+      console.error('[AdminDashboard] Export error:', err);
+      showToast(err.message || 'Gagal mengekspor data', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Run retention cleanup scheduler on-demand
+  const handleRunRetentionCleanup = async () => {
+    setIsPurging(true);
+    try {
+      const res = await fetch('/api/admin/analytics/retention-run', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Gagal menjalankan skeduler pembersihan (${res.status})`);
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        showToast(
+          json.message || `Skeduler pembersihan berhasil dijalankan. ${json.result?.deletedCount || 0} pesanan usang dihapus.`,
+          'success'
+        );
+        fetchAnalytics(true);
+      } else {
+        throw new Error(json.error || 'Gagal menjalankan pembersihan data');
+      }
+    } catch (err: any) {
+      console.error('[AdminDashboard] Retention cleanup error:', err);
+      showToast(err.message || 'Gagal menjalankan skeduler', 'error');
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  // Export current table view directly to CSV or JSON
+  const handleExportCurrentTable = (format: 'csv' | 'json') => {
+    if (!activeDataset || activeDataset.length === 0) {
+      showToast('Tidak ada data tabel untuk diekspor', 'error');
+      return;
+    }
+
+    const periodNames: Record<PeriodType, string> = {
+      day: 'Per_Hari',
+      week: 'Per_Minggu',
+      month: 'Per_Bulan',
+      year: 'Per_Tahun'
+    };
+
+    if (format === 'json') {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(activeDataset, null, 2));
+      const a = document.createElement('a');
+      a.href = dataStr;
+      a.download = `sipspot_rekap_tabel_${periodNames[period]}_${selectedVendor}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('Tabel analitik berhasil diekspor ke JSON', 'success');
+      return;
+    }
+
+    // CSV format
+    const vendors = data?.vendors || [];
+    const headers = [
+      'Periode',
+      'Hari',
+      ...vendors.map((v) => `Omzet ${v.name} (Rp)`),
+      ...vendors.map((v) => `Trx ${v.name}`),
+      'Total Volume Trx',
+      'Total Omzet (Rp)',
+      'Rata-rata / AOV (Rp)'
+    ];
+
+    const rows = activeDataset.map((row: any) => {
+      return [
+        `"${row.label || ''}"`,
+        `"${row.dayName || ''}"`,
+        ...vendors.map((v) => row[`${v.id}_revenue`] || 0),
+        ...vendors.map((v) => row[`${v.id}_orders`] || 0),
+        row.totalOrders || 0,
+        row.totalRevenue || 0,
+        row.averageTicket || 0
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sipspot_rekap_tabel_${periodNames[period]}_${selectedVendor}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Tabel analitik berhasil diekspor ke CSV', 'success');
+  };
 
   // Current active dataset according to selected period
   const activeDataset = useMemo(() => {
@@ -257,22 +422,53 @@ export const AdminDashboardScreen: React.FC = () => {
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
               Admin Analytics
             </span>
             <span className="text-xs text-stone-500 dark:text-stone-400">Multi-Vendor Performance</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              <ShieldCheck className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>Retensi 3 Bulan (90 Hari)</span>
+            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold font-heading text-stone-900 dark:text-white mt-1">
             Dashboard Transaksi Vendor
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 max-w-2xl mt-0.5">
-            Pantau dan bandingkan dinamika penjualan harian, mingguan, bulanan, dan tahunan dari seluruh vendor jaringan SipSpot.
+            Pantau dinamika grafik transaksi Per Hari, Per Minggu, dan Per Bulan untuk multi-vendor. Data tersimpan 3 bulan terakhir dengan skeduler pembersihan otomatis dan fasilitas ekspor data CSV/JSON.
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
+        {/* Action Controls: Export Data + Refresh */}
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* Export CSV Button */}
+          <button
+            type="button"
+            id="admin-export-csv-btn"
+            onClick={() => handleExportTransactions('csv')}
+            disabled={isLoading || isExporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Unduh Data Transaksi 3 Bulan Terakhir format CSV (Excel)"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>{isExporting ? 'Mengekspor...' : 'Ekspor CSV'}</span>
+          </button>
+
+          {/* Export JSON Button */}
+          <button
+            type="button"
+            id="admin-export-json-btn"
+            onClick={() => handleExportTransactions('json')}
+            disabled={isLoading || isExporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Unduh Data Transaksi 3 Bulan Terakhir format JSON"
+          >
+            <FileCode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Ekspor JSON</span>
+          </button>
+
+          {/* Refresh Button */}
           <button
             type="button"
             id="admin-dashboard-refresh-btn"
@@ -330,7 +526,7 @@ export const AdminDashboardScreen: React.FC = () => {
               }`}
             >
               <CalendarRange className="w-3.5 h-3.5" />
-              <span>Per Bulan (12 Bulan)</span>
+              <span>Per Bulan (3 Bulan Terakhir)</span>
             </button>
 
             <button
@@ -554,6 +750,141 @@ export const AdminDashboardScreen: React.FC = () => {
                 {data?.summary.topVendor?.percentage || 0}% Kontribusi
               </span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Retention Policy & Automated Cleanup Scheduler Card */}
+      <div className="bg-gradient-to-br from-amber-500/5 via-stone-50 to-orange-500/5 dark:from-amber-950/20 dark:via-stone-900 dark:to-orange-950/20 p-5 sm:p-6 rounded-2xl border border-amber-200/70 dark:border-amber-900/50 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-amber-200/50 dark:border-stone-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/80 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white">
+                  Kebijakan Retensi Data 3 Bulan & Skeduler Pembersihan Otomatis
+                </h3>
+                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  90 Hari Terakhir
+                </span>
+              </div>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Data transaksi disimpan selama 3 bulan terakhir. Data pesanan usang sebelum batas retensi dihapus secara otomatis oleh skeduler sistem.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Skeduler Aktif (Tiap 6 Jam)</span>
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Stat Tiles for Retention */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Tile 1: Cutoff Date */}
+          <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200/70 dark:border-stone-750 flex flex-col justify-between">
+            <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-xs font-semibold">
+              <CalendarCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Batas Tanggal Retensi</span>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white font-mono">
+                {data?.retention?.cutoffDate
+                  ? new Date(data.retention.cutoffDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '90 Hari Lalu'}
+              </p>
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">Data sebelum tanggal ini dibersihkan</p>
+            </div>
+          </div>
+
+          {/* Tile 2: Active Stored Orders */}
+          <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200/70 dark:border-stone-750 flex flex-col justify-between">
+            <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-xs font-semibold">
+              <Database className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Transaksi Aktif Tersimpan</span>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white font-mono">
+                {data?.retention?.activeOrdersCount !== undefined
+                  ? `${data.retention.activeOrdersCount.toLocaleString('id-ID')} Pesanan`
+                  : `${(data?.summary.totalOrders || 0).toLocaleString('id-ID')} Pesanan`}
+              </p>
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">Tersedia dalam database aktif 3 bulan</p>
+            </div>
+          </div>
+
+          {/* Tile 3: Last Purge */}
+          <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200/70 dark:border-stone-750 flex flex-col justify-between">
+            <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-xs font-semibold">
+              <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Pembersihan Terakhir</span>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white font-mono">
+                {data?.retention?.lastDeletedCount !== undefined
+                  ? `${data.retention.lastDeletedCount} data usang dihapus`
+                  : '0 data usang dihapus'}
+              </p>
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
+                {data?.retention?.lastRunTime
+                  ? `Eksekusi: ${new Date(data.retention.lastRunTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
+                  : 'Berjalan otomatis berkala'}
+              </p>
+            </div>
+          </div>
+
+          {/* Tile 4: Next Scheduled Run */}
+          <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200/70 dark:border-stone-750 flex flex-col justify-between">
+            <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-xs font-semibold">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Jadwal Berikutnya</span>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white font-mono">
+                {data?.retention?.nextScheduledRun
+                  ? `${new Date(data.retention.nextScheduledRun).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
+                  : 'Setiap 6 Jam'}
+              </p>
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">Skeduler latar belakang otomatis</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Controls for Retention */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-amber-200/50 dark:border-stone-800">
+          <div className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+            <span className="font-semibold text-stone-700 dark:text-stone-300">Catatan Retensi:</span>
+            <span>Data transaksi &gt; 90 hari otomatis dimusnahkan demi efisiensi dan privasi.</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              id="admin-run-retention-btn"
+              onClick={handleRunRetentionCleanup}
+              disabled={isPurging || isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-200 border border-stone-300 dark:border-stone-700 transition-all cursor-pointer disabled:opacity-50"
+              title="Jalankan skeduler pembersihan data usang sekarang secara manual"
+            >
+              <Trash2 className={`w-3.5 h-3.5 ${isPurging ? 'animate-spin text-orange-600' : 'text-stone-500'}`} />
+              <span>{isPurging ? 'Menjalankan Skeduler...' : 'Jalankan Skeduler Sekarang'}</span>
+            </button>
+
+            <button
+              type="button"
+              id="admin-export-3months-csv-btn"
+              onClick={() => handleExportTransactions('csv', 'all')}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Ekspor Seluruh Data 3 Bulan (.CSV)</span>
+            </button>
           </div>
         </div>
       </div>
@@ -855,9 +1186,33 @@ export const AdminDashboardScreen: React.FC = () => {
               Rincian angka transaksi dan pendapatan tiap entitas dalam rentang waktu yang dipilih.
             </p>
           </div>
-          <span className="text-xs font-bold text-stone-500 dark:text-stone-400 self-start sm:self-auto">
-            Total {activeDataset.length} Baris Data
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              id="export-table-csv-btn"
+              onClick={() => handleExportCurrentTable('csv')}
+              disabled={activeDataset.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 transition-all cursor-pointer disabled:opacity-50"
+              title="Ekspor data tabel ke format CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Ekspor Tabel (CSV)</span>
+            </button>
+            <button
+              type="button"
+              id="export-table-json-btn"
+              onClick={() => handleExportCurrentTable('json')}
+              disabled={activeDataset.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 transition-all cursor-pointer disabled:opacity-50"
+              title="Ekspor data tabel ke format JSON"
+            >
+              <FileCode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Ekspor Tabel (JSON)</span>
+            </button>
+            <span className="text-xs font-bold text-stone-500 dark:text-stone-400 pl-1">
+              Total {activeDataset.length} Baris
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

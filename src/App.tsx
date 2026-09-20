@@ -23,6 +23,8 @@ import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
 import { VendorClientScreen } from './components/screens/VendorClientScreen';
 import { VendorManagementScreen } from './components/screens/VendorManagementScreen';
 import { AdminDashboardScreen } from './components/screens/AdminDashboardScreen';
+import { ManagerDashboardScreen } from './components/screens/ManagerDashboardScreen';
+import { TopProductsScreen } from './components/screens/TopProductsScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 
 const MainLayout: React.FC = () => {
@@ -30,6 +32,9 @@ const MainLayout: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>(() => {
     if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
       return 'admin-dashboard';
+    }
+    if (user?.role === 'MANAGER') {
+      return 'manager-dashboard';
     }
     return 'katalog';
   });
@@ -46,6 +51,7 @@ const MainLayout: React.FC = () => {
 
   // 2. Manajemen Toko: Hanya boleh diakses role MANAGER
   const managerTabs = [
+    'manager-dashboard',
     'inventaris',
     'users',
     'diskon',
@@ -58,6 +64,7 @@ const MainLayout: React.FC = () => {
   // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN dan SUPERADMIN
   const adminTabs = [
     'admin-dashboard',
+    'admin-top-products',
     'vendor-management',
     'admin-orders',
     'admin-riwayat',
@@ -221,6 +228,8 @@ const MainLayout: React.FC = () => {
           {activeView === 'settings' && <SettingsScreen />}
 
           {/* Manajemen Toko (HANYA role MANAGER) */}
+          {isManager && activeView === 'manager-dashboard' && <ManagerDashboardScreen />}
+          {isAdmin && activeView === 'manager-dashboard' && <ManagerDashboardScreen />}
           {isManager && activeView === 'inventaris' && <InventoryScreen />}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
@@ -232,6 +241,9 @@ const MainLayout: React.FC = () => {
           {/* Administrasi Sistem Lintas Vendor (HANYA role ADMIN / SUPERADMIN) */}
           {isAdmin && activeView === 'admin-dashboard' && (
             <AdminDashboardScreen />
+          )}
+          {isAdmin && activeView === 'admin-top-products' && (
+            <TopProductsScreen />
           )}
           {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
             <OrderHistoryScreen allVendorsMode={true} />

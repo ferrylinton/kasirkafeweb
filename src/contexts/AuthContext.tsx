@@ -7,6 +7,7 @@ export const IDLE_WARNING_THRESHOLD_MS = 60 * 1000; // 60 seconds visual countdo
 export interface LoginResult {
   success: boolean;
   message?: string;
+  previousSessionsTerminated?: boolean;
   error?: string;
   isLocked?: boolean;
   lockedUntil?: number | null;
@@ -383,7 +384,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('sipspot_last_active', String(now));
         setToken(data.token);
         setUser(data.user);
-        return { success: true, message: data.message };
+        return { success: true, message: data.message, previousSessionsTerminated: data.previousSessionsTerminated };
       }
       return {
         success: false,
@@ -427,7 +428,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('sipspot_last_active', String(now));
         setToken(data.token);
         setUser(data.user);
-        return { success: true, message: data.message };
+        return { success: true, message: data.message, previousSessionsTerminated: data.previousSessionsTerminated };
       }
       return {
         success: false,

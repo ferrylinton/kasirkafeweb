@@ -18,6 +18,8 @@ import {
   ClipboardList,
   Building2,
   BarChart3,
+  TrendingUp,
+  Trophy,
   X
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -45,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const managerTabs = ['manager-dashboard', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
   const adminTabs = ['vendor-management', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs'];
   const accountTabs = ['profile', 'settings'];
 
@@ -272,6 +274,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 <span>Manajemen Toko</span>
               </div>
               <div className="space-y-1">
+                {/* Dashboard Transaksi Vendor (Role Manager) */}
+                <button
+                  type="button"
+                  id="nav-manager-dashboard"
+                  onClick={() => handleNavClick('manager-dashboard')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                    currentTab === 'manager-dashboard'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <TrendingUp className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Dashboard Transaksi</span>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider ${
+                    currentTab === 'manager-dashboard'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400'
+                  }`}>
+                    CABANG
+                  </span>
+                </button>
+
                 {/* Inventaris */}
                 <button
                   type="button"
@@ -435,6 +461,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     GRAFIK
+                  </span>
+                </button>
+
+                {/* 0.5. Top 10 Produk Terlaris (Hari, Minggu, Bulan) */}
+                <button
+                  type="button"
+                  id="nav-admin-top-products-btn"
+                  onClick={() => handleNavClick('admin-top-products')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-top-products'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Trophy className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span className="truncate">{t('navAdminTopProducts') || 'Top 10 Produk Terlaris'}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    TOP 10
                   </span>
                 </button>
 

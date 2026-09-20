@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import { getDB, fallbackStore } from './db';
-import { getSessionFromRedis, removeSessionFromRedis, RedisSessionData } from './sessionStore';
+import { getSessionFromRedis, removeSessionFromRedis, getActiveTokenForUser, RedisSessionData } from './sessionStore';
 
 dotenv.config();
 
@@ -121,13 +121,30 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     });
   }
 
-  // Check if session has been revoked via email or admin
+  // Check if session has been revoked via email or admin or concurrent login on another browser
   if (decoded.sessionId) {
     const isRevoked = await isSessionRevoked(decoded.sessionId);
     if (isRevoked) {
       // Also ensure session is removed from Redis
       await removeSessionFromRedis(decoded.sessionId);
-      const msg = req.t ? req.t('auth.sessionRevoked') : 'Sesi login Anda telah dikeluarkan dari jauh melalui email keamanan akun.';
+      const msg = req.t ? req.t('auth.sessionRevoked') : 'Sesi login Anda telah dikeluarkan karena akun Anda telah berhasil login di browser lain.';
+      return res.status(401).json({
+        success: false,
+        error: 'SessionRevoked',
+        message: msg
+      });
+    }
+  }
+
+  // Single-session policy: verify this token is the currently active token for the user
+  if (decoded.email) {
+    const currentActiveToken = await getActiveTokenForUser(decoded.email);
+    if (currentActiveToken && currentActiveToken !== token) {
+      if (decoded.sessionId) {
+        revokedSessionIds.add(decoded.sessionId);
+        await removeSessionFromRedis(decoded.sessionId);
+      }
+      const msg = req.t ? req.t('auth.sessionRevoked') : 'Sesi login Anda telah dikeluarkan karena akun Anda telah berhasil login di browser lain.';
       return res.status(401).json({
         success: false,
         error: 'SessionRevoked',
@@ -140,6 +157,17 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   // Synchronized with client-side idleTimedOut (15 minutes idle timeout)
   const redisSession = await getSessionFromRedis(token, true);
   if (!redisSession) {
+    // Check if session was revoked due to another login before treating as idle timeout
+    const isRevoked = decoded.sessionId ? await isSessionRevoked(decoded.sessionId) : false;
+    if (isRevoked) {
+      const msg = req.t ? req.t('auth.sessionRevoked') : 'Sesi login Anda telah dikeluarkan karena akun Anda telah berhasil login di browser lain.';
+      return res.status(401).json({
+        success: false,
+        error: 'SessionRevoked',
+        message: msg
+      });
+    }
+
     const msg = req.t ? req.t('auth.sessionTimedOut') : 'Sesi Anda telah berakhir otomatis karena 15 menit tanpa aktivitas.';
     return res.status(401).json({
       success: false,
