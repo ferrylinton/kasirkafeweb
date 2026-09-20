@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, KeyRound, Edit2, Trash2, Shield, UserCheck, X, Check, Lock } from 'lucide-react';
+import { Users, UserPlus, KeyRound, Edit2, Trash2, Shield, UserCheck, X, Check, Lock, ShieldAlert } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
-export const UserManagementScreen: React.FC = () => {
+interface UserManagementScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allVendorsMode = false }) => {
   const { user: currentUser, token } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -33,7 +39,11 @@ export const UserManagementScreen: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/users', {
+      const url = allVendorsMode
+        ? (selectedVendor === 'all' ? '/api/users?allVendors=true' : `/api/users?vendorId=${selectedVendor}`)
+        : '/api/users';
+
+      const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token || ''}`
         }
@@ -51,7 +61,7 @@ export const UserManagementScreen: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [token]);
+  }, [token, allVendorsMode, selectedVendor]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,36 +163,73 @@ export const UserManagementScreen: React.FC = () => {
     }
   };
 
+  const isAuthorized = allVendorsMode
+    ? (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERADMIN')
+    : (currentUser?.role === 'MANAGER');
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-xl mx-auto flex flex-col items-center justify-center text-center">
+        <div className="w-full bg-white dark:bg-[#251e1c] rounded-3xl border border-rose-200 dark:border-rose-900/50 p-8 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold font-heading text-stone-900 dark:text-stone-100">
+            {allVendorsMode ? 'Akses Terbatas: Khusus Administrator' : 'Akses Terbatas: Khusus Manajer'}
+          </h2>
+          <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 mb-6">
+            {allVendorsMode
+              ? 'Menu Administrasi Pengguna Lintas Vendor hanya dapat diakses oleh Administrator.'
+              : 'Menu Manajemen Pengguna Toko hanya dapat diakses oleh akun dengan peran Manajer.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
       {/* 1. Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-stone-800">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
-              {t('userManagementTitle')}
-            </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
-              Khusus Manager
-            </span>
+      {allVendorsMode ? (
+        <AdminAllVendorsHeader
+          title={t('navAdminUsers')}
+          subtitle="Manajemen akun pengguna, role manager, dan kasir di seluruh vendor jaringan"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={fetchUsers}
+          isLoading={loading}
+          itemCount={users.length}
+          itemLabel="User"
+        />
+      ) : (
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-stone-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
+                {t('userManagementTitle')}
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                Khusus Manager
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              Tambah, edit role, dan reset password kasir toko
+            </p>
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-            Tambah, edit role, dan reset password kasir toko
-          </p>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setFormData({ name: '', email: '', password: '', role: 'CASHIER', pin: '1234', avatar: '' });
-            setShowAddModal(true);
-          }}
-          className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>{t('addUser')}</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFormData({ name: '', email: '', password: '', role: 'CASHIER', pin: '1234', avatar: '' });
+              setShowAddModal(true);
+            }}
+            className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{t('addUser')}</span>
+          </button>
+        </div>
+      )}
 
       {/* 2. User Cards */}
       {loading ? (
@@ -222,16 +269,21 @@ export const UserManagementScreen: React.FC = () => {
                       )}
                     </div>
                     <p className="text-xs text-stone-500 dark:text-stone-400 truncate">{u.email}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          u.role === 'MANAGER'
+                          u.role === 'ADMIN' || u.role === 'SUPERADMIN'
+                            ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+                            : u.role === 'MANAGER'
                             ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
                             : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
                         }`}
                       >
                         {u.role}
                       </span>
+                      {allVendorsMode && (
+                        <VendorBadge vendorId={u.vendorId} />
+                      )}
                       <span className="text-[10px] text-stone-400 font-mono">
                         PIN: {u.pin || '••••'}
                       </span>

@@ -38,6 +38,7 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
 
 export interface EmailLogEntry {
   _id?: any;
+  vendorId?: string;
   orderId?: string;
   orderNumber?: string;
   recipientEmail: string;
@@ -56,11 +57,15 @@ export interface TemplateVariables {
 /**
  * Fetch email template from database with fallback
  */
-export async function getTemplateByCode(code: string): Promise<{ subject: string; bodyHtml: string } | null> {
+export async function getTemplateByCode(code: string, vendorId?: string): Promise<{ subject: string; bodyHtml: string } | null> {
+  const activeVendorId = vendorId || 'vnd_sipspot_central';
   const db = getDB();
   if (db) {
     try {
-      const tmpl = await db.collection('email_templates').findOne({ code, isActive: true });
+      let tmpl = await db.collection('email_templates').findOne({ code, vendorId: activeVendorId, isActive: true });
+      if (!tmpl) {
+        tmpl = await db.collection('email_templates').findOne({ code, isActive: true });
+      }
       if (tmpl) {
         return { subject: tmpl.subject, bodyHtml: tmpl.bodyHtml };
       }
@@ -69,7 +74,8 @@ export async function getTemplateByCode(code: string): Promise<{ subject: string
     }
   }
 
-  const fallbackTmpl = fallbackStore.email_templates.find((t) => t.code === code);
+  const fallbackTmpl = fallbackStore.email_templates.find((t) => t.code === code && ((t as any).vendorId === activeVendorId || !(t as any).vendorId))
+    || fallbackStore.email_templates.find((t) => t.code === code);
   if (fallbackTmpl) {
     return { subject: fallbackTmpl.subject, bodyHtml: fallbackTmpl.bodyHtml };
   }
@@ -90,16 +96,18 @@ export function interpolateTemplate(text: string, variables: TemplateVariables):
  * Send email, save log to database
  */
 export async function sendReceiptEmail(params: {
+  vendorId?: string;
   recipientEmail: string;
   orderId: string;
   orderNumber: string;
   variables: TemplateVariables;
   customSubject?: string;
 }): Promise<{ success: boolean; error?: string; logId?: string }> {
-  const { recipientEmail, orderId, orderNumber, variables, customSubject } = params;
+  const { vendorId, recipientEmail, orderId, orderNumber, variables, customSubject } = params;
+  const activeVendorId = vendorId || 'vnd_sipspot_central';
 
   // Retrieve template
-  const template = await getTemplateByCode('RECEIPT_EMAIL');
+  const template = await getTemplateByCode('RECEIPT_EMAIL', activeVendorId);
   const subjectTemplate = customSubject || template?.subject || 'Struk Transaksi SipSpot POS - #{{orderNumber}}';
   const bodyTemplate = template?.bodyHtml || getDefaultReceiptHtml();
 
@@ -113,7 +121,7 @@ export async function sendReceiptEmail(params: {
   if (!transporter) {
     status = 'success';
     messageId = `mock_receipt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    console.log(`[SMTP (Simulated)] Receipt email generated for ${recipientEmail}, Order: #${orderNumber}`);
+    console.log(`[SMTP (Simulated)] Receipt email generated for ${recipientEmail}, Order: #${orderNumber}, Vendor: ${activeVendorId}`);
   } else {
     try {
       const info = await transporter.sendMail({
@@ -135,6 +143,7 @@ export async function sendReceiptEmail(params: {
 
   // Record log into database
   const logData: EmailLogEntry = {
+    vendorId: activeVendorId,
     orderId,
     orderNumber,
     recipientEmail,

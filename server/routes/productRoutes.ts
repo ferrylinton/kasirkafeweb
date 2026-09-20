@@ -22,29 +22,110 @@ const productSchema = z.object({
 
 /**
  * GET /api/products/categories
+ * Returns categories strictly partitioned by active vendor
  */
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
     const db = getDB();
     let categories: any[] = [];
+
     if (db) {
       try {
-        categories = await db.collection('categories').find({}).toArray();
+        const query = isSuperAdmin
+          ? {}
+          : (activeVendorId === 'vnd_sipspot_central'
+              ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+              : { vendorId: activeVendorId });
+        categories = await db.collection('categories').find(query).toArray();
       } catch (e) {}
     }
+
     if (categories.length === 0) {
-      categories = fallbackStore.categories;
+      const source = fallbackStore.categories || [];
+      categories = isSuperAdmin
+        ? source
+        : source.filter(c => (c.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      
+      // If vendor doesn't have custom categories yet, fallback to all default categories
+      if (categories.length === 0) {
+        categories = source.filter(c => !c.vendorId || c.vendorId === 'vnd_sipspot_central');
+      }
     }
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       categories: categories.map(c => ({
         id: c._id ? c._id.toString() : c.code,
+        vendorId: c.vendorId || activeVendorId,
         code: c.code,
         name: c.name,
         icon: c.icon,
         description: c.description
       }))
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * POST /api/products/categories
+ * Add category for the active vendor (Manager only)
+ */
+const categorySchema = z.object({
+  code: z.string().min(2),
+  name: z.string().min(2),
+  icon: z.string().default('🏷️'),
+  description: z.string().optional()
+});
+
+productRouter.post('/categories', authMiddleware, requireManager, async (req: Request, res: Response) => {
+  try {
+    const parsed = categorySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Data kategori tidak valid' });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const formattedCode = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
+
+    const newCategory = {
+      ...parsed.data,
+      code: formattedCode,
+      vendorId: activeVendorId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const db = getDB();
+    let insertedId = `cat_${Date.now()}`;
+
+    if (db) {
+      try {
+        const result = await db.collection('categories').insertOne(newCategory);
+        insertedId = result.insertedId.toString();
+      } catch (e) {}
+    }
+
+    fallbackStore.categories.push({ ...newCategory, _id: insertedId });
+
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'CATEGORY',
+      entityId: insertedId,
+      entityName: newCategory.name,
+      summary: `Menambahkan kategori baru '${newCategory.name}' [${newCategory.code}] untuk vendor`,
+      details: newCategory,
+      req
+    });
+
+    return res.status(201).json({
+      success: true,
+      category: { id: insertedId, ...newCategory },
+      message: 'Kategori berhasil ditambahkan!'
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -60,6 +141,9 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
 
+    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let products: any[] = [];
@@ -67,7 +151,13 @@ productRouter.get('/', async (req: Request, res: Response) => {
     if (db) {
       try {
         const filter: any = {};
-        if (activeVendorId === 'vnd_sipspot_central') {
+        if (isAllVendors) {
+          // No vendor restriction across all vendors
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          filter.vendorId = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : requestedVendor;
+        } else if (activeVendorId === 'vnd_sipspot_central') {
           filter.$or = [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
         } else {
           filter.vendorId = activeVendorId;
@@ -86,7 +176,14 @@ productRouter.get('/', async (req: Request, res: Response) => {
     if (products.length === 0) {
       products = fallbackStore.products.filter(p => {
         const pVendor = p.vendorId || 'vnd_sipspot_central';
-        const matchVendor = pVendor === activeVendorId;
+        let matchVendor = true;
+        if (isAllVendors) {
+          matchVendor = true;
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          matchVendor = pVendor === requestedVendor;
+        } else {
+          matchVendor = pVendor === activeVendorId;
+        }
         const matchCategory = !category || category === 'all' || p.category.toLowerCase() === category.toLowerCase();
         const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
         return matchVendor && matchCategory && matchSearch;
@@ -95,10 +192,11 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      vendorId: activeVendorId,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       products: products.map(p => ({
         id: p._id ? p._id.toString() : p.id,
-        vendorId: p.vendorId || activeVendorId,
+        vendorId: p.vendorId || 'vnd_sipspot_central',
         name: p.name,
         category: p.category,
         subCategory: p.subCategory,
@@ -122,19 +220,38 @@ productRouter.get('/', async (req: Request, res: Response) => {
  */
 productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+
     const db = getDB();
     let products: any[] = [];
     if (db) {
       try {
-        const query = activeVendorId === 'vnd_sipspot_central'
-          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
+        let query: any = {};
+        if (isAllVendors) {
+          query = {};
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          query = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: requestedVendor };
+        } else {
+          query = activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId };
+        }
         products = await db.collection('products').find(query).toArray();
       } catch (e) {}
     }
     if (products.length === 0) {
-      products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      if (isAllVendors) {
+        products = fallbackStore.products;
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === requestedVendor);
+      } else {
+        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      }
     }
 
     const mapped = products.map(p => {
@@ -144,6 +261,7 @@ productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res:
       const isLowStock = stock > 0 && stock <= threshold;
       return {
         id: p._id ? p._id.toString() : p.id,
+        vendorId: p.vendorId || 'vnd_sipspot_central',
         name: p.name,
         category: p.category,
         subCategory: p.subCategory,
@@ -171,6 +289,8 @@ productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res:
 
     return res.json({
       success: true,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       summary: {
         totalProducts: mapped.length,
         healthyCount,
@@ -189,25 +309,52 @@ productRouter.get('/inventory/alerts', authMiddleware, async (req: Request, res:
 
 /**
  * GET /api/products/inventory/logs
- * Audit history of stock restocks and adjustments
+ * Audit history of stock restocks and adjustments partitioned by vendor
  */
 productRouter.get('/inventory/logs', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let logs: any[] = [];
+
     if (db) {
       try {
-        logs = await db.collection('inventory_logs').find({}).sort({ createdAt: -1 }).limit(100).toArray();
+        let query: any = {};
+        if (isAllVendors) {
+          query = {};
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          query = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: requestedVendor };
+        } else {
+          query = activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId };
+        }
+        logs = await db.collection('inventory_logs').find(query).sort({ createdAt: -1 }).limit(200).toArray();
       } catch (e) {}
     }
     if (logs.length === 0) {
-      logs = fallbackStore.inventory_logs || [];
+      const source = fallbackStore.inventory_logs || [];
+      if (isAllVendors) {
+        logs = source;
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        logs = source.filter(l => (l.vendorId || 'vnd_sipspot_central') === requestedVendor);
+      } else {
+        logs = source.filter(l => (l.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      }
     }
 
     return res.json({
       success: true,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       logs: logs.map(l => ({
         id: l._id ? l._id.toString() : l.id,
+        vendorId: l.vendorId || 'vnd_sipspot_central',
         productId: l.productId,
         productName: l.productName,
         previousStock: l.previousStock,
@@ -226,7 +373,7 @@ productRouter.get('/inventory/logs', authMiddleware, async (req: Request, res: R
 
 /**
  * POST /api/products/inventory/bulk-threshold
- * Configure threshold globally or by category
+ * Configure threshold globally or by category for active vendor
  */
 productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
@@ -236,8 +383,14 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, 
       return res.status(400).json({ success: false, error: 'Batas threshold harus berupa angka positif' });
     }
 
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
     const db = getDB();
-    const filter: any = {};
+    const filter: any = {
+      $or: [
+        { vendorId: activeVendorId },
+        ...(activeVendorId === 'vnd_sipspot_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
+      ]
+    };
     if (category && category !== 'all') {
       filter.category = category.toLowerCase();
     }
@@ -251,13 +404,17 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, 
     }
 
     fallbackStore.products.forEach(p => {
-      if (!category || category === 'all' || p.category?.toLowerCase() === category.toLowerCase()) {
-        p.lowStockThreshold = thresholdNum;
-        p.updatedAt = new Date();
+      const pVendor = p.vendorId || 'vnd_sipspot_central';
+      if (pVendor === activeVendorId) {
+        if (!category || category === 'all' || p.category?.toLowerCase() === category.toLowerCase()) {
+          p.lowStockThreshold = thresholdNum;
+          p.updatedAt = new Date();
+        }
       }
     });
 
     const logDoc = {
+      vendorId: activeVendorId,
       productId: 'BULK',
       productName: category && category !== 'all' ? `Kategori: ${category.toUpperCase()}` : 'Semua Produk',
       previousStock: 0,
@@ -287,7 +444,7 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireManager, 
       entityId: 'BULK',
       entityName: category && category !== 'all' ? `Kategori ${category}` : 'Semua Produk',
       summary: `Mengatur batas peringatan stok menjadi ${thresholdNum} untuk ${category && category !== 'all' ? `kategori ${category}` : 'seluruh produk'}`,
-      details: { threshold: thresholdNum, category: category || 'all' },
+      details: { threshold: thresholdNum, category: category || 'all', vendorId: activeVendorId },
       req
     });
 
@@ -311,15 +468,25 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
       return res.status(400).json({ success: false, error: 'Data baris CSV tidak boleh kosong' });
     }
 
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
     const db = getDB();
     let currentProducts: any[] = [];
     if (db) {
       try {
-        currentProducts = await db.collection('products').find({}).toArray();
+        const query = isSuperAdmin
+          ? {}
+          : (activeVendorId === 'vnd_sipspot_central'
+              ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+              : { vendorId: activeVendorId });
+        currentProducts = await db.collection('products').find(query).toArray();
       } catch (e) {}
     }
     if (currentProducts.length === 0) {
-      currentProducts = [...fallbackStore.products];
+      const source = fallbackStore.products || [];
+      currentProducts = isSuperAdmin
+        ? [...source]
+        : source.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
     }
 
     let updatedCount = 0;
@@ -331,7 +498,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
       if (!rawName) continue;
 
       const itemId = item.id ? String(item.id).trim() : null;
-      // Match existing by ID or case-insensitive Name
+      // Match existing by ID or case-insensitive Name within active vendor's catalog
       const existing = currentProducts.find(p => {
         if (itemId) {
           const pId = p._id ? p._id.toString() : String(p.id);
@@ -419,6 +586,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
           }
 
           const logDoc = {
+            vendorId: existing.vendorId || activeVendorId,
             productId: existingId,
             productName: existing.name,
             previousStock: prevStock,
@@ -448,6 +616,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
         const newImg = item.image ? String(item.image).trim() : '';
 
         const newDoc: any = {
+          vendorId: activeVendorId,
           name: rawName,
           category: newCat,
           subCategory: newSubCat,
@@ -474,6 +643,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireManager, asyn
         fallbackStore.products.push(newDoc);
 
         const logDoc = {
+          vendorId: activeVendorId,
           productId: insertedId,
           productName: rawName,
           previousStock: 0,
@@ -593,6 +763,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireManager, async (req: Re
 
     const stockChange = newStock - currentStock;
     const logDoc = {
+      vendorId: product.vendorId || req.vendorId || 'vnd_sipspot_central',
       productId: id,
       productName: product.name,
       previousStock: currentStock,

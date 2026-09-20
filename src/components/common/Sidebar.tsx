@@ -35,7 +35,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const { t } = useLanguage();
   const { totalItemsCount } = useCart();
   const { user, token, logout } = useAuth();
+  const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [alertCount, setAlertCount] = useState<number>(0);
@@ -163,84 +165,88 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
             <span
               className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 ${
-                isManager
+                isAdmin
+                  ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800/60'
+                  : isManager
                   ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/60'
                   : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60'
               }`}
             >
-              {isManager ? 'Manager' : 'Kasir'}
+              {user?.role || 'Kasir'}
             </span>
           </div>
         </div>
 
         {/* Middle: Navigation Links */}
         <div className="p-4 overflow-y-auto flex-1 space-y-6">
-          {/* Group 1: Kasir Operasional */}
-          <div>
-            <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-              Operasional Kasir
-            </div>
-            <div className="space-y-1">
-              {/* Katalog */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('katalog')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
-                  currentTab === 'katalog'
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Store className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navCatalog')}</span>
-                </div>
-              </button>
+          {/* Group 1: Kasir Operasional (Hanya role CASHIER dan role MANAGER) */}
+          {isCashierOrManager && (
+            <div>
+              <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                Operasional Kasir
+              </div>
+              <div className="space-y-1">
+                {/* Katalog */}
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('katalog')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                    currentTab === 'katalog'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Store className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t('navCatalog')}</span>
+                  </div>
+                </button>
 
-              {/* Pesanan / Keranjang */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('pesanan')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
-                  currentTab === 'pesanan'
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <ShoppingBag className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navOrders')}</span>
-                </div>
-                {totalItemsCount > 0 && (
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                      currentTab === 'pesanan'
-                        ? 'bg-white text-stone-900 shadow-2xs'
-                        : 'bg-accent text-white shadow-2xs'
-                    }`}
-                  >
-                    {totalItemsCount}
-                  </span>
-                )}
-              </button>
+                {/* Pesanan / Keranjang */}
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('pesanan')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                    currentTab === 'pesanan'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ShoppingBag className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t('navOrders')}</span>
+                  </div>
+                  {totalItemsCount > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        currentTab === 'pesanan'
+                          ? 'bg-white text-stone-900 shadow-2xs'
+                          : 'bg-accent text-white shadow-2xs'
+                      }`}
+                    >
+                      {totalItemsCount}
+                    </span>
+                  )}
+                </button>
 
-              {/* Histori Transaksi */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('histori')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
-                  currentTab === 'histori'
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Receipt className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navHistory')}</span>
-                </div>
-              </button>
+                {/* Riwayat Pesanan */}
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('histori')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${
+                    currentTab === 'histori'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Receipt className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t('navHistory')}</span>
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Group 2: Manajemen Toko (Only for Manager) */}
           {isManager && (
@@ -383,7 +389,183 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
             </div>
           )}
 
-          {/* Group 3: Pengaturan & Profil */}
+          {/* Group 3: Administrasi Sistem (Khusus Role ADMIN) */}
+          {isAdmin && (
+            <div>
+              <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Administrasi Sistem</span>
+                </div>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
+                  ALL VENDOR
+                </span>
+              </div>
+              <div className="space-y-1">
+                {/* 1. Riwayat Pesanan Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-orders-btn"
+                  onClick={() => handleNavClick('admin-orders')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-orders'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Receipt className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminOrders')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 2. Inventaris Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-inventory-btn"
+                  onClick={() => handleNavClick('admin-inventory')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-inventory'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Boxes className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminInventory')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 3. Manajemen User Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-users-btn"
+                  onClick={() => handleNavClick('admin-users')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-users'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Users className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminUsers')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 4. Aturan Diskon Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-discounts-btn"
+                  onClick={() => handleNavClick('admin-discounts')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-discounts'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Tag className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminDiscounts')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 5. Template Email Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-templates-btn"
+                  onClick={() => handleNavClick('admin-templates')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-templates'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Mail className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminTemplates')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 6. Login History Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-login-history-btn"
+                  onClick={() => handleNavClick('admin-login-history')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-login-history'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminLoginHistory')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 7. Log Aktivitas DB Semua Vendor */}
+                <button
+                  type="button"
+                  id="nav-admin-activity-logs-btn"
+                  onClick={() => handleNavClick('admin-activity-logs')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'admin-activity-logs'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ClipboardList className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminActivityLogs')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    SEMUA
+                  </span>
+                </button>
+
+                {/* 8. Manajemen Vendor */}
+                <button
+                  type="button"
+                  id="nav-vendor-management-btn"
+                  onClick={() => handleNavClick('vendor-management')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                    currentTab === 'vendor-management'
+                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Building2 className="w-4 h-4 shrink-0 text-purple-500" />
+                    <span className="truncate">{t('navAdminVendors')}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    ADMIN
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Group 4: Pengaturan & Profil */}
           <div>
             <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               Sistem & Akun

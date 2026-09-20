@@ -43,6 +43,29 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navTemplates');
       case 'login-history':
         return t('navLoginHistory');
+      case 'activity-logs':
+        return t('navActivityLogs');
+      case 'vendor-client':
+        return 'Vendor & Klien ID (M2M)';
+      case 'vendor-management':
+        return 'Manajemen Vendor (Admin)';
+      case 'admin-orders':
+      case 'admin-riwayat':
+        return t('navAdminOrders');
+      case 'admin-inventory':
+      case 'admin-inventaris':
+        return t('navAdminInventory');
+      case 'admin-users':
+        return t('navAdminUsers');
+      case 'admin-discounts':
+      case 'admin-diskon':
+        return t('navAdminDiscounts');
+      case 'admin-templates':
+        return t('navAdminTemplates');
+      case 'admin-login-history':
+        return t('navAdminLoginHistory');
+      case 'admin-activity-logs':
+        return t('navAdminActivityLogs');
       case 'profile':
         return t('navAccount');
       case 'settings':

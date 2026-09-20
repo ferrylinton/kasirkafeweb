@@ -15,7 +15,8 @@ import {
   ShoppingBag,
   RefreshCw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DiscountRule } from '../../types';
@@ -23,8 +24,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { ConfirmationModal } from '../common/ConfirmationModal';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
-export const DiscountRulesScreen: React.FC = () => {
+interface DiscountRulesScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVendorsMode = false }) => {
   const { token, user } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
@@ -32,6 +38,7 @@ export const DiscountRulesScreen: React.FC = () => {
   const [rules, setRules] = useState<DiscountRule[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -59,7 +66,15 @@ export const DiscountRulesScreen: React.FC = () => {
     else setLoading(true);
 
     try {
-      const res = await fetch('/api/discounts/rules');
+      const url = allVendorsMode
+        ? (selectedVendor === 'all' ? '/api/discounts/rules?allVendors=true' : `/api/discounts/rules?vendorId=${selectedVendor}`)
+        : '/api/discounts/rules';
+
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token || ''}`
+        }
+      });
       const data = await res.json();
       if (data.success && data.rules) {
         setRules(data.rules);
@@ -74,7 +89,7 @@ export const DiscountRulesScreen: React.FC = () => {
 
   useEffect(() => {
     fetchRules();
-  }, []);
+  }, [allVendorsMode, selectedVendor, token]);
 
   const openCreateModal = () => {
     setEditingRule(null);
@@ -279,6 +294,20 @@ export const DiscountRulesScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-5xl mx-auto flex flex-col gap-6">
+      {/* Admin Cross-Vendor Header */}
+      {allVendorsMode && (
+        <AdminAllVendorsHeader
+          title={t('navAdminDiscounts')}
+          subtitle="Kelola dan pantau seluruh aturan diskon, promosi, dan rewards dari seluruh vendor jaringan"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={() => fetchRules(true)}
+          isLoading={loading || refreshing}
+          itemCount={rules.length}
+          itemLabel="Aturan"
+        />
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-200/80 dark:border-stone-800">
         <div>
@@ -287,14 +316,14 @@ export const DiscountRulesScreen: React.FC = () => {
               <Tag className="w-5 h-5" />
             </div>
             <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
-              {t('discountRulesTitle')}
+              {allVendorsMode ? 'Aturan Diskon Jaringan' : t('discountRulesTitle')}
             </h2>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
-              {t('roleManager')}
+              {allVendorsMode ? 'ALL VENDOR' : t('roleManager')}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            {t('discountRulesSubtitle')}
+            {allVendorsMode ? 'Daftar seluruh promosi dan diskon otomatis lintas cabang vendor' : t('discountRulesSubtitle')}
           </p>
         </div>
 
@@ -505,6 +534,9 @@ export const DiscountRulesScreen: React.FC = () => {
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
                           {rule.code}
                         </span>
+                        {allVendorsMode && (
+                          <VendorBadge vendorId={rule.vendorId} />
+                        )}
                         {isDefaultRule && (
                           <span className="px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
                             Sistem

@@ -41,6 +41,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
 interface SelectableUser {
   id: string;
@@ -53,18 +54,24 @@ interface SelectableUser {
 type ValuePiece = Date | null;
 type DatePickerValue = ValuePiece | [ValuePiece, ValuePiece];
 
-export const ActivityLogScreen: React.FC = () => {
+interface ActivityLogScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const ActivityLogScreen: React.FC<ActivityLogScreenProps> = ({ allVendorsMode = false }) => {
   const { user, token } = useAuth();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  const isManager = user?.role === 'MANAGER';
+  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isManager = isAuthorized;
 
   // Data states
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [usersList, setUsersList] = useState<SelectableUser[]>([]);
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -110,16 +117,24 @@ export const ActivityLogScreen: React.FC = () => {
 
   // Fetch selectable users for user filter dropdown
   useEffect(() => {
-    if (!isManager) return;
+    if (!isAuthorized) return;
     const fetchUsers = async () => {
       try {
-        const res = await fetch('/api/auth/selectable-users');
+        const url = allVendorsMode
+          ? (selectedVendor === 'all' ? '/api/auth/selectable-users?allVendors=true' : `/api/auth/selectable-users?vendorId=${selectedVendor}`)
+          : '/api/auth/selectable-users';
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        });
         const data = await res.json();
         if (data.success && Array.isArray(data.users)) {
           setUsersList(data.users);
         } else {
           // Fallback to /api/users
-          const resFallback = await fetch('/api/users', {
+          const fallbackUrl = allVendorsMode
+            ? (selectedVendor === 'all' ? '/api/users?allVendors=true' : `/api/users?vendorId=${selectedVendor}`)
+            : '/api/users';
+          const resFallback = await fetch(fallbackUrl, {
             headers: { Authorization: `Bearer ${token || ''}` }
           });
           const dataFallback = await resFallback.json();
@@ -132,7 +147,7 @@ export const ActivityLogScreen: React.FC = () => {
       }
     };
     fetchUsers();
-  }, [isManager, token]);
+  }, [isAuthorized, allVendorsMode, selectedVendor, token]);
 
   // Determine computed date string for query
   const computedDateQuery = useMemo(() => {
@@ -151,11 +166,20 @@ export const ActivityLogScreen: React.FC = () => {
 
   // Fetch activity logs data with pagination & filters
   const fetchLogs = async () => {
+    if (!isAuthorized) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('page', page.toString());
       params.set('limit', limit.toString());
+
+      if (allVendorsMode) {
+        if (selectedVendor === 'all') {
+          params.set('allVendors', 'true');
+        } else {
+          params.set('vendorId', selectedVendor);
+        }
+      }
 
       if (debouncedKeyword.trim()) {
         params.set('search', debouncedKeyword.trim());
@@ -181,7 +205,7 @@ export const ActivityLogScreen: React.FC = () => {
       });
 
       if (res.status === 403) {
-        showToast('Akses ditolak: Hanya Manajer yang dapat melihat log audit database', 'error');
+        showToast('Akses ditolak: Hanya Manajer atau Admin yang dapat melihat log audit database', 'error');
         setLoading(false);
         return;
       }
@@ -209,7 +233,7 @@ export const ActivityLogScreen: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [page, limit, debouncedKeyword, selectedUser, selectedAction, selectedEntity, computedDateQuery, token]);
+  }, [page, limit, debouncedKeyword, selectedUser, selectedAction, selectedEntity, computedDateQuery, token, allVendorsMode, selectedVendor, isAuthorized]);
 
   // Handle DatePicker change from react-date-picker
   const handleDatePickerChange = (val: DatePickerValue) => {
@@ -608,6 +632,20 @@ export const ActivityLogScreen: React.FC = () => {
 
   return (
     <div id="activity-log-screen" className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-200">
+      {/* Admin Cross-Vendor Header */}
+      {allVendorsMode && (
+        <AdminAllVendorsHeader
+          title={t('navAdminActivityLog')}
+          subtitle="Audit trail aktivitas database lintas seluruh vendor mitra dan cabang"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={fetchLogs}
+          isLoading={loading}
+          itemCount={totalRecords}
+          itemLabel="Log DB"
+        />
+      )}
+
       {/* 1. Header Section - Matching Login History */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-4 sm:p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs">
         <div className="space-y-1">
@@ -618,10 +656,10 @@ export const ActivityLogScreen: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
-                  Log Aktivitas Database
+                  {allVendorsMode ? 'Log Aktivitas DB Seluruh Vendor' : 'Log Aktivitas Database'}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60">
-                  Audit Trail
+                  {allVendorsMode ? 'ALL VENDOR' : 'Audit Trail'}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-0.5">
@@ -1138,7 +1176,7 @@ export const ActivityLogScreen: React.FC = () => {
                               {entry.performedBy?.name?.[0] || 'U'}
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-bold text-stone-900 dark:text-stone-100 truncate">
                                   {entry.performedBy?.name || 'Sistem POS'}
                                 </span>
@@ -1151,6 +1189,9 @@ export const ActivityLogScreen: React.FC = () => {
                                 >
                                   {entry.performedBy?.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                                 </span>
+                                {allVendorsMode && (
+                                  <VendorBadge vendorId={entry.vendorId} />
+                                )}
                               </div>
                               <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                                 {entry.performedBy?.email || '-'}
@@ -1276,6 +1317,9 @@ export const ActivityLogScreen: React.FC = () => {
                             >
                               {entry.performedBy?.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                             </span>
+                            {allVendorsMode && (
+                              <VendorBadge vendorId={entry.vendorId} />
+                            )}
                           </div>
                           <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                             {entry.performedBy?.email || '-'}
@@ -1395,6 +1439,9 @@ export const ActivityLogScreen: React.FC = () => {
                             >
                               {entry.performedBy?.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                             </span>
+                            {allVendorsMode && (
+                              <VendorBadge vendorId={entry.vendorId} />
+                            )}
                           </div>
                           <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                             {entry.performedBy?.email || '-'}

@@ -14,7 +14,11 @@ activityLogRouter.use(authMiddleware, requireManager);
  */
 activityLogRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { action, entity, userId, search, startDate, endDate, date, page, limit } = req.query;
+    const { action, entity, userId, search, startDate, endDate, date, page, limit, vendorId: vendorQuery, allVendors } = req.query;
+
+    const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPERADMIN';
+    const isAllVendors = (allVendors === 'true' || vendorQuery === 'all' || vendorQuery === 'ALL' || (!vendorQuery && isAdmin)) && isAdmin;
+    const targetVendor = isAllVendors ? 'ALL' : ((vendorQuery as string) || req.vendorId || 'vnd_sipspot_central');
 
     let computedStartDate = startDate as string;
     let computedEndDate = endDate as string;
@@ -25,7 +29,7 @@ activityLogRouter.get('/', async (req: Request, res: Response) => {
     }
 
     const result = await queryActivityLogs({
-      vendorId: req.vendorId,
+      vendorId: targetVendor,
       action: action as string,
       entity: entity as string,
       userId: userId as string,

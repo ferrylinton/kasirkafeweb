@@ -5,6 +5,7 @@ import {
   Search,
   Check,
   Shield,
+  ShieldCheck,
   Coffee,
   UserCheck,
   Sparkles,
@@ -47,12 +48,24 @@ interface SelectUserModalProps {
 }
 
 const FALLBACK_VENDORS: ModalVendor[] = [
+  { id: 'vnd_admin', name: 'Admin', code: 'ADMIN', clientId: 'client_admin_master_00', status: 'ACTIVE' },
   { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT', clientId: 'client_sipspot_central_01', status: 'ACTIVE' },
   { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', clientId: 'client_kopikulo_kemang_02', status: 'ACTIVE' },
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', clientId: 'client_tehpoci_nusantara_03', status: 'ACTIVE' }
 ];
 
 const FALLBACK_USERS: SelectableUser[] = [
+  {
+    id: 'admin_1',
+    name: 'Radit Admin Sistem',
+    email: 'admin@sipspot.com',
+    role: 'ADMIN',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    pin: '999999',
+    vendorId: 'vnd_admin',
+    vendorName: 'Admin',
+    vendorCode: 'ADMIN'
+  },
   {
     id: 'manager_1',
     name: 'Ferry Manager',
@@ -357,6 +370,17 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => setFilterRole('ADMIN')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  filterRole === 'ADMIN'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                Admin
+              </button>
+              <button
+                type="button"
                 onClick={() => setFilterRole('MANAGER')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   filterRole === 'MANAGER'
@@ -412,6 +436,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
             ) : (
               filteredUsers.map(user => {
                 const isSelected = selectedUserId === user.id || selectedUserId === user.email;
+                const isAdmin = user.role.toUpperCase() === 'ADMIN' || user.role.toUpperCase() === 'SUPERADMIN';
                 const isManager = user.role.toUpperCase() === 'MANAGER';
 
                 return (
@@ -438,6 +463,8 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           className={`w-13 h-13 rounded-2xl overflow-hidden border-2 p-0.5 bg-stone-100 dark:bg-stone-800 shadow-xs transition-transform group-hover:scale-105 ${
                             isSelected
                               ? 'border-accent ring-2 ring-accent/40'
+                              : isAdmin
+                              ? 'border-purple-500'
                               : isManager
                               ? 'border-amber-400'
                               : 'border-emerald-400'
@@ -460,10 +487,12 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                         {/* Role Icon Overlay */}
                         <div
                           className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] shadow-xs border border-white dark:border-stone-900 ${
-                            isManager ? 'bg-amber-500' : 'bg-emerald-500'
+                            isAdmin ? 'bg-purple-600' : isManager ? 'bg-amber-500' : 'bg-emerald-500'
                           }`}
                         >
-                          {isManager ? (
+                          {isAdmin ? (
+                            <ShieldCheck className="w-2.5 h-2.5" />
+                          ) : isManager ? (
                             <Shield className="w-2.5 h-2.5" />
                           ) : (
                             <Coffee className="w-2.5 h-2.5" />
@@ -479,12 +508,14 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           </h4>
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              isManager
+                              isAdmin
+                                ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800/60'
+                                : isManager
                                 ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/60'
                                 : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60'
                             }`}
                           >
-                            {isManager ? t('roleManager') : t('roleCashier')}
+                            {isAdmin ? 'ADMIN' : isManager ? t('roleManager') : t('roleCashier')}
                           </span>
                         </div>
 

@@ -10,6 +10,20 @@ export async function seedDatabase() {
 
   const initialVendors = [
     {
+      id: 'vnd_admin',
+      name: 'Admin',
+      code: 'ADMIN',
+      clientId: 'client_admin_master_00',
+      clientSecret: 'sec_admin_master_9941a80c2f',
+      status: 'ACTIVE',
+      email: 'admin@sipspot.com',
+      phone: '+628119999000',
+      address: 'Headquarters / Server Central Admin',
+      currency: 'IDR',
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date()
+    },
+    {
       id: 'vnd_sipspot_central',
       name: 'SipSpot Coffee & Boba (Pusat)',
       code: 'SIPSPOT',
@@ -54,6 +68,17 @@ export async function seedDatabase() {
   ];
 
   const initialUsers = [
+    {
+      email: 'admin@sipspot.com',
+      password: managerPassword,
+      name: 'Radit Admin Sistem',
+      role: 'ADMIN',
+      vendorId: 'vnd_admin',
+      pin: '999999',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
     {
       email: 'manager@beverage.com',
       password: managerPassword,
@@ -123,10 +148,14 @@ export async function seedDatabase() {
   ];
 
   const initialCategories = [
-    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Espresso, Latte, Cold Brew pilihan biji Arabika' },
-    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan' },
-    { code: 'jus', name: 'Jus', icon: '🍹', description: '100% Buah segar cold-pressed alami tanpa pemanis buatan' },
-    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry renyah, kue lezat, dan finger food pendamping' }
+    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Espresso, Latte, Cold Brew pilihan biji Arabika', vendorId: 'vnd_sipspot_central' },
+    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan', vendorId: 'vnd_sipspot_central' },
+    { code: 'jus', name: 'Jus', icon: '🍹', description: '100% Buah segar cold-pressed alami tanpa pemanis buatan', vendorId: 'vnd_sipspot_central' },
+    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry renyah, kue lezat, dan finger food pendamping', vendorId: 'vnd_sipspot_central' },
+    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Signature Kulo Es Kopi Susu & Avocatto', vendorId: 'vnd_kopi_kulo_kemang' },
+    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Cemilan roti bakar dan snack pendamping', vendorId: 'vnd_kopi_kulo_kemang' },
+    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Teh Poci Melati Asli Seduh Tradisional', vendorId: 'vnd_tehpoci_nusantara' },
+    { code: 'cemilan', name: 'Cemilan', icon: '🥟', description: 'Dimsum kukus dan goreng spesial', vendorId: 'vnd_tehpoci_nusantara' }
   ];
 
   const initialProducts = [
@@ -412,13 +441,14 @@ export async function seedDatabase() {
   const initialTemplates = [
     {
       code: 'RECEIPT_EMAIL',
-      name: 'Struk Transaksi Pembeli',
+      vendorId: 'vnd_sipspot_central',
+      name: 'Struk Transaksi Pembeli - SipSpot Central',
       description: 'Template otomatis yang dikirim ke email pelanggan setelah pesanan dibayar',
       subject: 'Struk Pembelian SipSpot POS - #{{orderNumber}}',
       bodyHtml: `
 <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 24px; font-family: sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.05); border: 1px solid #f0dfdb;">
   <div style="text-align: center; border-bottom: 2px dashed #f0dfdb; padding-bottom: 16px; margin-bottom: 16px;">
-    <h2 style="color: #ae3115; margin: 0;">SipSpot POS</h2>
+    <h2 style="color: #ae3115; margin: 0;">SipSpot Central</h2>
     <p style="color: #59413c; font-size: 13px; margin: 4px 0 0 0;">Kopi, Teh, Jus & Cemilan Segar</p>
     <p style="color: #8d716a; font-size: 12px; margin-top: 8px;">Order #{{orderNumber}} • {{date}}</p>
   </div>
@@ -433,7 +463,69 @@ export async function seedDatabase() {
     <tr><td>Kembalian:</td><td style="text-align: right; color: #006c49;">{{change}}</td></tr>
   </table>
   <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #f0dfdb; font-size: 12px; color: #8d716a;">
-    Terima kasih telah berbelanja di SipSpot!<br>
+    Terima kasih telah berbelanja di SipSpot Central!<br>
+    Kasir: {{cashierName}}
+  </div>
+</div>`,
+      isActive: true,
+      updatedAt: new Date()
+    },
+    {
+      code: 'RECEIPT_EMAIL',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      name: 'Struk Transaksi - Kopi Kulo Kemang',
+      description: 'Template otomatis struk email khas Kopi Kulo Kemang',
+      subject: 'Struk Transaksi Kopi Kulo Kemang - #{{orderNumber}}',
+      bodyHtml: `
+<div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 24px; font-family: sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.05); border: 1px solid #e7dfd8;">
+  <div style="text-align: center; border-bottom: 2px dashed #e7dfd8; padding-bottom: 16px; margin-bottom: 16px;">
+    <h2 style="color: #654321; margin: 0;">Kopi Kulo Kemang</h2>
+    <p style="color: #59413c; font-size: 13px; margin: 4px 0 0 0;">Spesialis Es Kopi Susu & Avocatto</p>
+    <p style="color: #8d716a; font-size: 12px; margin-top: 8px;">Order #{{orderNumber}} • {{date}}</p>
+  </div>
+  <p style="font-size: 14px; color: #221a18;">Halo <strong>{{customerName}}</strong>, nikmati kesegaran racikan Kopi Kulo:</p>
+  <div style="margin: 16px 0;">{{itemsTable}}</div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px;">
+    <tr><td>Subtotal:</td><td style="text-align: right;"><strong>{{subtotal}}</strong></td></tr>
+    <tr><td>Diskon Promo:</td><td style="text-align: right; color: #006c49;"><strong>- {{discount}}</strong></td></tr>
+    <tr><td>PB1 (10%):</td><td style="text-align: right;"><strong>{{tax}}</strong></td></tr>
+    <tr style="font-size: 16px; font-weight: bold; color: #654321;"><td style="padding-top: 8px;">Total:</td><td style="text-align: right; padding-top: 8px;">{{total}}</td></tr>
+    <tr><td>Metode:</td><td style="text-align: right;">{{paymentMethod}}</td></tr>
+    <tr><td>Kembalian:</td><td style="text-align: right; color: #006c49;">{{change}}</td></tr>
+  </table>
+  <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e7dfd8; font-size: 12px; color: #8d716a;">
+    Terima kasih telah singgah di Kopi Kulo Kemang!<br>
+    Kasir: {{cashierName}}
+  </div>
+</div>`,
+      isActive: true,
+      updatedAt: new Date()
+    },
+    {
+      code: 'RECEIPT_EMAIL',
+      vendorId: 'vnd_tehpoci_nusantara',
+      name: 'Struk Transaksi - Teh Poci Nusantara',
+      description: 'Template otomatis struk email khas Teh Poci Nusantara & Dimsum',
+      subject: 'Struk Pembelian Teh Poci Nusantara - #{{orderNumber}}',
+      bodyHtml: `
+<div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 24px; font-family: sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.05); border: 1px solid #dce8db;">
+  <div style="text-align: center; border-bottom: 2px dashed #dce8db; padding-bottom: 16px; margin-bottom: 16px;">
+    <h2 style="color: #1b4332; margin: 0;">Teh Poci Nusantara</h2>
+    <p style="color: #2d6a4f; font-size: 13px; margin: 4px 0 0 0;">Teh Melati Asli Gula Batu & Dimsum Segar</p>
+    <p style="color: #52b788; font-size: 12px; margin-top: 8px;">Order #{{orderNumber}} • {{date}}</p>
+  </div>
+  <p style="font-size: 14px; color: #221a18;">Halo <strong>{{customerName}}</strong>, terima kasih telah menikmati sajian kami:</p>
+  <div style="margin: 16px 0;">{{itemsTable}}</div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px;">
+    <tr><td>Subtotal:</td><td style="text-align: right;"><strong>{{subtotal}}</strong></td></tr>
+    <tr><td>Diskon Promo:</td><td style="text-align: right; color: #006c49;"><strong>- {{discount}}</strong></td></tr>
+    <tr><td>PB1 (10%):</td><td style="text-align: right;"><strong>{{tax}}</strong></td></tr>
+    <tr style="font-size: 16px; font-weight: bold; color: #1b4332;"><td style="padding-top: 8px;">Total:</td><td style="text-align: right; padding-top: 8px;">{{total}}</td></tr>
+    <tr><td>Metode:</td><td style="text-align: right;">{{paymentMethod}}</td></tr>
+    <tr><td>Kembalian:</td><td style="text-align: right; color: #006c49;">{{change}}</td></tr>
+  </table>
+  <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #dce8db; font-size: 12px; color: #8d716a;">
+    Terima kasih telah mampir di Teh Poci Nusantara!<br>
     Kasir: {{cashierName}}
   </div>
 </div>`,
@@ -457,6 +549,7 @@ export async function seedDatabase() {
   fallbackStore.inventory_logs = [
     {
       id: 'log_1',
+      vendorId: 'vnd_sipspot_central',
       productId: 'prod_1',
       productName: 'Espresso Latte',
       previousStock: 18,
@@ -469,6 +562,7 @@ export async function seedDatabase() {
     },
     {
       id: 'log_2',
+      vendorId: 'vnd_sipspot_central',
       productId: 'prod_7',
       productName: 'Dragonfruit Berry',
       previousStock: 15,
@@ -478,6 +572,32 @@ export async function seedDatabase() {
       reason: 'Penjualan minuman jam sibuk',
       performedBy: { id: 'user_2', name: 'Sarah Barista', role: 'CASHIER' },
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+    },
+    {
+      id: 'log_3',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      productId: 'kulo_prod_1',
+      productName: 'Es Kopi Kulo (Signature)',
+      previousStock: 30,
+      newStock: 50,
+      change: 20,
+      type: 'MANUAL_RESTOCK',
+      reason: 'Penyetokan susu segar dan konsentrat espresso',
+      performedBy: { id: 'user_kulo_1', name: 'Rian Manager Kulo', role: 'MANAGER' },
+      createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
+    },
+    {
+      id: 'log_4',
+      vendorId: 'vnd_tehpoci_nusantara',
+      productId: 'poci_prod_1',
+      productName: 'Teh Poci Melati Jumbo',
+      previousStock: 25,
+      newStock: 60,
+      change: 35,
+      type: 'MANUAL_RESTOCK',
+      reason: 'Penerimaan daun teh poci wangi dari Tegal',
+      performedBy: { id: 'user_poci_1', name: 'Dewi Manager Poci', role: 'MANAGER' },
+      createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
     }
   ];
 
@@ -758,25 +878,33 @@ export async function seedDatabase() {
   ];
 
   if (fallbackStore.login_history.length === 0) {
-    fallbackStore.login_history = [...initialLoginHistory];
+    fallbackStore.login_history = initialLoginHistory.map(h => ({
+      vendorId: (h as any).vendorId || 'vnd_sipspot_central',
+      ...h
+    }));
   }
 
   if (!fallbackStore.activity_logs || fallbackStore.activity_logs.length === 0) {
-    fallbackStore.activity_logs = [...initialActivityLogs];
+    fallbackStore.activity_logs = initialActivityLogs.map(a => ({
+      vendorId: (a as any).vendorId || 'vnd_sipspot_central',
+      ...a
+    }));
   }
 
   // Seed MongoDB if connected
   const db = getDB();
   if (db) {
     try {
-      // 0. Vendors
-      const vendorCount = await db.collection('vendors').countDocuments();
-      if (vendorCount === 0) {
-        await db.collection('vendors').insertMany(initialVendors);
-        console.log('[Seeder] Vendors seeded in MongoDB successfully.');
+      // 0. Vendors - ensure all initial vendors including vnd_admin are present
+      for (const v of initialVendors) {
+        await db.collection('vendors').updateOne(
+          { id: v.id },
+          { $setOnInsert: v },
+          { upsert: true }
+        );
       }
+      console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
-      // 1. Users
       // 1. Users - upsert each by email so all vendors have their staff accounts
       for (const u of initialUsers) {
         await db.collection('users').updateOne(
@@ -785,6 +913,18 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
+      // Explicitly sync Admin user to role ADMIN and vnd_admin vendor
+      await db.collection('users').updateOne(
+        { email: 'admin@sipspot.com' },
+        {
+          $set: {
+            role: 'ADMIN',
+            vendorId: 'vnd_admin',
+            pin: '999999',
+            name: 'Radit Admin Sistem'
+          }
+        }
+      );
       // Migrate legacy 4-digit PINs to 6-digit PINs
       await db.collection('users').updateMany({ pin: '1234' }, { $set: { pin: '123456' } });
       await db.collection('users').updateMany({ pin: '8492' }, { $set: { pin: '849201' } });
@@ -827,16 +967,35 @@ export async function seedDatabase() {
       // 6. Login History
       const historyCount = await db.collection('login_history').countDocuments();
       if (historyCount === 0) {
-        await db.collection('login_history').insertMany(initialLoginHistory);
+        await db.collection('login_history').insertMany(initialLoginHistory.map(h => ({
+          vendorId: (h as any).vendorId || 'vnd_sipspot_central',
+          ...h
+        })));
         console.log('[Seeder] Login history seeded in MongoDB successfully.');
       }
 
       // 7. Activity Logs
       const activityCount = await db.collection('activity_logs').countDocuments();
       if (activityCount === 0) {
-        await db.collection('activity_logs').insertMany(initialActivityLogs);
+        await db.collection('activity_logs').insertMany(initialActivityLogs.map(a => ({
+          vendorId: (a as any).vendorId || 'vnd_sipspot_central',
+          ...a
+        })));
         console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
       }
+
+      // 8. Universal Vendor Partition Migration across all collections
+      await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('discount_rules').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('email_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('email_templates').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('inventory_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('login_history').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      console.log('[Seeder] All 10 data collections verified and updated with vendorId partition.');
     } catch (err: any) {
       console.warn('[Seeder] MongoDB insert warning, using initialized fallback store:', err.message);
     }

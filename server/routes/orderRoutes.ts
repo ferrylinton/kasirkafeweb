@@ -173,6 +173,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     // 1. Calculate items subtotal
     const subtotal = items.reduce((acc, item) => acc + item.itemTotal, 0);
 
+    // Active Vendor ID resolution
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+
     // 2. Calculate discounts
     let discountAmount = 0;
     let appliedDiscounts: any[] = [];
@@ -189,7 +192,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       }];
       freeItemsSummary = [`${discountItem.name} (${discountItem.ruleName}): Rp ${discountItem.discountedPrice.toLocaleString('id-ID')}`];
     } else if (selectedDiscountCode) {
-      const rules = await getActiveDiscountRules();
+      const rules = await getActiveDiscountRules(activeVendorId);
       const matchedRule = rules.find(r => r.code === selectedDiscountCode);
       if (matchedRule) {
         if (matchedRule.rewardType === 'PERCENTAGE') {
@@ -216,7 +219,6 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     const change = paymentMethod === 'CASH' ? Math.max(0, cashReceived - totalAmount) : 0;
 
     // Sequential order number resetting daily as queue number
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence(activeVendorId);
     const cashierName = req.user?.name || 'Kasir SipSpot';
 
@@ -277,6 +279,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       const nextStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock : 0;
 
       const saleLog = {
+        vendorId: activeVendorId,
         productId: item.productId,
         productName: item.name,
         previousStock: prevStock,
@@ -324,6 +327,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       const nextStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock : 0;
 
       const promoLog = {
+        vendorId: activeVendorId,
         productId: discountItem.productId,
         productName: discountItem.name,
         previousStock: prevStock,
@@ -433,6 +437,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       `;
 
       emailResult = await sendReceiptEmail({
+        vendorId: activeVendorId,
         recipientEmail: customerEmail,
         orderId,
         orderNumber,
@@ -476,29 +481,48 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
  */
 orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const isAdmin = req.user?.role === 'ADMIN' || (req.user as any)?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let orders: any[] = [];
 
     if (db) {
       try {
-        const query = activeVendorId === 'vnd_sipspot_central'
-          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
-        orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(100).toArray();
+        let query: any = {};
+        if (isAllVendors) {
+          query = {};
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          query = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: requestedVendor };
+        } else {
+          query = activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId };
+        }
+        orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(200).toArray();
       } catch (e) {}
     }
 
     if (orders.length === 0) {
-      orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      if (isAllVendors) {
+        orders = fallbackStore.orders;
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === requestedVendor);
+      } else {
+        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      }
     }
 
     return res.json({
       success: true,
-      vendorId: activeVendorId,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       orders: orders.map(o => ({
         id: o._id ? o._id.toString() : o.id,
-        vendorId: o.vendorId || activeVendorId,
+        vendorId: o.vendorId || 'vnd_sipspot_central',
         orderNumber: o.orderNumber,
         queueNumber: o.queueNumber,
         items: o.items,
@@ -593,6 +617,7 @@ orderRouter.post('/:id/resend-email', authMiddleware, async (req: Request, res: 
     `;
 
     const result = await sendReceiptEmail({
+      vendorId: order.vendorId || req.vendorId || 'vnd_sipspot_central',
       recipientEmail: emailToSend,
       orderId: order._id ? order._id.toString() : id,
       orderNumber: order.orderNumber,

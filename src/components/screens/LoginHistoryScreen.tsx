@@ -37,6 +37,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
 interface SelectableUser {
   id: string;
@@ -49,18 +50,24 @@ interface SelectableUser {
 type ValuePiece = Date | null;
 type DatePickerValue = ValuePiece | [ValuePiece, ValuePiece];
 
-export const LoginHistoryScreen: React.FC = () => {
+interface LoginHistoryScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendorsMode = false }) => {
   const { user, token } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  const isManager = user?.role === 'MANAGER';
+  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isManager = isAuthorized;
 
   // Data states
   const [history, setHistory] = useState<LoginHistoryEntry[]>([]);
   const [usersList, setUsersList] = useState<SelectableUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -104,10 +111,15 @@ export const LoginHistoryScreen: React.FC = () => {
 
   // Fetch selectable users for user filter dropdown
   useEffect(() => {
-    if (!isManager) return;
+    if (!isAuthorized) return;
     const fetchUsers = async () => {
       try {
-        const res = await fetch('/api/auth/selectable-users');
+        const url = allVendorsMode
+          ? (selectedVendor === 'all' ? '/api/auth/selectable-users?allVendors=true' : `/api/auth/selectable-users?vendorId=${selectedVendor}`)
+          : '/api/auth/selectable-users';
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        });
         const data = await res.json();
         if (data.success && Array.isArray(data.users)) {
           setUsersList(data.users);
@@ -117,7 +129,7 @@ export const LoginHistoryScreen: React.FC = () => {
       }
     };
     fetchUsers();
-  }, [isManager]);
+  }, [isAuthorized, allVendorsMode, selectedVendor, token]);
 
   // Determine computed date string for query
   const computedDateQuery = useMemo(() => {
@@ -136,13 +148,21 @@ export const LoginHistoryScreen: React.FC = () => {
 
   // Fetch login history data with pagination & filters
   const fetchHistory = async () => {
-    if (!isManager) return;
+    if (!isAuthorized) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('scope', 'all');
       params.set('page', page.toString());
       params.set('limit', limit.toString());
+
+      if (allVendorsMode) {
+        if (selectedVendor === 'all') {
+          params.set('allVendors', 'true');
+        } else {
+          params.set('vendorId', selectedVendor);
+        }
+      }
 
       if (debouncedKeyword.trim()) {
         params.set('search', debouncedKeyword.trim());
@@ -164,7 +184,7 @@ export const LoginHistoryScreen: React.FC = () => {
       });
 
       if (res.status === 403) {
-        showToast('Akses ditolak: Hanya Manajer yang dapat melihat riwayat login', 'error');
+        showToast('Akses ditolak: Hanya Manajer atau Admin yang dapat melihat riwayat login', 'error');
         setLoading(false);
         return;
       }
@@ -192,7 +212,7 @@ export const LoginHistoryScreen: React.FC = () => {
 
   useEffect(() => {
     fetchHistory();
-  }, [token, isManager, page, limit, debouncedKeyword, selectedUser, computedDateQuery, statusFilter]);
+  }, [token, isAuthorized, allVendorsMode, selectedVendor, page, limit, debouncedKeyword, selectedUser, computedDateQuery, statusFilter]);
 
   // Handle DatePicker change from react-date-picker
   const handleDatePickerChange = (val: DatePickerValue) => {
@@ -443,8 +463,8 @@ export const LoginHistoryScreen: React.FC = () => {
     }
   };
 
-  // If user is not manager, display access denied
-  if (!isManager) {
+  // If user is not manager/admin, display access denied
+  if (!isAuthorized) {
     return (
       <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-xl mx-auto flex flex-col items-center justify-center text-center">
         <div className="w-full bg-white dark:bg-[#251e1c] rounded-3xl border border-rose-200 dark:border-rose-900/50 p-8 shadow-xs">
@@ -452,10 +472,10 @@ export const LoginHistoryScreen: React.FC = () => {
             <ShieldAlert className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold font-heading text-stone-900 dark:text-stone-100">
-            Akses Terbatas: Khusus Manajer
+            Akses Terbatas: Khusus Manajer & Administrator
           </h2>
           <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 mb-6">
-            Menu Login Histori hanya dapat diakses oleh akun dengan peran Manajer untuk memantau audit keamanan seluruh staf.
+            Menu Login Histori hanya dapat diakses oleh akun dengan peran Manajer atau Administrator untuk memantau audit keamanan seluruh staf.
           </p>
         </div>
       </div>
@@ -464,6 +484,20 @@ export const LoginHistoryScreen: React.FC = () => {
 
   return (
     <div id="login-history-screen" className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-200">
+      {/* Admin Cross-Vendor Header */}
+      {allVendorsMode && (
+        <AdminAllVendorsHeader
+          title={t('navAdminLoginHistory')}
+          subtitle="Audit log riwayat login, keamanan sesi, dan alamat IP seluruh vendor jaringan"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={fetchHistory}
+          isLoading={loading}
+          itemCount={totalRecords}
+          itemLabel="Log Sesi"
+        />
+      )}
+
       {/* 1. Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-4 sm:p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs">
         <div className="space-y-1">
@@ -474,10 +508,10 @@ export const LoginHistoryScreen: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
-                  Riwayat Login Pengguna
+                  {allVendorsMode ? 'Riwayat Login Seluruh Vendor' : 'Riwayat Login Pengguna'}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60">
-                  Khusus Manajer
+                  {allVendorsMode ? 'ALL VENDOR' : 'Khusus Manajer'}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-0.5">
@@ -939,7 +973,7 @@ export const LoginHistoryScreen: React.FC = () => {
                               {entry.name?.[0] || 'U'}
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-bold text-stone-900 dark:text-stone-100 truncate">
                                   {entry.name}
                                 </span>
@@ -952,6 +986,9 @@ export const LoginHistoryScreen: React.FC = () => {
                                 >
                                   {entry.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                                 </span>
+                                {allVendorsMode && (
+                                  <VendorBadge vendorId={entry.vendorId} />
+                                )}
                               </div>
                               <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                                 {entry.email}
@@ -1112,6 +1149,9 @@ export const LoginHistoryScreen: React.FC = () => {
                             >
                               {entry.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                             </span>
+                            {allVendorsMode && (
+                              <VendorBadge vendorId={entry.vendorId} />
+                            )}
                           </div>
                           <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                             {entry.email}
@@ -1267,6 +1307,9 @@ export const LoginHistoryScreen: React.FC = () => {
                             >
                               {entry.role === 'MANAGER' ? 'Manager' : 'Kasir'}
                             </span>
+                            {allVendorsMode && (
+                              <VendorBadge vendorId={entry.vendorId} />
+                            )}
                           </div>
                           <span className="text-[11px] text-stone-500 dark:text-stone-400 block truncate">
                             {entry.email}

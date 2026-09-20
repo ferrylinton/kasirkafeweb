@@ -567,7 +567,9 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     });
 
     // Record login in history collection
+    const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_sipspot_central';
     const historyEntry = {
+      vendorId: historyVendorId,
       sessionId,
       userId,
       email: user.email,
@@ -889,12 +891,13 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     const currentUser = req.user!;
     const scope = (req.query.scope as string) || (currentUser.role === 'MANAGER' ? 'all' : 'me');
 
-    // Security check: Only manager can view other users or all login history
-    if (scope === 'all' && currentUser.role !== 'MANAGER') {
+    // Security check: Only manager/admin can view other users or all login history
+    const isPrivileged = currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN';
+    if (scope === 'all' && !isPrivileged) {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
-        message: 'Hanya manajer yang diizinkan untuk melihat semua riwayat login pengguna.'
+        message: 'Hanya manajer dan admin yang diizinkan untuk melihat semua riwayat login pengguna.'
       });
     }
 
@@ -904,6 +907,8 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
 
     const search = (req.query.search as string || req.query.keyword as string || '').trim();
     const userFilter = (req.query.user as string || '').trim();
+    const vendorQuery = (req.query.vendorId as string || '').trim();
+    const isAllVendors = (req.query.allVendors === 'true' || vendorQuery === 'ALL' || vendorQuery === 'all' || (!vendorQuery && currentUser.role === 'ADMIN')) && (currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN');
     const dateFilter = (req.query.date as string || '').trim();
     const startDate = (req.query.startDate as string || '').trim();
     const endDate = (req.query.endDate as string || '').trim();
@@ -913,7 +918,7 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     const andClauses: any[] = [];
 
     // Role / user constraint
-    if (currentUser.role !== 'MANAGER' || scope === 'me') {
+    if (!isPrivileged || scope === 'me') {
       andClauses.push({
         $or: [{ userId: currentUser.userId }, { email: currentUser.email }]
       });
@@ -969,6 +974,20 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
       andClauses.push({ status: statusFilter });
     }
 
+    // Vendor partition filter
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    if (!isAllVendors) {
+      if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
+        andClauses.push({ vendorId: vendorQuery });
+      } else {
+        andClauses.push(
+          activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId }
+        );
+      }
+    }
+
     const mongoFilter = andClauses.length > 0 ? { $and: andClauses } : {};
 
     const db = getDB();
@@ -1003,8 +1022,17 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     if (!db || (history.length === 0 && total === 0)) {
       // Filter in-memory from fallbackStore.login_history
       let inMemoryList = fallbackStore.login_history.filter(item => {
+        // Vendor partition filter
+        if (!isAllVendors) {
+          if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
+            if ((item.vendorId || 'vnd_sipspot_central') !== vendorQuery) return false;
+          } else if ((item.vendorId || 'vnd_sipspot_central') !== activeVendorId) {
+            return false;
+          }
+        }
+
         // Role / user filter
-        if (currentUser.role !== 'MANAGER' || scope === 'me') {
+        if (!isPrivileged || scope === 'me') {
           if (item.userId !== currentUser.userId && item.email !== currentUser.email) return false;
         } else if (userFilter && userFilter !== 'ALL') {
           if (item.userId !== userFilter && item.email.toLowerCase() !== userFilter.toLowerCase()) return false;
@@ -1116,13 +1144,19 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
   try {
     const currentUser = req.user!;
     const targetEmail = req.body.email || currentUser.email;
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const isSuperAdmin = currentUser.role === 'SUPERADMIN';
 
     const db = getDB();
     let history: any[] = [];
     if (db) {
       try {
+        const query: any = { email: targetEmail };
+        if (!isSuperAdmin) {
+          query.vendorId = activeVendorId;
+        }
         history = await db.collection('login_history')
-          .find({ email: targetEmail })
+          .find(query)
           .sort({ timestamp: -1 })
           .limit(20)
           .toArray();
@@ -1131,7 +1165,7 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
 
     if (!history || history.length === 0) {
       history = fallbackStore.login_history
-        .filter(h => h.email === targetEmail)
+        .filter(h => h.email === targetEmail && (isSuperAdmin || (h.vendorId || 'vnd_sipspot_central') === activeVendorId))
         .slice(0, 20);
     }
 

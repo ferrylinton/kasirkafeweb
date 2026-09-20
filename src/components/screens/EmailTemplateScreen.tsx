@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Code, Eye, Save, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Mail, Code, Eye, Save, Sparkles, CheckCircle2, Layers } from 'lucide-react';
 import { EmailTemplate } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
-export const EmailTemplateScreen: React.FC = () => {
+interface EmailTemplateScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVendorsMode = false }) => {
   const { token } = useAuth();
+  const { t } = useLanguage();
   const { showToast } = useToast();
 
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -14,26 +21,45 @@ export const EmailTemplateScreen: React.FC = () => {
   const [bodyHtml, setBodyHtml] = useState<string>('');
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
+
+  const fetchTemplates = async () => {
+    setLoading(true);
+    try {
+      const url = allVendorsMode
+        ? (selectedVendor === 'all' ? '/api/templates?allVendors=true' : `/api/templates?vendorId=${selectedVendor}`)
+        : '/api/templates';
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token || ''}` }
+      });
+      const data = await res.json();
+      if (data.success && data.templates?.length > 0) {
+        setTemplates(data.templates);
+        setSelectedTemplate(data.templates[0]);
+        setSubject(data.templates[0].subject);
+        setBodyHtml(data.templates[0].bodyHtml);
+      } else {
+        setTemplates([]);
+        setSelectedTemplate(null);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch email templates');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        const res = await fetch('/api/templates', {
-          headers: { Authorization: `Bearer ${token || ''}` }
-        });
-        const data = await res.json();
-        if (data.success && data.templates?.length > 0) {
-          setTemplates(data.templates);
-          setSelectedTemplate(data.templates[0]);
-          setSubject(data.templates[0].subject);
-          setBodyHtml(data.templates[0].bodyHtml);
-        }
-      } catch (e) {
-        console.warn('Failed to fetch email templates');
-      }
-    };
     fetchTemplates();
-  }, [token]);
+  }, [token, allVendorsMode, selectedVendor]);
+
+  const handleSelectTemplate = (tpl: EmailTemplate) => {
+    setSelectedTemplate(tpl);
+    setSubject(tpl.subject);
+    setBodyHtml(tpl.bodyHtml);
+  };
 
   const handleSave = async () => {
     if (!selectedTemplate) return;
@@ -50,7 +76,7 @@ export const EmailTemplateScreen: React.FC = () => {
       const data = await res.json();
       setIsSaving(false);
       if (data.success) {
-        showToast('Template email berhasil disimpan ke MongoDB!', 'success');
+        showToast('Template email berhasil disimpan!', 'success');
       } else {
         showToast(data.error || 'Gagal menyimpan template.', 'error');
       }
@@ -84,31 +110,93 @@ export const EmailTemplateScreen: React.FC = () => {
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-stone-800">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
-              Template Email Struk (SMTP)
-            </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
-              Khusus Manager
-            </span>
+      {allVendorsMode ? (
+        <AdminAllVendorsHeader
+          title={t('navAdminTemplates')}
+          subtitle="Konfigurasi template email notifikasi struk dan keamanan untuk seluruh vendor jaringan"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={fetchTemplates}
+          isLoading={loading}
+          itemCount={templates.length}
+          itemLabel="Template"
+        />
+      ) : (
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-stone-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
+                Template Email Struk (SMTP)
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                Khusus Manager
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              Format HTML dan variabel dinamis yang dikirim ke email pelanggan via SMTP
+            </p>
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-            Format HTML dan variabel dinamis yang dikirim ke email pelanggan via SMTP
-          </p>
-        </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
-        >
-          <Save className="w-4 h-4" />
-          <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Template Selector if multiple templates available */}
+      {templates.length > 1 && (
+        <div className="p-3 bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 rounded-2xl flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-stone-500 flex items-center gap-1">
+            <Layers className="w-3.5 h-3.5 text-accent" />
+            Pilih Template:
+          </span>
+          {templates.map(tpl => (
+            <button
+              key={tpl.id}
+              onClick={() => handleSelectTemplate(tpl)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                selectedTemplate?.id === tpl.id
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+              }`}
+            >
+              <span>{tpl.name || tpl.type}</span>
+              {allVendorsMode && (
+                <VendorBadge vendorId={tpl.vendorId} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedTemplate && (
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-stone-500">Template Aktif:</span>
+            <span className="text-xs font-bold text-stone-800 dark:text-stone-200">{selectedTemplate.name || selectedTemplate.type}</span>
+            {allVendorsMode && (
+              <VendorBadge vendorId={selectedTemplate.vendorId} />
+            )}
+          </div>
+          {allVendorsMode && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="py-1.5 px-3 rounded-xl bg-accent text-white font-bold text-xs shadow-xs hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Menyimpan...' : 'Simpan'}</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Subject Input */}
       <div className="p-4 rounded-2xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs">

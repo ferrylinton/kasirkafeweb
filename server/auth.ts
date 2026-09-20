@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'beverage_pos_jwt_secret_key_2026';
 export interface TokenPayload {
   userId: string;
   email: string;
-  role: 'SUPERADMIN' | 'MANAGER' | 'CASHIER';
+  role: 'SUPERADMIN' | 'ADMIN' | 'MANAGER' | 'CASHIER';
   name: string;
   sessionId?: string;
   vendorId?: string;
@@ -154,7 +154,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 }
 
 /**
- * Manager-only role authorization middleware
+ * Manager-only role authorization middleware (also accessible by ADMIN and SUPERADMIN)
  */
 export function requireManager(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
@@ -166,8 +166,33 @@ export function requireManager(req: Request, res: Response, next: NextFunction) 
     });
   }
 
-  if (req.user.role !== 'MANAGER' && req.user.role !== 'SUPERADMIN') {
+  if (req.user.role !== 'MANAGER' && req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN') {
     const msg = req.t ? req.t('auth.managerOnly') : 'Akses ditolak. Fitur ini khusus untuk role MANAGER.';
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: msg
+    });
+  }
+
+  next();
+}
+
+/**
+ * Admin-only role authorization middleware (strictly for ADMIN and SUPERADMIN)
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    const msg = req.t ? req.t('auth.unauthorized') : 'Autentikasi diperlukan.';
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: msg
+    });
+  }
+
+  if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN') {
+    const msg = req.t ? req.t('auth.adminOnly') : 'Akses ditolak. Halaman dan fitur ini hanya dapat diakses oleh role ADMIN.';
     return res.status(403).json({
       success: false,
       error: 'Forbidden',

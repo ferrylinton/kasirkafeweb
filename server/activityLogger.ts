@@ -10,7 +10,8 @@ export type ActivityEntity =
   | 'USER'
   | 'ORDER'
   | 'EMAIL_TEMPLATE'
-  | 'CATEGORY';
+  | 'CATEGORY'
+  | 'VENDOR';
 
 export interface PerformedByUser {
   id: string;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -11,7 +11,7 @@ import { LoginScreen } from './components/screens/LoginScreen';
 import { CatalogScreen } from './components/screens/CatalogScreen';
 import { CartScreen } from './components/screens/CartScreen';
 import { PaymentScreen } from './components/screens/PaymentScreen';
-import { HistoryScreen } from './components/screens/HistoryScreen';
+import { OrderHistoryScreen } from './components/screens/OrderHistoryScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
 import { UserManagementScreen } from './components/screens/UserManagementScreen';
 import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
@@ -21,17 +21,75 @@ import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
 import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
 import { VendorClientScreen } from './components/screens/VendorClientScreen';
+import { VendorManagementScreen } from './components/screens/VendorManagementScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<string>('katalog');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
+      return 'admin-orders';
+    }
+    return 'katalog';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024;
     }
     return true;
   });
+
+  // Kategori Tab Berdasarkan Hak Akses Role
+  // 1. Operasional Kasir: Hanya boleh diakses role CASHIER dan role MANAGER
+  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
+
+  // 2. Manajemen Toko: Hanya boleh diakses role MANAGER
+  const managerTabs = [
+    'inventaris',
+    'users',
+    'diskon',
+    'templates',
+    'login-history',
+    'activity-logs',
+    'vendor-client'
+  ];
+
+  // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN dan SUPERADMIN
+  const adminTabs = [
+    'vendor-management',
+    'admin-orders',
+    'admin-riwayat',
+    'admin-inventory',
+    'admin-inventaris',
+    'admin-users',
+    'admin-discounts',
+    'admin-diskon',
+    'admin-templates',
+    'admin-login-history',
+    'admin-activity-logs'
+  ];
+
+  const accountTabs = ['profile', 'settings'];
+
+  // Sinkronisasi tab saat role user berubah
+  useEffect(() => {
+    if (!user) return;
+    const role = user.role;
+    if (role === 'ADMIN' || role === 'SUPERADMIN') {
+      if (!adminTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
+        setCurrentTab('admin-orders');
+      }
+    } else if (role === 'MANAGER') {
+      if (adminTabs.includes(currentTab)) {
+        setCurrentTab('katalog');
+      }
+    } else {
+      // CASHIER
+      if (!cashierTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
+        setCurrentTab('katalog');
+      }
+    }
+  }, [user?.role]);
 
   if (isLoading) {
     return (
@@ -48,11 +106,27 @@ const MainLayout: React.FC = () => {
     return <LoginScreen />;
   }
 
-  // Route protection: Manager only tabs
-  const isManager = user.role === 'MANAGER' || user.role === 'SUPERADMIN';
+  // Hak Akses Role
+  const isCashierOrManager = user.role === 'CASHIER' || user.role === 'MANAGER';
+  const isManager = user.role === 'MANAGER';
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+
   let activeView = currentTab;
-  if (!isManager && (currentTab === 'users' || currentTab === 'diskon' || currentTab === 'templates' || currentTab === 'inventaris' || currentTab === 'login-history' || currentTab === 'activity-logs' || currentTab === 'vendor-client')) {
-    activeView = 'katalog';
+  if (isAdmin) {
+    // Role ADMIN dilarang mengakses Operasional Kasir & Manajemen Toko lokal
+    if (!adminTabs.includes(activeView) && !accountTabs.includes(activeView)) {
+      activeView = 'admin-orders';
+    }
+  } else if (isManager) {
+    // Role MANAGER boleh Operasional Kasir & Manajemen Toko, dilarang Administrasi Sistem
+    if (adminTabs.includes(activeView)) {
+      activeView = 'katalog';
+    }
+  } else {
+    // Role CASHIER hanya boleh Operasional Kasir & Akun/Setting. Dilarang Manajemen Toko & Administrasi Sistem
+    if (!cashierTabs.includes(activeView) && !accountTabs.includes(activeView)) {
+      activeView = 'katalog';
+    }
   }
 
   return (
@@ -83,41 +157,65 @@ const MainLayout: React.FC = () => {
 
         {/* Main View Area */}
         <main className="w-full flex-1">
-          {activeView === 'katalog' && (
+          {/* Operasional Kasir (Hanya role CASHIER dan role MANAGER) */}
+          {isCashierOrManager && activeView === 'katalog' && (
             <CatalogScreen onNavigateToCart={() => setCurrentTab('pesanan')} />
           )}
 
-          {activeView === 'pesanan' && (
+          {isCashierOrManager && activeView === 'pesanan' && (
             <CartScreen
               onProceedToPayment={() => setCurrentTab('pembayaran')}
               onNavigateToCatalog={() => setCurrentTab('katalog')}
             />
           )}
 
-          {activeView === 'pembayaran' && (
+          {isCashierOrManager && activeView === 'pembayaran' && (
             <PaymentScreen
               onBackToCart={() => setCurrentTab('pesanan')}
               onPaymentComplete={() => setCurrentTab('katalog')}
             />
           )}
 
-          {activeView === 'histori' && <HistoryScreen />}
+          {isCashierOrManager && activeView === 'histori' && <OrderHistoryScreen />}
 
+          {/* Sistem & Akun (Semua Pengguna Terautentikasi) */}
           {activeView === 'profile' && <ProfileScreen />}
-
           {activeView === 'settings' && <SettingsScreen />}
 
+          {/* Manajemen Toko (HANYA role MANAGER) */}
           {isManager && activeView === 'inventaris' && <InventoryScreen />}
-
           {isManager && activeView === 'users' && <UserManagementScreen />}
-
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
-
           {isManager && activeView === 'templates' && <EmailTemplateScreen />}
-
           {isManager && activeView === 'login-history' && <LoginHistoryScreen />}
           {isManager && activeView === 'activity-logs' && <ActivityLogScreen />}
           {isManager && activeView === 'vendor-client' && <VendorClientScreen />}
+
+          {/* Administrasi Sistem Lintas Vendor (HANYA role ADMIN / SUPERADMIN) */}
+          {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
+            <OrderHistoryScreen allVendorsMode={true} />
+          )}
+          {isAdmin && (activeView === 'admin-inventory' || activeView === 'admin-inventaris') && (
+            <InventoryScreen allVendorsMode={true} />
+          )}
+          {isAdmin && activeView === 'admin-users' && (
+            <UserManagementScreen allVendorsMode={true} />
+          )}
+          {isAdmin && (activeView === 'admin-discounts' || activeView === 'admin-diskon') && (
+            <DiscountRulesScreen allVendorsMode={true} />
+          )}
+          {isAdmin && activeView === 'admin-templates' && (
+            <EmailTemplateScreen allVendorsMode={true} />
+          )}
+          {isAdmin && activeView === 'admin-login-history' && (
+            <LoginHistoryScreen allVendorsMode={true} />
+          )}
+          {isAdmin && activeView === 'admin-activity-logs' && (
+            <ActivityLogScreen allVendorsMode={true} />
+          )}
+          {isAdmin && activeView === 'vendor-management' && (
+            <VendorManagementScreen />
+          )}
         </main>
       </div>
 

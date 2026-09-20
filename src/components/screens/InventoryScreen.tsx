@@ -19,7 +19,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Layers,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ShieldAlert
 } from 'lucide-react';
 import { Product, InventoryLog, InventoryAlertSummary } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -27,9 +28,14 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ProductImage } from '../common/ProductImage';
 import { CsvImportModal } from '../inventory/CsvImportModal';
+import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
 
-export const InventoryScreen: React.FC = () => {
-  const { token } = useAuth();
+interface InventoryScreenProps {
+  allVendorsMode?: boolean;
+}
+
+export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode = false }) => {
+  const { user, token } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
@@ -38,6 +44,7 @@ export const InventoryScreen: React.FC = () => {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'products' | 'logs'>('products');
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -66,14 +73,18 @@ export const InventoryScreen: React.FC = () => {
   const fetchInventoryData = async () => {
     setLoading(true);
     try {
+      const vendorParam = allVendorsMode
+        ? (selectedVendor === 'all' ? '?allVendors=true' : `?vendorId=${selectedVendor}`)
+        : '';
+
       const [alertsRes, prodsRes, logsRes] = await Promise.all([
-        fetch('/api/products/inventory/alerts', {
+        fetch(`/api/products/inventory/alerts${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
-        fetch('/api/products', {
+        fetch(`/api/products${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
-        fetch('/api/products/inventory/logs', {
+        fetch(`/api/products/inventory/logs${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         })
       ]);
@@ -101,7 +112,7 @@ export const InventoryScreen: React.FC = () => {
 
   useEffect(() => {
     fetchInventoryData();
-  }, [token]);
+  }, [token, allVendorsMode, selectedVendor]);
 
   // Quick delta adjustment (+/-)
   const handleQuickAdjust = async (product: Product, delta: number) => {
@@ -280,8 +291,46 @@ export const InventoryScreen: React.FC = () => {
   const totalStockUnits = summary?.totalStockUnits ?? products.reduce((acc, p) => acc + p.stock, 0);
   const totalStockValue = summary?.totalStockValue ?? products.reduce((acc, p) => acc + (p.stock * p.price), 0);
 
+  const isAuthorized = allVendorsMode
+    ? (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN')
+    : (user?.role === 'MANAGER');
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-xl mx-auto flex flex-col items-center justify-center text-center">
+        <div className="w-full bg-white dark:bg-[#251e1c] rounded-3xl border border-rose-200 dark:border-rose-900/50 p-8 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold font-heading text-stone-900 dark:text-stone-100">
+            {allVendorsMode ? 'Akses Terbatas: Khusus Administrator' : 'Akses Terbatas: Khusus Manajer'}
+          </h2>
+          <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 mb-6">
+            {allVendorsMode
+              ? 'Menu Administrasi Inventaris Jaringan hanya dapat diakses oleh Administrator.'
+              : 'Menu Manajemen Inventaris Toko hanya dapat diakses oleh akun dengan peran Manajer.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6">
+      {/* Admin Cross-Vendor Header */}
+      {allVendorsMode && (
+        <AdminAllVendorsHeader
+          title={t('navAdminInventory')}
+          subtitle="Monitoring inventaris stok barang, ambang batas minimum, dan audit mutasi stok lintas vendor"
+          selectedVendor={selectedVendor}
+          onVendorChange={setSelectedVendor}
+          onRefresh={fetchInventoryData}
+          isLoading={loading}
+          itemCount={products.length}
+          itemLabel="Produk"
+        />
+      )}
+
       {/* 1. Header & Quick Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -291,10 +340,10 @@ export const InventoryScreen: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
-                {t('inventoryTitle')}
+                {allVendorsMode ? 'Data Inventaris Jaringan' : t('inventoryTitle')}
               </h1>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                {t('inventorySubtitle')}
+                {allVendorsMode ? 'Inventaris gabungan seluruh cabang vendor terdaftar' : t('inventorySubtitle')}
               </p>
             </div>
           </div>
@@ -705,6 +754,9 @@ export const InventoryScreen: React.FC = () => {
                                 {product.tag}
                               </span>
                             )}
+                            {allVendorsMode && (
+                              <VendorBadge vendorId={product.vendorId} />
+                            )}
                           </div>
                           <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-heading truncate mt-1">
                             {product.name}
@@ -872,6 +924,7 @@ export const InventoryScreen: React.FC = () => {
                 <thead>
                   <tr className="border-b border-stone-200 dark:border-stone-800 text-stone-400 uppercase tracking-wider font-semibold">
                     <th className="py-2.5 px-3">Waktu</th>
+                    {allVendorsMode && <th className="py-2.5 px-3">Vendor</th>}
                     <th className="py-2.5 px-3">Produk</th>
                     <th className="py-2.5 px-3">Tipe Aksi</th>
                     <th className="py-2.5 px-3 text-center">Perubahan</th>
@@ -893,6 +946,11 @@ export const InventoryScreen: React.FC = () => {
                             timeStyle: 'short'
                           })}
                         </td>
+                        {allVendorsMode && (
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <VendorBadge vendorId={log.vendorId} />
+                          </td>
+                        )}
                         <td className="py-2.5 px-3 font-bold text-stone-900 dark:text-stone-100 whitespace-nowrap">
                           {log.productName}
                         </td>

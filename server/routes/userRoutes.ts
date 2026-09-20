@@ -33,18 +33,27 @@ const updateUserSchema = z.object({
  */
 userRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
     const db = getDB();
     let usersList: any[] = [];
 
     if (db) {
       try {
-        const query = isSuperAdmin
-          ? {}
-          : activeVendorId === 'vnd_sipspot_central'
-          ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
+        let query: any = {};
+        if (isAllVendors) {
+          query = {};
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          query = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: requestedVendor };
+        } else {
+          query = activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId };
+        }
 
         const cursor = db.collection('users').find(query, { projection: { password: 0 } });
         usersList = await cursor.toArray();
@@ -55,17 +64,22 @@ userRouter.get('/', async (req: Request, res: Response) => {
 
     if (usersList.length === 0) {
       const allUsers = fallbackStore.users.map(({ password, ...rest }) => rest);
-      usersList = isSuperAdmin
-        ? allUsers
-        : allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      if (isAllVendors) {
+        usersList = allUsers;
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        usersList = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === requestedVendor);
+      } else {
+        usersList = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      }
     }
 
     return res.json({
       success: true,
-      vendorId: activeVendorId,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       users: usersList.map(u => ({
         id: u._id ? u._id.toString() : u.id,
-        vendorId: u.vendorId || activeVendorId,
+        vendorId: u.vendorId || 'vnd_sipspot_central',
         email: u.email,
         name: u.name,
         role: u.role,

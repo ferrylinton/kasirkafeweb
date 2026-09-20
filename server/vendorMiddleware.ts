@@ -109,7 +109,23 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
 export async function vendorMiddleware(req: Request, res: Response, next: NextFunction) {
   const clientIdHeader = req.headers['x-client-id'] as string | undefined;
   const clientSecretHeader = req.headers['x-client-secret'] as string | undefined;
-  const vendorIdHeader = req.headers['x-vendor-id'] as string | undefined;
+
+  let cookieVendorId: string | undefined;
+  if (req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)sipspot_vendor_id=([^;]+)/);
+    if (match) {
+      try {
+        cookieVendorId = decodeURIComponent(match[1].trim());
+      } catch {
+        cookieVendorId = match[1].trim();
+      }
+    }
+  }
+
+  const vendorIdHeader = (req.headers['x-vendor-id'] as string) || 
+    cookieVendorId ||
+    (req.query.vendorId as string) || 
+    (req.body && typeof req.body.vendorId === 'string' ? req.body.vendorId : undefined);
 
   // Case 1: Client ID & Client Secret Authentication (M2M / API Vendor Integration)
   if (clientIdHeader) {
@@ -157,8 +173,8 @@ export async function vendorMiddleware(req: Request, res: Response, next: NextFu
       // Default to user's assigned vendorId
       let chosenVendorId = decoded.vendorId || 'vnd_sipspot_central';
 
-      // Managers & Superadmins can switch active vendor via X-Vendor-Id header or query param
-      if ((decoded.role === 'MANAGER' || (decoded as any).role === 'SUPERADMIN') && vendorIdHeader) {
+      // Admins, Managers & Superadmins can switch active vendor via X-Vendor-Id header or query param
+      if ((decoded.role === 'ADMIN' || decoded.role === 'MANAGER' || (decoded as any).role === 'SUPERADMIN') && vendorIdHeader) {
         chosenVendorId = vendorIdHeader.trim();
       }
 

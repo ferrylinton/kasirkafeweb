@@ -41,10 +41,12 @@ discountRouter.post('/evaluate', async (req: Request, res: Response) => {
     }
 
     const { items, subtotal } = parsed.data;
-    const result = await evaluateDiscountsForOrder(items, subtotal);
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const result = await evaluateDiscountsForOrder(items, subtotal, activeVendorId);
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       eligibleDiscounts: result.eligibleDiscounts,
       allRules: result.allRules
     });
@@ -82,10 +84,12 @@ discountRouter.post('/calculate', async (req: Request, res: Response) => {
     }
 
     const { items, subtotal, customerBirthDate, isBirthdayClaimed } = parsed.data;
-    const result = await calculateDiscounts(items, subtotal, customerBirthDate, isBirthdayClaimed);
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const result = await calculateDiscounts(items, subtotal, customerBirthDate, isBirthdayClaimed, activeVendorId);
 
     return res.json({
       success: true,
+      vendorId: activeVendorId,
       data: result
     });
   } catch (err: any) {
@@ -98,28 +102,45 @@ discountRouter.post('/calculate', async (req: Request, res: Response) => {
  */
 discountRouter.get('/rules', async (req: Request, res: Response) => {
   try {
-    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
 
     const db = getDB();
     let rules: any[] = [];
     if (db) {
       try {
-        const filter = isSuperAdmin
-          ? {}
-          : { $or: [{ vendorId: activeVendorId }, { vendorId: { $exists: false } }] };
+        let filter: any = {};
+        if (isAllVendors) {
+          filter = {};
+        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+          filter = requestedVendor === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: requestedVendor };
+        } else {
+          filter = activeVendorId === 'vnd_sipspot_central'
+            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId };
+        }
         rules = await db.collection('discount_rules').find(filter).toArray();
       } catch (e) {}
     }
     if (rules.length === 0) {
       const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
-      rules = isSuperAdmin
-        ? source
-        : source.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId || !r.vendorId);
+      if (isAllVendors) {
+        rules = source;
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        rules = source.filter(r => (r.vendorId || 'vnd_sipspot_central') === requestedVendor);
+      } else {
+        rules = source.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      }
     }
 
     return res.json({
       success: true,
+      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      isAllVendors,
       rules: rules.map(r => ({
         id: r._id ? r._id.toString() : r.code,
         vendorId: r.vendorId || 'vnd_sipspot_central',
@@ -187,7 +208,7 @@ discountRouter.post('/rules', authMiddleware, requireManager, async (req: Reques
       });
     }
 
-    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
 
     const newRuleData = {
       vendorId: activeVendorId,
@@ -324,7 +345,7 @@ discountRouter.put('/rules/:id', authMiddleware, requireManager, async (req: Req
     const db = getDB();
     let existingRule: any = null;
 
-    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
     const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
 
     if (db) {
@@ -379,7 +400,7 @@ discountRouter.delete('/rules/:id', authMiddleware, requireManager, async (req: 
     const db = getDB();
     let targetRule: any = null;
 
-    const activeVendorId = (req as any).activeVendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
     const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
 
     if (db) {

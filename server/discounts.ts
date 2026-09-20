@@ -2,6 +2,7 @@ import { getDB, fallbackStore } from './db';
 
 export interface DiscountRule {
   _id?: any;
+  vendorId?: string;
   code: string;
   name: string;
   description: string;
@@ -36,6 +37,7 @@ export interface DiscountCalculationResult {
 
 export interface EvaluatedDiscountRule {
   id?: string;
+  vendorId?: string;
   code: string;
   name: string;
   description: string;
@@ -70,9 +72,10 @@ export function calculateItemDiscountPrice(
 
 export async function evaluateDiscountsForOrder(
   items: OrderItemInput[],
-  subtotal: number
+  subtotal: number,
+  vendorId?: string
 ): Promise<{ eligibleDiscounts: EvaluatedDiscountRule[]; allRules: EvaluatedDiscountRule[] }> {
-  const rules = await getActiveDiscountRules();
+  const rules = await getActiveDiscountRules(vendorId);
   const totalDrinks = items
     .filter(i => ['kopi', 'teh', 'jus'].includes(i.category.toLowerCase()))
     .reduce((sum, i) => sum + i.quantity, 0);
@@ -132,6 +135,7 @@ export async function evaluateDiscountsForOrder(
 
     return {
       id: rule._id ? rule._id.toString() : rule.code,
+      vendorId: rule.vendorId || vendorId || 'vnd_sipspot_central',
       code: rule.code,
       name: rule.name,
       description: rule.description,
@@ -154,7 +158,9 @@ export async function evaluateDiscountsForOrder(
 }
 
 export const DEFAULT_RULES: DiscountRule[] = [
+  // SipSpot Central HQ Rules
   {
+    vendorId: 'vnd_sipspot_central',
     code: 'BUY_5_FREE_1_SNACK',
     name: 'Beli 5 Gratis 1 Snek',
     description: 'Beli minimal 5 minuman apa saja, dapatkan 1 snek gratis (senilai hingga Rp 20.000).',
@@ -165,6 +171,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
+    vendorId: 'vnd_sipspot_central',
     code: 'BUY_10_FREE_1_DRINK_OR_SNACK',
     name: 'Beli 10 Gratis 1 Kopi / Snack',
     description: 'Beli minimal 10 minuman apa saja, dapatkan 1 kopi atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -175,6 +182,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
+    vendorId: 'vnd_sipspot_central',
     code: 'SPEND_100K_FREE_ITEM',
     name: 'Belanja Min. Rp 100.000 Gratis 1 Kopi / Snack',
     description: 'Belanja total minimal Rp 100.000, dapatkan 1 kopi atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -185,6 +193,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
+    vendorId: 'vnd_sipspot_central',
     code: 'BIRTHDAY_REWARD',
     name: 'Diskon Ulang Tahun Pembeli',
     description: 'Promo hari ulang tahun pembeli: Dapatkan 1 minuman atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -192,11 +201,50 @@ export const DEFAULT_RULES: DiscountRule[] = [
     rewardType: 'FREE_DRINK_OR_SNACK',
     rewardValue: 28000,
     isActive: true
+  },
+
+  // Kopi Kulo (Kemang) Rules
+  {
+    vendorId: 'vnd_kopi_kulo_kemang',
+    code: 'KULO_BUY_3_FREE_1',
+    name: 'Beli 3 Kulo Gratis 1 Toast',
+    description: 'Beli 3 cup Kopi Kulo / Avocatto dapat 1 Roti Toast Keju gratis',
+    type: 'QUANTITY_THRESHOLD',
+    threshold: 3,
+    rewardType: 'FREE_SNACK',
+    rewardValue: 18000,
+    isActive: true
+  },
+  {
+    vendorId: 'vnd_kopi_kulo_kemang',
+    code: 'KULO_SPEND_75K_DEAL',
+    name: 'Hemat Belanja Rp 75.000 (Potongan Rp 15.000)',
+    description: 'Beli menu Kulo minimal Rp 75.000 dapat potongan langsung Rp 15.000',
+    type: 'MIN_SPEND',
+    threshold: 75000,
+    rewardType: 'FIXED_AMOUNT',
+    rewardValue: 15000,
+    isActive: true
+  },
+
+  // Teh Poci Nusantara (Bekasi) Rules
+  {
+    vendorId: 'vnd_tehpoci_nusantara',
+    code: 'POCI_BUY_5_FREE_DIMSUM',
+    name: 'Beli 5 Teh Poci Gratis 1 Dimsum Hakau',
+    description: 'Beli 5 cup Teh Poci jumbo dapatkan 1 porsi Dimsum kukus gratis',
+    type: 'QUANTITY_THRESHOLD',
+    threshold: 5,
+    rewardType: 'FREE_SNACK',
+    rewardValue: 16000,
+    isActive: true
   }
 ];
 
-export async function getActiveDiscountRules(): Promise<DiscountRule[]> {
+export async function getActiveDiscountRules(vendorId?: string): Promise<DiscountRule[]> {
+  const activeVendorId = vendorId || 'vnd_sipspot_central';
   const birthdayRule: DiscountRule = {
+    vendorId: activeVendorId,
     code: 'BIRTHDAY_REWARD',
     name: 'Diskon Ulang Tahun Pembeli',
     description: 'Promo hari ulang tahun pembeli: Dapatkan 1 minuman atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -209,40 +257,35 @@ export async function getActiveDiscountRules(): Promise<DiscountRule[]> {
   const db = getDB();
   if (db) {
     try {
-      // Ensure birthday rule is active in database
-      await db.collection('discount_rules').updateOne(
-        { code: 'BIRTHDAY_REWARD' },
-        {
-          $set: {
-            code: 'BIRTHDAY_REWARD',
-            name: 'Diskon Ulang Tahun Pembeli',
-            description: 'Promo hari ulang tahun pembeli: Dapatkan 1 minuman atau 1 snack gratis (senilai hingga Rp 28.000).',
-            type: 'BIRTHDAY',
-            rewardType: 'FREE_DRINK_OR_SNACK',
-            rewardValue: 28000,
-            isActive: true
-          }
-        },
-        { upsert: true }
-      );
-
-      const rules: DiscountRule[] = await db.collection<DiscountRule>('discount_rules').find({ isActive: true }).toArray();
-      if (!rules.some(r => r.code === 'BIRTHDAY_REWARD')) {
-        rules.push(birthdayRule);
-      }
+      const query: any = {
+        isActive: true,
+        $or: [
+          { vendorId: activeVendorId },
+          ...(activeVendorId === 'vnd_sipspot_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
+        ]
+      };
+      const rules: DiscountRule[] = await db.collection<DiscountRule>('discount_rules').find(query).toArray();
       if (rules.length > 0) return rules;
     } catch (e) {
       // Fallback
     }
   }
 
-  const rules = fallbackStore.discount_rules.length > 0
-    ? fallbackStore.discount_rules.filter(r => r.isActive)
-    : [...DEFAULT_RULES];
+  const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
+  let rules = source.filter(r => {
+    if (!r.isActive) return false;
+    const rVendor = r.vendorId || 'vnd_sipspot_central';
+    return rVendor === activeVendorId;
+  });
 
-  if (!rules.some(r => r.code === 'BIRTHDAY_REWARD')) {
-    rules.push(birthdayRule);
+  if (rules.length === 0) {
+    rules = DEFAULT_RULES.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId);
   }
+
+  if (rules.length === 0) {
+    rules = [birthdayRule];
+  }
+
   return rules;
 }
 
@@ -267,9 +310,10 @@ export async function calculateDiscounts(
   items: OrderItemInput[],
   subtotal: number,
   customerBirthDate?: string,
-  isBirthdayClaimed?: boolean
+  isBirthdayClaimed?: boolean,
+  vendorId?: string
 ): Promise<DiscountCalculationResult> {
-  const rules = await getActiveDiscountRules();
+  const rules = await getActiveDiscountRules(vendorId);
   const appliedDiscounts: AppliedDiscount[] = [];
   const freeItemsSummary: string[] = [];
 
