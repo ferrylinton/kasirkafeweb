@@ -78,6 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navAdminLoginHistory');
       case 'admin-activity-logs':
         return t('navAdminActivityLogs');
+      case 'admin-locked-users':
+        return 'User Terkunci (Redis Lockout)';
       case 'profile':
         return t('navAccount');
       case 'settings':

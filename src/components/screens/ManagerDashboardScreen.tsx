@@ -121,6 +121,17 @@ interface ManagerAnalyticsData {
   }>;
 }
 
+export interface ChartDataItem {
+  label: string;
+  shortLabel?: string;
+  dayName?: string;
+  date?: string;
+  totalOrders: number;
+  totalRevenue: number;
+  averageTicket: number;
+  [key: string]: any;
+}
+
 interface ManagerDashboardScreenProps {
   onNavigateTab?: (tab: string) => void;
 }
@@ -342,11 +353,30 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
   };
 
   // Active chart data based on selected period
-  const currentChartData = useMemo(() => {
+  // Ensure every item is a valid object whose properties represent the values of different data dimensions
+  const currentChartData: ChartDataItem[] = useMemo(() => {
     if (!data) return [];
-    if (period === 'day') return data.daily || [];
-    if (period === 'week') return data.weekly || [];
-    return data.monthly || [];
+    const sourceList =
+      period === 'day'
+        ? data.daily
+        : period === 'week'
+        ? data.weekly
+        : data.monthly;
+
+    if (!Array.isArray(sourceList)) return [];
+
+    return sourceList
+      .filter((item): item is NonNullable<typeof item> => item !== null && typeof item === 'object')
+      .map(item => ({
+        ...item,
+        label: String(item.label || (item as any).shortLabel || ''),
+        shortLabel: (item as any).shortLabel ? String((item as any).shortLabel) : undefined,
+        dayName: (item as any).dayName ? String((item as any).dayName) : undefined,
+        date: (item as any).date ? String((item as any).date) : undefined,
+        totalOrders: Number(item.totalOrders) || 0,
+        totalRevenue: Number(item.totalRevenue) || 0,
+        averageTicket: Number(item.averageTicket) || 0
+      }));
   }, [data, period]);
 
   // Total summary for current chart view
@@ -1008,7 +1038,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                  {currentChartData.map((row: any, idx: number) => (
+                  {currentChartData.map((row: ChartDataItem, idx: number) => (
                     <tr key={idx} className="hover:bg-stone-50 dark:hover:bg-stone-850/60 transition-colors">
                       <td className="py-2 px-3 font-semibold text-stone-800 dark:text-stone-200 whitespace-nowrap">
                         {row.label || row.shortLabel}

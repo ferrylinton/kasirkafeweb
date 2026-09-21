@@ -2,13 +2,24 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDB, fallbackStore } from '../db';
-import { comparePassword, hashPassword, signToken, authMiddleware, revokedSessionIds, verifyToken } from '../auth';
+import { comparePassword, hashPassword, signToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken } from '../auth';
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
 import { getAllVendors } from '../vendorMiddleware';
 import { logLogin } from '../dailyRollingLogger';
+import {
+  checkUserLockout,
+  recordUserFailedAttempt,
+  clearUserLockout,
+  getLockedUsersFromRedis,
+  unlockUserInRedis,
+  unlockAllUsersInRedis,
+  lockUserManually,
+  LOCKOUT_DURATION_MS
+} from '../lockoutStore';
+import { getRedisClient } from '../redis';
 
 export const authRouter = Router();
 
@@ -150,125 +161,167 @@ export async function findManagerByPin(pin: string) {
   return manager;
 }
 
-// Lockout store in memory (persisting across requests)
-interface LockoutRecord {
-  failedAttempts: number;
-  lockedUntil: number | null; // timestamp in ms
-  lastAttemptAt: number;
-}
-
-const lockoutMap = new Map<string, LockoutRecord>();
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
-const MAX_FAILED_ATTEMPTS = 3;
-
-function getLockoutKey(email?: string, ip?: string): string {
-  if (email && email.trim()) {
-    return `email_${email.trim().toLowerCase()}`;
-  }
-  return `ip_${ip || 'unknown'}`;
-}
-
-function checkUserLockout(email?: string, ip?: string) {
-  const key = getLockoutKey(email, ip);
-  const now = Date.now();
-  const record = lockoutMap.get(key);
-
-  if (!record) {
-    return {
-      isLocked: false,
-      lockedUntil: null,
-      remainingSeconds: 0,
-      failedAttempts: 0,
-      attemptsRemaining: MAX_FAILED_ATTEMPTS
-    };
-  }
-
-  // If locked but 15 minutes have passed, unlock and reset!
-  if (record.lockedUntil && record.lockedUntil <= now) {
-    record.failedAttempts = 0;
-    record.lockedUntil = null;
-    lockoutMap.set(key, record);
-    return {
-      isLocked: false,
-      lockedUntil: null,
-      remainingSeconds: 0,
-      failedAttempts: 0,
-      attemptsRemaining: MAX_FAILED_ATTEMPTS
-    };
-  }
-
-  // If currently locked
-  if (record.lockedUntil && record.lockedUntil > now) {
-    const remainingSeconds = Math.ceil((record.lockedUntil - now) / 1000);
-    return {
-      isLocked: true,
-      lockedUntil: record.lockedUntil,
-      remainingSeconds,
-      failedAttempts: record.failedAttempts,
-      attemptsRemaining: 0
-    };
-  }
-
-  return {
-    isLocked: false,
-    lockedUntil: null,
-    remainingSeconds: 0,
-    failedAttempts: record.failedAttempts,
-    attemptsRemaining: Math.max(0, MAX_FAILED_ATTEMPTS - record.failedAttempts)
-  };
-}
-
-function recordUserFailedAttempt(email?: string, ip?: string) {
-  const key = getLockoutKey(email, ip);
-  const now = Date.now();
-  let record = lockoutMap.get(key);
-
-  if (!record || (record.lockedUntil && record.lockedUntil <= now)) {
-    record = { failedAttempts: 0, lockedUntil: null, lastAttemptAt: now };
-  }
-
-  record.failedAttempts += 1;
-  record.lastAttemptAt = now;
-
-  if (record.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-    record.lockedUntil = now + LOCKOUT_DURATION_MS;
-    lockoutMap.set(key, record);
-    return {
-      isLocked: true,
-      lockedUntil: record.lockedUntil,
-      remainingSeconds: Math.ceil(LOCKOUT_DURATION_MS / 1000),
-      failedAttempts: record.failedAttempts,
-      attemptsRemaining: 0
-    };
-  }
-
-  lockoutMap.set(key, record);
-  return {
-    isLocked: false,
-    lockedUntil: null,
-    remainingSeconds: 0,
-    failedAttempts: record.failedAttempts,
-    attemptsRemaining: Math.max(0, MAX_FAILED_ATTEMPTS - record.failedAttempts)
-  };
-}
-
-function clearUserLockout(email?: string, ip?: string) {
-  const key = getLockoutKey(email, ip);
-  lockoutMap.delete(key);
-}
-
 /**
  * GET /api/auth/lockout-status
+ * Query lockout status for an email or IP (stored in Redis with fallback)
  */
-authRouter.get('/lockout-status', (req: Request, res: Response) => {
+authRouter.get('/lockout-status', async (req: Request, res: Response) => {
   const email = typeof req.query.email === 'string' ? req.query.email : undefined;
   const forwarded = req.headers['x-forwarded-for'];
   const ip = typeof forwarded === 'string'
     ? forwarded.split(',')[0].trim()
     : (req.socket.remoteAddress || '127.0.0.1');
 
-  const status = checkUserLockout(email, ip);
+  const status = await checkUserLockout(email, ip);
   return res.json({ success: true, ...status });
+});
+
+/**
+ * GET /api/auth/admin/locked-users
+ * Role ADMIN: Fetch all locked users from Redis
+ */
+authRouter.get('/admin/locked-users', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const lockedUsers = await getLockedUsersFromRedis();
+    const redis = getRedisClient();
+    return res.json({
+      success: true,
+      isRedisConnected: !!redis,
+      source: redis ? 'redis' : 'fallback_memory',
+      count: lockedUsers.length,
+      lockedUsers
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch locked users',
+      message: err?.message || 'Gagal memuat daftar pengguna terkunci dari Redis'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/admin/unlock-user
+ * Role ADMIN: Unlock a user from Redis
+ */
+authRouter.post('/admin/unlock-user', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { identifier } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        message: 'Identifier (email atau IP) diperlukan untuk membuka kunci'
+      });
+    }
+
+    const adminEmail = req.user?.email || req.user?.name || 'ADMIN';
+    const result = await unlockUserInRedis(identifier, adminEmail);
+
+    recordActivityLog({
+      action: 'UPDATE',
+      entity: 'USER',
+      entityName: identifier,
+      summary: `Admin (${adminEmail}) membuka kunci lockout Redis untuk akun/IP: ${identifier}`,
+      req,
+      details: {
+        unlockedIdentifier: identifier,
+        unlockedBy: adminEmail,
+        action: 'ADMIN_UNLOCK_USER'
+      }
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'Unlock Failed',
+      message: err?.message || 'Gagal membuka kunci pengguna di Redis'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/admin/unlock-all
+ * Role ADMIN: Bulk unlock all locked users in Redis
+ */
+authRouter.post('/admin/unlock-all', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const adminEmail = req.user?.email || req.user?.name || 'ADMIN';
+    const result = await unlockAllUsersInRedis(adminEmail);
+
+    recordActivityLog({
+      action: 'UPDATE',
+      entity: 'USER',
+      summary: `Admin (${adminEmail}) membuka kunci semua akun (${result.unlockedCount} akun) dari Redis lockout`,
+      req,
+      details: {
+        unlockedCount: result.unlockedCount,
+        unlockedBy: adminEmail,
+        action: 'ADMIN_UNLOCK_ALL_USERS'
+      }
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      unlockedCount: result.unlockedCount,
+      message: result.message
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'Unlock All Failed',
+      message: err?.message || 'Gagal membuka semua kunci pengguna di Redis'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/admin/lock-user
+ * Role ADMIN: Manually lock a user in Redis (for testing or emergency administrative action)
+ */
+authRouter.post('/admin/lock-user', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { identifier, reason } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        message: 'Identifier (email atau IP) diperlukan'
+      });
+    }
+
+    const adminEmail = req.user?.email || req.user?.name || 'ADMIN';
+    const lockStatus = await lockUserManually(identifier, reason || 'Dikunci manual oleh Admin', adminEmail);
+
+    recordActivityLog({
+      action: 'UPDATE',
+      entity: 'USER',
+      entityName: identifier,
+      summary: `Admin (${adminEmail}) mengunci akun/IP: ${identifier} secara manual di Redis selama 15 menit`,
+      req,
+      details: {
+        lockedIdentifier: identifier,
+        lockedBy: adminEmail,
+        reason: reason || 'Manual lock by Admin'
+      }
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Akun/IP ${identifier} berhasil dikunci selama 15 menit di Redis.`,
+      lockStatus
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'Lock Failed',
+      message: err?.message || 'Gagal mengunci pengguna di Redis'
+    });
+  }
 });
 
 const profileUpdateSchema = z.object({
@@ -369,7 +422,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       : (req.socket.remoteAddress || '127.0.0.1');
 
     // Check Lockout before processing credentials
-    const currentLockout = checkUserLockout(email, ipAddress);
+    const currentLockout = await checkUserLockout(email, ipAddress);
     if (currentLockout.isLocked) {
       const remMin = Math.ceil(currentLockout.remainingSeconds / 60);
       logLogin({
@@ -446,7 +499,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     if (!user) {
-      const failStatus = recordUserFailedAttempt(email, ipAddress);
+      const failReason = pin ? 'PIN kasir tidak cocok atau akun tidak ditemukan' : 'Email tidak terdaftar';
+      const failStatus = await recordUserFailedAttempt(email, ipAddress, failReason);
       logLogin({
         status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
         email,
@@ -454,7 +508,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         userAgent: req.headers['user-agent'] as string,
         req,
         loginMethod: pin ? 'PIN' : 'PASSWORD',
-        reason: pin ? 'PIN kasir tidak cocok atau akun tidak ditemukan' : 'Email tidak terdaftar'
+        reason: failReason
       }).catch(() => {});
 
       if (failStatus.isLocked) {
@@ -488,7 +542,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     if (email && password) {
       const match = await comparePassword(password, user.password);
       if (!match) {
-        const failStatus = recordUserFailedAttempt(email, ipAddress);
+        const failStatus = await recordUserFailedAttempt(email, ipAddress, 'Password akun salah');
         logLogin({
           status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
           email: user.email,
@@ -527,7 +581,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     // Authentication Succeeded -> Clear Lockout!
-    clearUserLockout(user.email, ipAddress);
+    await clearUserLockout(user.email, ipAddress);
 
     const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
     const loginMethod: 'PIN' | 'PASSWORD' = pin ? 'PIN' : 'PASSWORD';

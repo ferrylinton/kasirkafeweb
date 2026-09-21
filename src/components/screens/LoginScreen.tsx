@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   AlertTriangle,
   Clock,
+  RefreshCw,
   X,
   Building2,
   Store
@@ -245,6 +246,18 @@ export const LoginScreen: React.FC = () => {
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [isLocked, lockedUntil, selectedUser?.email, getLockoutStorageKey, showToast, t]);
+
+  // Periodically check Redis lockout status while locked (so if admin unlocks, UI updates immediately)
+  useEffect(() => {
+    if (!isLocked) return;
+    const targetEmail = selectedUser?.email || email;
+    if (!targetEmail) return;
+
+    const pollInterval = setInterval(() => {
+      checkLockoutStatus(targetEmail);
+    }, 4000);
+    return () => clearInterval(pollInterval);
+  }, [isLocked, selectedUser?.email, email, checkLockoutStatus]);
 
   const formatLockoutTimer = (totalSeconds: number) => {
     const m = Math.floor(Math.max(0, totalSeconds) / 60);
@@ -819,6 +832,21 @@ export const LoginScreen: React.FC = () => {
               <span className="font-mono text-base font-extrabold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/80 px-3 py-1 rounded-xl tracking-wider">
                 {formatLockoutTimer(remainingSeconds)}
               </span>
+            </div>
+
+            {/* Admin unlock note & instant check button */}
+            <div className="flex items-center justify-between pt-1 text-[11px] text-red-800/80 dark:text-red-300/80">
+              <span>Hubungi Role ADMIN jika perlu membuka kunci segera.</span>
+              <button
+                type="button"
+                id="check-unlock-status-btn"
+                onClick={() => checkLockoutStatus(selectedUser?.email || email)}
+                className="px-2.5 py-1 text-[11px] font-bold text-red-700 dark:text-red-300 hover:text-red-900 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/70 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Periksa apakah Admin telah membuka kunci akun Anda"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Cek Status</span>
+              </button>
             </div>
           </div>
         )}

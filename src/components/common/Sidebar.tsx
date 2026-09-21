@@ -20,6 +20,7 @@ import {
   BarChart3,
   TrendingUp,
   Trophy,
+  UserX,
   X
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -48,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
   const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'admin-dashboard', 'admin-top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -659,6 +660,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       </div>
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                         ADMIN
+                      </span>
+                    </button>
+
+                    {/* 9. User Terkunci (Redis Lockout) */}
+                    <button
+                      type="button"
+                      id="nav-admin-locked-users-btn"
+                      onClick={() => handleNavClick('admin-locked-users')}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-locked-users'
+                          ? 'bg-purple-600 text-white shadow-xs font-bold'
+                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <UserX className="w-4 h-4 shrink-0 text-red-500" />
+                        <span className="truncate">User Terkunci (Redis)</span>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                        REDIS
                       </span>
                     </button>
 

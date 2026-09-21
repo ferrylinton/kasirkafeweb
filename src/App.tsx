@@ -27,6 +27,7 @@ import { ManagerDashboardScreen } from './components/screens/ManagerDashboardScr
 import { TopProductsScreen } from './components/screens/TopProductsScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 import { AdminLogViewerScreen } from './components/screens/AdminLogViewerScreen';
+import { AdminLockedUsersScreen } from './components/screens/AdminLockedUsersScreen';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -81,7 +82,8 @@ const MainLayout: React.FC = () => {
     'admin-diskon',
     'admin-templates',
     'admin-login-history',
-    'admin-activity-logs'
+    'admin-activity-logs',
+    'admin-locked-users'
   ];
 
   const accountTabs = ['profile', 'settings'];
@@ -280,6 +282,9 @@ const MainLayout: React.FC = () => {
           )}
           {isAdmin && activeView === 'log-viewer' && (
             <AdminLogViewerScreen />
+          )}
+          {isAdmin && activeView === 'admin-locked-users' && (
+            <AdminLockedUsersScreen />
           )}
         </main>
       </div>
