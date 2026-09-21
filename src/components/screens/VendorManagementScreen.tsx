@@ -348,7 +348,7 @@ export const VendorManagementScreen: React.FC = () => {
   // If user is not ADMIN, show strict Access Denied view
   if (!isAdmin) {
     return (
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto py-12">
+      <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto py-8">
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl p-8 border border-rose-200 dark:border-rose-900/50 shadow-xl text-center flex flex-col items-center">
           <div className="w-16 h-16 rounded-3xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4 shadow-xs">
             <Lock className="w-8 h-8" />
@@ -379,7 +379,7 @@ export const VendorManagementScreen: React.FC = () => {
   }
 
   return (
-    <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-16">
+    <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-6">
       {/* Top Banner Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
