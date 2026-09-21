@@ -59,6 +59,7 @@ export const resources = {
       navAdminDashboard: 'Dashboard Grafik Transaksi Semua Vendor',
       navAdminTopProducts: 'Top 10 Produk Terlaris (Hari, Minggu, Bulan)',
       navAdminVendors: 'Manajemen Vendor',
+      navLogViewer: 'Penampil Log',
       toggleSidebar: 'Buka / Tutup Sidebar',
       closeSidebar: 'Tutup Sidebar',
       logout: 'Keluar (Logout)',
@@ -138,7 +139,7 @@ export const resources = {
       filterDevice: 'Semua Perangkat',
       filterStatus: 'Semua Status',
       searchHistoryPlaceholder: 'Cari nama staf, email, atau IP address...',
-      methodPin: 'PIN 4-Digit',
+      methodPin: 'PIN 6-Digit',
       methodPassword: 'Email & Password',
 
       // Settings Screen
@@ -519,6 +520,7 @@ export const resources = {
       navAdminDashboard: 'All Vendors Transaction Chart Dashboard',
       navAdminTopProducts: 'Top 10 Best-Selling Products (Day, Week, Month)',
       navAdminVendors: 'Vendor Management',
+      navLogViewer: 'Log Viewer',
       toggleSidebar: 'Toggle Sidebar',
       closeSidebar: 'Close Sidebar',
       logout: 'Log Out',
@@ -598,7 +600,7 @@ export const resources = {
       filterDevice: 'All Devices',
       filterStatus: 'All Statuses',
       searchHistoryPlaceholder: 'Search staff name, email, or IP address...',
-      methodPin: '4-Digit PIN',
+      methodPin: '6-Digit PIN',
       methodPassword: 'Email & Password',
 
       // Settings Screen

@@ -376,11 +376,7 @@ export const AdminLogViewerScreen: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header Lintas Vendor */}
-      <AdminAllVendorsHeader
-        title="Pusat Log Sistem Harian (Daily Rolling File)"
-        subtitle="Audit berkas log berputar harian (rolling daily files) yang mencatat siklus login, transaksi pesanan, modifikasi data, status koneksi MongoDB, Redis rate limiter, serta galat server."
-      />
+
 
       {/* Top System Health & Connection Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -505,22 +501,22 @@ export const AdminLogViewerScreen: React.FC = () => {
             Total Catatan: <strong className="text-orange-600">{statusData.todayStats.total}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-blue-700 dark:text-blue-300 border border-stone-200 dark:border-stone-700">
-            Login: <strong>{statusData.todayStats.byCategory.AUTH || 0}</strong>
+            Login: <strong>{statusData.todayStats.byCategory?.AUTH || 0}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-amber-700 dark:text-amber-300 border border-stone-200 dark:border-stone-700">
-            Pesanan: <strong>{statusData.todayStats.byCategory.ORDER || 0}</strong>
+            Pesanan: <strong>{statusData.todayStats.byCategory?.ORDER || 0}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-purple-700 dark:text-purple-300 border border-stone-200 dark:border-stone-700">
-            Mutasi Data: <strong>{statusData.todayStats.byCategory.DATA_MUTATION || 0}</strong>
+            Mutasi Data: <strong>{statusData.todayStats.byCategory?.DATA_MUTATION || 0}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-emerald-700 dark:text-emerald-300 border border-stone-200 dark:border-stone-700">
-            Database: <strong>{statusData.todayStats.byCategory.DATABASE || 0}</strong>
+            Database: <strong>{statusData.todayStats.byCategory?.DATABASE || 0}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-red-700 dark:text-red-300 border border-stone-200 dark:border-stone-700">
-            Redis: <strong>{statusData.todayStats.byCategory.REDIS || 0}</strong>
+            Redis: <strong>{statusData.todayStats.byCategory?.REDIS || 0}</strong>
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 font-medium text-rose-700 dark:text-rose-300 border border-stone-200 dark:border-stone-700">
-            Galat/Error: <strong>{statusData.todayStats.byCategory.ERROR || 0}</strong>
+            Galat/Error: <strong>{statusData.todayStats.byCategory?.ERROR || 0}</strong>
           </span>
         </div>
       )}

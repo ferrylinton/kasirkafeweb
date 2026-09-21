@@ -26,6 +26,7 @@ import { AdminDashboardScreen } from './components/screens/AdminDashboardScreen'
 import { ManagerDashboardScreen } from './components/screens/ManagerDashboardScreen';
 import { TopProductsScreen } from './components/screens/TopProductsScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
+import { AdminLogViewerScreen } from './components/screens/AdminLogViewerScreen';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -70,6 +71,7 @@ const MainLayout: React.FC = () => {
     'admin-dashboard',
     'admin-top-products',
     'vendor-management',
+    'log-viewer',
     'admin-orders',
     'admin-riwayat',
     'admin-inventory',
@@ -275,6 +277,9 @@ const MainLayout: React.FC = () => {
           )}
           {isAdmin && activeView === 'vendor-management' && (
             <VendorManagementScreen />
+          )}
+          {isAdmin && activeView === 'log-viewer' && (
+            <AdminLogViewerScreen />
           )}
         </main>
       </div>

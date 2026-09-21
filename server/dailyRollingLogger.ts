@@ -433,6 +433,7 @@ export async function logError(params: {
   performer?: Partial<DailyLogPerformer>;
   vendorId?: string;
   details?: Record<string, any>;
+  statusCode?: number
 }): Promise<DailyLogEntry> {
   const errMsg = params.error?.message || params.message || 'Unknown Server Error';
   const fullMsg = params.context ? `[${params.context}] ${errMsg}` : errMsg;

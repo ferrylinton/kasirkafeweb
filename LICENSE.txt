@@ -1,0 +1,14 @@
+
+**LISENSI PENGGUNAAN PERANGKAT LUNAK**
+
+Hak Cipta (c) 2026 Ferry Linton Hutapea (ferrylinton@gmail.com)
+
+Dengan ini diberikan hak dan izin kepada siapa pun yang mendapatkan salinan kode/perangkat lunak ini ("Perangkat Lunak") untuk menggunakannya secara terbuka, dengan tunduk pada ketentuan-ketentuan berikut:
+
+1. **Hak Penggunaan (Termasuk Komersial Pribadi):** Perangkat Lunak ini boleh digunakan, disalin, dan didistribusikan secara gratis untuk keperluan umum, edukasi, maupun **penggunaan komersial pribadi** (misalnya, digunakan untuk menjalankan bisnis pribadi pengguna).
+2. **Kewajiban Atribusi:** Setiap penyebaran, penggunaan, atau modifikasi dari Perangkat Lunak ini (pada bagian kode yang diizinkan) **wajib** mencantumkan nama **Ferry Linton Hutapea** dan email **ferrylinton@gmail.com** secara jelas di dalam kode atau dokumentasi sebagai pemilik dan pengembang (developer) asli.
+3. **Integritas Identitas (Larangan Ubah Nama & Logo):** Pengguna **DILARANG KERAS** untuk mengubah, mengganti, menghapus, atau memodifikasi **nama aplikasi** dan **logo aplikasi**. Aplikasi harus tetap beroperasi dan didistribusikan menggunakan nama dan logo aslinya dalam segala bentuk penggunaan.
+4. **Batasan Penjualan Kode (Resell):** Meskipun aplikasi dapat digunakan untuk kegiatan komersial pribadi, pengguna tidak diperkenankan untuk memperjualbelikan ulang (resell) kode sumber aplikasi ini secara langsung tanpa mendapatkan izin persetujuan tertulis terlebih dahulu dari pemilik Hak Cipta.
+
+**PENAFIAN (DISCLAIMER)**
+PERANGKAT LUNAK INI DISEDIAKAN "SEBAGAIMANA ADANYA", TANPA JAMINAN APA PUN, BAIK TERSURAT MAUPUN TERSIRAT. DALAM KEADAAN APA PUN, PEMILIK HAK CIPTA ATAU PENGEMBANG TIDAK BERTANGGUNG JAWAB ATAS KLAIM, KERUGIAN, ATAU KEWAJIBAN LAINNYA YANG TIMBUL DARI, ATAU SEHUBUNGAN DENGAN PENGGUNAAN PERANGKAT LUNAK INI.

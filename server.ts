@@ -24,7 +24,9 @@ import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
 import { initRetentionScheduler } from './server/retentionScheduler';
 import { initDailyRollingLogger, logError, writeDailyLog } from './server/dailyRollingLogger';
+import dns from "node:dns/promises";
 
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
 dotenv.config();
 
 const PORT = 3000;
