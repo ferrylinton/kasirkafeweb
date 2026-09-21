@@ -22,7 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { totalItemsCount, subtotal } = useCart();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isAdmin = user?.role === 'ADMIN';
 
   const toggleLanguage = () => {
     setLanguage(language === 'id' ? 'en' : 'id');

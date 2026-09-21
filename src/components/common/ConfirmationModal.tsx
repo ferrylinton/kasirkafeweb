@@ -12,6 +12,7 @@ interface ConfirmationModalProps {
   confirmVariant?: 'danger' | 'primary' | 'success';
   onConfirm: () => void;
   onCancel: () => void;
+  type?: string
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({

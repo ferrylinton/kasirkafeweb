@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const { user, token, logout } = useAuth();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isAdmin = user?.role === 'ADMIN';
   const isCashier = user?.role === 'CASHIER';
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);

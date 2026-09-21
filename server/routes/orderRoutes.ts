@@ -7,6 +7,7 @@ import { authMiddleware } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { logOrder } from '../dailyRollingLogger';
+import { IParam } from '@/src/types';
 
 export const orderRouter = Router();
 
@@ -528,7 +529,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
  */
 orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const isAdmin = req.user?.role === 'ADMIN' || (req.user as any)?.role === 'SUPERADMIN';
+    const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
@@ -601,7 +602,7 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
  */
 orderRouter.post('/:id/resend-email', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const { targetEmail } = req.body;
 
     const db = getDB();

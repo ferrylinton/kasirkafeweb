@@ -11,13 +11,14 @@ import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const discountRouter = Router();
 
 /**
  * RBAC Rule: Role ADMIN HANYA bisa melihat Aturan Diskon (Read-Only).
  * ADMIN TIDAK BISA menambah, mengubah, atau menghapus aturan diskon.
- * Hak menambah, mengubah, dan menghapus aturan diskon dipegang khusus oleh role MANAGER (dan SUPERADMIN).
+ * Hak menambah, mengubah, dan menghapus aturan diskon dipegang khusus oleh role MANAGER.
  */
 function requireDiscountWriteAccess(req: Request, res: Response, next: () => void) {
   const user = (req as any).user;
@@ -38,8 +39,8 @@ function requireDiscountWriteAccess(req: Request, res: Response, next: () => voi
     });
   }
 
-  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola diskon
-  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+  // Pastikan hanya MANAGER yang memiliki izin kelola diskon
+  if (user.role !== 'MANAGER') {
     return res.status(403).json({
       success: false,
       error: 'Forbidden',
@@ -138,7 +139,7 @@ discountRouter.post('/calculate', async (req: Request, res: Response) => {
  */
 discountRouter.get('/rules', async (req: Request, res: Response) => {
   try {
-    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
@@ -321,7 +322,7 @@ discountRouter.post('/rules', authMiddleware, requireDiscountWriteAccess, async 
  */
 discountRouter.get('/rules/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const db = getDB();
     let rule = null;
 
@@ -365,7 +366,7 @@ discountRouter.get('/rules/:id', async (req: Request, res: Response) => {
  */
 discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const updateData = { ...req.body, updatedAt: new Date() };
 
     if (updateData.code) {
@@ -382,13 +383,12 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
     let existingRule: any = null;
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
-
+  
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         existingRule = await db.collection('discount_rules').findOne(query);
-        if (existingRule && !isSuperAdmin && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
+        if (existingRule  && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
           return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
         }
         await db.collection('discount_rules').updateOne(query, { $set: updateData });
@@ -398,7 +398,7 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
     const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
     if (idx !== -1) {
       if (!existingRule) existingRule = fallbackStore.discount_rules[idx];
-      if (existingRule && !isSuperAdmin && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
+      if (existingRule && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
         return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
       }
       fallbackStore.discount_rules[idx] = { ...fallbackStore.discount_rules[idx], ...updateData };
@@ -432,18 +432,17 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
  */
 discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const db = getDB();
     let targetRule: any = null;
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
 
     if (db) {
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         targetRule = await db.collection('discount_rules').findOne(query);
-        if (targetRule && !isSuperAdmin && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
+        if (targetRule && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
           return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
         }
         await db.collection('discount_rules').deleteOne(query);
@@ -453,7 +452,7 @@ discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, 
     const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
     if (idx !== -1) {
       if (!targetRule) targetRule = fallbackStore.discount_rules[idx];
-      if (targetRule && !isSuperAdmin && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
+      if (targetRule && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
         return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
       }
     }

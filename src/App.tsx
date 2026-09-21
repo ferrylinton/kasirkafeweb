@@ -31,7 +31,7 @@ import { AdminLogViewerScreen } from './components/screens/AdminLogViewerScreen'
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
+    if (user?.role === 'ADMIN') {
       return 'admin-dashboard';
     }
     if (user?.role === 'MANAGER') {
@@ -66,7 +66,7 @@ const MainLayout: React.FC = () => {
     'vendor-client'
   ];
 
-  // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN dan SUPERADMIN
+  // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN
   const adminTabs = [
     'admin-dashboard',
     'admin-top-products',
@@ -90,7 +90,7 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     const role = user.role;
-    if (role === 'ADMIN' || role === 'SUPERADMIN') {
+    if (role === 'ADMIN') {
       if (!adminTabs.includes(currentTab) && !accountTabs.includes(currentTab)) {
         setCurrentTab('admin-dashboard');
       }
@@ -125,7 +125,7 @@ const MainLayout: React.FC = () => {
   // Hak Akses Role
   const isCashierOrManager = user.role === 'CASHIER' || user.role === 'MANAGER';
   const isManager = user.role === 'MANAGER';
-  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+  const isAdmin = user.role === 'ADMIN' ;
   const isCashier = user.role === 'CASHIER';
 
   // Strict activeView validation

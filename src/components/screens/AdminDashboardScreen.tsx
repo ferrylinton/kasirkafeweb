@@ -878,7 +878,7 @@ export const AdminDashboardScreen: React.FC = () => {
             <button
               type="button"
               id="admin-export-3months-csv-btn"
-              onClick={() => handleExportTransactions('csv', 'all')}
+              onClick={() => handleExportTransactions('csv', period)}
               disabled={isExporting}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs disabled:opacity-50"
             >

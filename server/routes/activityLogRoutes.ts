@@ -16,7 +16,7 @@ activityLogRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { action, entity, userId, search, startDate, endDate, date, page, limit, vendorId: vendorQuery, allVendors } = req.query;
 
-    const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPERADMIN';
+    const isAdmin = req.user?.role === 'ADMIN' ;
     const isAllVendors = (allVendors === 'true' || vendorQuery === 'all' || vendorQuery === 'ALL' || (!vendorQuery && isAdmin)) && isAdmin;
     const targetVendor = isAllVendors ? 'ALL' : ((vendorQuery as string) || req.vendorId || 'vnd_sipspot_central');
 

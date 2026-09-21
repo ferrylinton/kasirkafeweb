@@ -63,7 +63,7 @@ export const ActivityLogScreen: React.FC<ActivityLogScreenProps> = ({ allVendors
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const isManager = isAuthorized;
 
   // Data states
@@ -1773,7 +1773,7 @@ export const ActivityLogScreen: React.FC<ActivityLogScreenProps> = ({ allVendors
       {/* 7. Clear Old Logs Modal */}
       <ConfirmationModal
         isOpen={isClearModalOpen}
-        onClose={() => setIsClearModalOpen(false)}
+        onCancel={() => setIsClearModalOpen(false)}
         onConfirm={handleClearOldLogs}
         title="Bersihkan Log Aktivitas Lama?"
         message="Aksi ini akan menghapus semua riwayat log aktivitas database yang berusia lebih dari 30 hari untuk menghemat ruang penyimpanan. Catatan baru akan tetap tersimpan."

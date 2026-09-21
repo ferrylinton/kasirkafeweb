@@ -304,7 +304,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check remote session revocation every 3.5 seconds
       if (currentTime - lastSessionCheckRef.current >= 3500) {
         lastSessionCheckRef.current = currentTime;
-        checkRemoteSession(token);
+        checkRemoteSession(token || '');
       }
     };
 

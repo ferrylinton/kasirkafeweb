@@ -4,6 +4,7 @@ import { getDB, fallbackStore } from '../db';
 import { hashPassword, authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const userRouter = Router();
 
@@ -33,7 +34,7 @@ const updateUserSchema = z.object({
  */
 userRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPERADMIN';
+    const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
@@ -195,9 +196,8 @@ userRouter.post('/', async (req: Request, res: Response) => {
  */
 userRouter.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
 
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -227,7 +227,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     }
 
     const userVendor = existingUser.vendorId || 'vnd_sipspot_central';
-    if (userVendor !== activeVendorId && !isSuperAdmin) {
+    if (userVendor !== activeVendorId) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak memiliki izin untuk mengedit pengguna dari vendor lain.'
@@ -289,9 +289,8 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
  */
 userRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = req.user?.role === 'SUPERADMIN';
 
     // Prevent deleting self
     if (req.user?.userId === id) {
@@ -321,7 +320,7 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
     }
 
     const userVendor = targetUser.vendorId || 'vnd_sipspot_central';
-    if (userVendor !== activeVendorId && !isSuperAdmin) {
+    if (userVendor !== activeVendorId) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak dapat menghapus pengguna milik vendor lain.'

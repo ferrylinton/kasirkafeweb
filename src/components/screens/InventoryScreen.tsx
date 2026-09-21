@@ -314,7 +314,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   const totalStockValue = summary?.totalStockValue ?? products.reduce((acc, p) => acc + (p.stock * p.price), 0);
 
   const isAuthorized = allVendorsMode
-    ? (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN')
+    ? (user?.role === 'ADMIN')
     : (user?.role === 'MANAGER');
 
   if (!isAuthorized) {

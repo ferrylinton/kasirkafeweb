@@ -38,7 +38,7 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
   const { t } = useLanguage();
 
   // Role Rule: Role ADMIN hanya bisa melihat Aturan Diskon (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
-  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER' && user?.role !== 'SUPERADMIN');
+  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER');
 
   const [rules, setRules] = useState<DiscountRule[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -585,7 +585,7 @@ export const DiscountRulesScreen: React.FC<DiscountRulesScreenProps> = ({ allVen
                           {rule.code}
                         </span>
                         {allVendorsMode && (
-                          <VendorBadge vendorId={rule.vendorId} />
+                          <VendorBadge vendorId={rule.id} />
                         )}
                         {isDefaultRule && (
                           <span className="px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">

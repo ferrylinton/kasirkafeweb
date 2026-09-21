@@ -186,7 +186,7 @@ export async function writeDailyLog(input: {
   }
 
   // Resolve vendorId
-  const vendorId = input.vendorId || (input.req as any)?.vendorId || performer?.role === 'SUPERADMIN' ? 'ALL' : undefined;
+  const vendorId = input.vendorId || (input.req as any)?.vendorId || undefined;
 
   const entry: DailyLogEntry = {
     id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,

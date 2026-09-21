@@ -59,7 +59,7 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isAuthorized = user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const isManager = isAuthorized;
 
   // Data states
@@ -90,7 +90,7 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
   const [dateFilterType, setDateFilterType] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
   const [dateValue, setDateValue] = useState<ValuePiece>(null);
   const [customDate, setCustomDate] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'LOGGED_OUT'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'TIMED_OUT' | 'LOGGED_OUT'>('ALL');
   const [calendarPortal, setCalendarPortal] = useState<HTMLDivElement | null>(null);
 
   // Modal states
@@ -1652,7 +1652,6 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
           message={`Anda akan mencabut sesi aktif milik ${sessionToRevoke.name} (${sessionToRevoke.email}) pada perangkat ${sessionToRevoke.device || sessionToRevoke.ipAddress}. Perangkat tersebut akan langsung logout seketika.`}
           confirmText={isRevoking ? 'Mencabut...' : 'Keluarkan Sesi'}
           cancelText="Batal"
-          isDanger={true}
           onConfirm={handleConfirmRevoke}
           onCancel={() => setSessionToRevoke(null)}
         />

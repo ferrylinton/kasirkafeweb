@@ -4,13 +4,14 @@ import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const productRouter = Router();
 
 /**
  * RBAC Rule: Role ADMIN HANYA bisa melihat Data Inventaris (Read-Only).
  * ADMIN TIDAK BISA menambah, mengubah, atau menghapus inventaris atau produk.
- * Hak menambah, mengubah, dan menghapus inventaris khusus dipegang oleh role MANAGER (dan SUPERADMIN).
+ * Hak menambah, mengubah, dan menghapus inventaris khusus dipegang oleh role MANAGER.
  */
 function requireInventoryWriteAccess(req: Request, res: Response, next: () => void) {
   const user = (req as any).user;
@@ -31,8 +32,8 @@ function requireInventoryWriteAccess(req: Request, res: Response, next: () => vo
     });
   }
 
-  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola inventaris
-  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+  // Pastikan hanya MANAGER yang memiliki izin kelola inventaris
+  if (user.role !== 'MANAGER') {
     return res.status(403).json({
       success: false,
       error: 'Forbidden',
@@ -63,15 +64,12 @@ const productSchema = z.object({
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
     const db = getDB();
     let categories: any[] = [];
 
     if (db) {
       try {
-        const query = isSuperAdmin
-          ? {}
-          : (activeVendorId === 'vnd_sipspot_central'
+        const query = (activeVendorId === 'vnd_sipspot_central'
               ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         categories = await db.collection('categories').find(query).toArray();
@@ -80,9 +78,7 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
 
     if (categories.length === 0) {
       const source = fallbackStore.categories || [];
-      categories = isSuperAdmin
-        ? source
-        : source.filter(c => (c.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      categories = source.filter(c => (c.vendorId || 'vnd_sipspot_central') === activeVendorId);
       
       // If vendor doesn't have custom categories yet, fallback to all default categories
       if (categories.length === 0) {
@@ -177,7 +173,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
 
-    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
@@ -257,7 +253,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
  */
 productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
-    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
@@ -351,7 +347,7 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
  */
 productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
-    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
@@ -507,14 +503,11 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
     }
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
     const db = getDB();
     let currentProducts: any[] = [];
     if (db) {
       try {
-        const query = isSuperAdmin
-          ? {}
-          : (activeVendorId === 'vnd_sipspot_central'
+        const query = (activeVendorId === 'vnd_sipspot_central'
               ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         currentProducts = await db.collection('products').find(query).toArray();
@@ -522,9 +515,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
     }
     if (currentProducts.length === 0) {
       const source = fallbackStore.products || [];
-      currentProducts = isSuperAdmin
-        ? [...source]
-        : source.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      currentProducts = source.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
     }
 
     let updatedCount = 0;
@@ -748,7 +739,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
  */
 productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const { stock, adjustment, lowStockThreshold, reason } = req.body;
 
     const db = getDB();
@@ -936,7 +927,7 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
  */
 productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const updateData = { ...req.body, updatedAt: new Date() };
 
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
@@ -959,7 +950,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     }
 
     const prodVendorId = existingProd.vendorId || 'vnd_sipspot_central';
-    if (prodVendorId !== activeVendorId && req.user?.role !== 'SUPERADMIN') {
+    if (prodVendorId !== activeVendorId) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak berhak mengubah produk milik vendor lain.'
@@ -1006,7 +997,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
  */
 productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
     let targetProd: any = null;
@@ -1027,7 +1018,7 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     }
 
     const prodVendorId = targetProd.vendorId || 'vnd_sipspot_central';
-    if (prodVendorId !== activeVendorId && req.user?.role !== 'SUPERADMIN') {
+    if (prodVendorId !== activeVendorId) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak berhak menghapus produk milik vendor lain.'

@@ -173,8 +173,8 @@ export async function vendorMiddleware(req: Request, res: Response, next: NextFu
       // Default to user's assigned vendorId
       let chosenVendorId = decoded.vendorId || 'vnd_sipspot_central';
 
-      // Admins, Managers & Superadmins can switch active vendor via X-Vendor-Id header or query param
-      if ((decoded.role === 'ADMIN' || decoded.role === 'MANAGER' || (decoded as any).role === 'SUPERADMIN') && vendorIdHeader) {
+      // Admins, Managers can switch active vendor via X-Vendor-Id header or query param
+      if ((decoded.role === 'ADMIN' || decoded.role === 'MANAGER') && vendorIdHeader) {
         chosenVendorId = vendorIdHeader.trim();
       }
 

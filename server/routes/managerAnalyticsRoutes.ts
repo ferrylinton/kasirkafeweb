@@ -12,7 +12,7 @@ import {
 
 export const managerAnalyticsRouter = Router();
 
-// Guarded for MANAGER, ADMIN, and SUPERADMIN
+// Guarded for MANAGER, ADMIN
 managerAnalyticsRouter.use(authMiddleware, requireManager);
 
 const INDONESIAN_DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -56,8 +56,8 @@ async function resolveManagerVendor(req: Request) {
   const user = req.user!;
   let targetVendorId = user.vendorId || req.vendorId || 'vnd_sipspot_central';
 
-  // If user is ADMIN or SUPERADMIN testing or managing, they may optionally pass a specific vendor
-  if ((user.role === 'ADMIN' || user.role === 'SUPERADMIN') && req.query.vendorId && req.query.vendorId !== 'all') {
+  // If user is ADMIN testing or managing, they may optionally pass a specific vendor
+  if (user.role === 'ADMIN' && req.query.vendorId && req.query.vendorId !== 'all') {
     targetVendorId = req.query.vendorId as string;
   }
 

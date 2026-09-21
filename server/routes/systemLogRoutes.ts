@@ -23,7 +23,7 @@ import { getRedisClient } from '../redis';
 
 export const systemLogRouter = Router();
 
-// Strictly guarded for ADMIN & SUPERADMIN
+// Strictly guarded for ADMIN
 systemLogRouter.use(authMiddleware, requireAdmin);
 
 /**

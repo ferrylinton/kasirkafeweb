@@ -148,7 +148,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
   const [selectedVendor, setSelectedVendor] = useState<string>(selectedVendorId || 'ALL');
   const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterRole, setFilterRole] = useState<'ALL' | 'MANAGER' | 'CASHIER'>('ALL');
+  const [filterRole, setFilterRole] = useState<'ALL' | 'ADMIN' | 'MANAGER' | 'CASHIER'>('ALL');
 
   // Keep selectedVendor synced with prop when modal opens
   useEffect(() => {
@@ -436,7 +436,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
             ) : (
               filteredUsers.map(user => {
                 const isSelected = selectedUserId === user.id || selectedUserId === user.email;
-                const isAdmin = user.role.toUpperCase() === 'ADMIN' || user.role.toUpperCase() === 'SUPERADMIN';
+                const isAdmin = user.role.toUpperCase() === 'ADMIN';
                 const isManager = user.role.toUpperCase() === 'MANAGER';
 
                 return (

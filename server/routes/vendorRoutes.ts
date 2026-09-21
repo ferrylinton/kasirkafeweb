@@ -11,6 +11,7 @@ import {
 } from '../vendorMiddleware';
 import { signToken, authMiddleware, requireManager } from '../auth';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const vendorRouter = Router();
 
@@ -253,7 +254,7 @@ vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res:
  */
 vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const vendor = await findVendorById(id);
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
@@ -313,7 +314,7 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
  */
 vendorRouter.post('/:id/regenerate-secret', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const vendor = await findVendorById(id);
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor tidak ditemukan' });

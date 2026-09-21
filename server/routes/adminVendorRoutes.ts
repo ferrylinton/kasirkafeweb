@@ -10,6 +10,7 @@ import {
   getAllVendors
 } from '../vendorMiddleware';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const adminVendorRouter = Router();
 
@@ -205,7 +206,7 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
  */
 adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const { name, code, email, phone, address, currency, status } = req.body;
 
     const vendor = await findVendorById(id);
@@ -291,7 +292,7 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
  */
 adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const { status } = req.body;
 
     if ((id === 'vnd_sipspot_central' || id === 'vnd_admin') && (status === 'SUSPENDED' || !status)) {
@@ -354,7 +355,7 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
  */
 adminVendorRouter.post('/:id/regenerate-secret', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const vendor = await findVendorById(id);
 
     if (!vendor) {
@@ -407,7 +408,7 @@ adminVendorRouter.post('/:id/regenerate-secret', async (req: Request, res: Respo
  */
 adminVendorRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
 
     if (id === 'vnd_sipspot_central' || id === 'vnd_admin') {
       return res.status(400).json({

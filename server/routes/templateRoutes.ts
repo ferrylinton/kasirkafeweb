@@ -4,13 +4,14 @@ import { getDB, fallbackStore } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
+import { IParam } from '@/src/types';
 
 export const templateRouter = Router();
 
 /**
  * RBAC Rule: Role ADMIN HANYA bisa melihat Template Email (Read-Only).
  * ADMIN TIDAK BISA menambah, mengubah, atau menghapus template email.
- * Hak menambah, mengubah, dan menghapus template email dipegang khusus oleh role MANAGER (dan SUPERADMIN).
+ * Hak menambah, mengubah, dan menghapus template email dipegang khusus oleh role MANAGER.
  */
 function requireTemplateWriteAccess(req: Request, res: Response, next: () => void) {
   const user = (req as any).user;
@@ -31,8 +32,8 @@ function requireTemplateWriteAccess(req: Request, res: Response, next: () => voi
     });
   }
 
-  // Pastikan hanya MANAGER (atau SUPERADMIN) yang memiliki izin kelola template
-  if (user.role !== 'MANAGER' && user.role !== 'SUPERADMIN') {
+  // Pastikan hanya MANAGER yang memiliki izin kelola template
+  if (user.role !== 'MANAGER') {
     return res.status(403).json({
       success: false,
       error: 'Forbidden',
@@ -55,7 +56,7 @@ const updateTemplateSchema = z.object({
  */
 templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
-    const isAdmin = (req as any).user?.role === 'ADMIN' || (req as any).user?.role === 'SUPERADMIN';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
@@ -122,15 +123,12 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
 templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Response) => {
   try {
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = (req as any).user?.role === 'SUPERADMIN';
     const db = getDB();
     let logs: any[] = [];
 
     if (db) {
       try {
-        const filter = isSuperAdmin
-          ? {}
-          : (activeVendorId === 'vnd_sipspot_central'
+        const filter = (activeVendorId === 'vnd_sipspot_central'
               ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         logs = await db.collection('email_logs').find(filter).sort({ sentAt: -1 }).limit(100).toArray();
@@ -139,7 +137,7 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
 
     if (logs.length === 0) {
       logs = fallbackStore.email_logs.filter(
-        l => isSuperAdmin || (l.vendorId || 'vnd_sipspot_central') === activeVendorId
+        l => (l.vendorId || 'vnd_sipspot_central') === activeVendorId
       );
     }
 
@@ -238,7 +236,7 @@ templateRouter.post('/', authMiddleware, requireTemplateWriteAccess, async (req:
  */
 templateRouter.put('/:id', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
     const parsed = updateTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -304,7 +302,7 @@ templateRouter.put('/:id', authMiddleware, requireTemplateWriteAccess, async (re
  */
 templateRouter.delete('/:id', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as unknown as IParam;
     const db = getDB();
     let targetTemplate: any = null;
 
@@ -327,7 +325,7 @@ templateRouter.delete('/:id', authMiddleware, requireTemplateWriteAccess, async 
     await recordActivityLog({
       action: 'DELETE',
       entity: 'EMAIL_TEMPLATE',
-      entityId: id,
+      entityId: id ,
       entityName: templateName,
       summary: `Menghapus template email '${templateName}'`,
       details: { templateId: id },

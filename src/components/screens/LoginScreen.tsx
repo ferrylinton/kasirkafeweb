@@ -484,7 +484,7 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  const isAdminRole = selectedUser.role?.toUpperCase() === 'ADMIN' || selectedUser.role?.toUpperCase() === 'SUPERADMIN';
+  const isAdminRole = selectedUser.role?.toUpperCase() === 'ADMIN';
   const isManagerRole = selectedUser.role?.toUpperCase() === 'MANAGER';
   const currentVendorData = vendors.find(v => v.id === selectedVendorId);
 

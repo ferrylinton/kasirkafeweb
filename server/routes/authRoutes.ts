@@ -933,7 +933,7 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     const scope = (req.query.scope as string) || (currentUser.role === 'MANAGER' ? 'all' : 'me');
 
     // Security check: Only manager/admin can view other users or all login history
-    const isPrivileged = currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN';
+    const isPrivileged = currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN';
     if (scope === 'all' && !isPrivileged) {
       return res.status(403).json({
         success: false,
@@ -949,7 +949,7 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     const search = (req.query.search as string || req.query.keyword as string || '').trim();
     const userFilter = (req.query.user as string || '').trim();
     const vendorQuery = (req.query.vendorId as string || '').trim();
-    const isAllVendors = (req.query.allVendors === 'true' || vendorQuery === 'ALL' || vendorQuery === 'all' || (!vendorQuery && currentUser.role === 'ADMIN')) && (currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN');
+    const isAllVendors = (req.query.allVendors === 'true' || vendorQuery === 'ALL' || vendorQuery === 'all' || (!vendorQuery && currentUser.role === 'ADMIN')) && (currentUser.role === 'ADMIN');
     const dateFilter = (req.query.date as string || '').trim();
     const startDate = (req.query.startDate as string || '').trim();
     const endDate = (req.query.endDate as string || '').trim();
@@ -1186,16 +1186,12 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
     const currentUser = req.user!;
     const targetEmail = req.body.email || currentUser.email;
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
-    const isSuperAdmin = currentUser.role === 'SUPERADMIN';
 
     const db = getDB();
     let history: any[] = [];
     if (db) {
       try {
         const query: any = { email: targetEmail };
-        if (!isSuperAdmin) {
-          query.vendorId = activeVendorId;
-        }
         history = await db.collection('login_history')
           .find(query)
           .sort({ timestamp: -1 })
@@ -1206,7 +1202,7 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
 
     if (!history || history.length === 0) {
       history = fallbackStore.login_history
-        .filter(h => h.email === targetEmail && (isSuperAdmin || (h.vendorId || 'vnd_sipspot_central') === activeVendorId))
+        .filter(h => h.email === targetEmail && (h.vendorId || 'vnd_sipspot_central') === activeVendorId)
         .slice(0, 20);
     }
 

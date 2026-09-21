@@ -12,7 +12,7 @@ import {
 
 export const adminAnalyticsRouter = Router();
 
-// Guarded for ADMIN, SUPERADMIN & MANAGER
+// Guarded for ADMIN & MANAGER
 adminAnalyticsRouter.use(authMiddleware, requireManager);
 
 const VENDOR_COLORS: Record<string, string> = {

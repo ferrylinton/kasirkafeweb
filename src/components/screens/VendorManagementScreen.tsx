@@ -58,7 +58,7 @@ export const VendorManagementScreen: React.FC = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isAdmin = user?.role === 'ADMIN';
 
   const [vendors, setVendors] = useState<AdminVendorItem[]>([]);
   const [summary, setSummary] = useState({
@@ -362,7 +362,6 @@ export const VendorManagementScreen: React.FC = () => {
           <p className="text-stone-600 dark:text-stone-400 max-w-md text-sm leading-relaxed mb-6">
             Halaman Manajemen Vendor multi-tenant dibatasi secara ketat hanya untuk akun staf dengan role{' '}
             <strong className="text-rose-600 dark:text-rose-400 font-semibold">ADMIN</strong> atau{' '}
-            <strong className="text-rose-600 dark:text-rose-400 font-semibold">SUPERADMIN</strong>.
             Akun Anda saat ini memiliki role <span className="font-bold underline">{user?.role || 'KASIR'}</span>.
           </p>
           <div className="flex items-center gap-3">

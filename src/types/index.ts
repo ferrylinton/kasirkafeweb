@@ -1,4 +1,8 @@
-export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'MANAGER' | 'CASHIER';
+export interface IParam {
+    id: string
+}
+
+export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 
 export interface Vendor {
   id: string;
@@ -51,6 +55,7 @@ export interface Product {
 
 export interface InventoryLog {
   id: string;
+  vendorId?: string;
   productId: string;
   productName: string;
   previousStock: number;
@@ -216,6 +221,7 @@ export type Language = 'en' | 'id';
 
 export interface LoginHistoryEntry {
   id: string;
+  vendorId?: string;
   sessionId: string;
   userId: string;
   email: string;

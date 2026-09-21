@@ -164,7 +164,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
   };
 
   const isAuthorized = allVendorsMode
-    ? (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERADMIN')
+    ? (currentUser?.role === 'ADMIN')
     : (currentUser?.role === 'MANAGER');
 
   if (!isAuthorized) {
@@ -272,7 +272,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          u.role === 'ADMIN' || u.role === 'SUPERADMIN'
+                          u.role === 'ADMIN'
                             ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
                             : u.role === 'MANAGER'
                             ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'

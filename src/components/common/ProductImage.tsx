@@ -28,7 +28,7 @@ export const getDefaultProductImage = (category?: string, name?: string): string
   return DEFAULT_PRODUCT_IMAGES.default;
 };
 
-export interface ProductImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+export interface ProductImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   src?: string | null;
   alt: string;
   category?: string;

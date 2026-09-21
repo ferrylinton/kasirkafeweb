@@ -158,8 +158,6 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
       summary,
       performer,
       vendorId: resolvedVendorId,
-      ipAddress: clientIp,
-      userAgent: clientAgent,
       req,
       details
     }).catch(() => {});

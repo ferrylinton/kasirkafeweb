@@ -184,7 +184,6 @@ export const LoginHistoryView: React.FC = () => {
         }
         cancelText={t('cancelBtn')}
         confirmVariant="danger"
-        isLoading={isRevoking}
         onConfirm={handleConfirmRevoke}
         onCancel={() => setSessionToRevoke(null)}
       />

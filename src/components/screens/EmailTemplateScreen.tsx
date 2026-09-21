@@ -16,7 +16,7 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
   const { showToast } = useToast();
 
   // Role Rule: Role ADMIN hanya bisa melihat Template Email (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
-  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER' && user?.role !== 'SUPERADMIN');
+  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER' );
 
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
@@ -193,9 +193,9 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
                   : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
               }`}
             >
-              <span>{tpl.name || tpl.type}</span>
+              <span>{tpl.name || tpl.code}</span>
               {allVendorsMode && (
-                <VendorBadge vendorId={tpl.vendorId} />
+                <VendorBadge vendorId={tpl.id} />
               )}
             </button>
           ))}
@@ -206,9 +206,9 @@ export const EmailTemplateScreen: React.FC<EmailTemplateScreenProps> = ({ allVen
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-stone-500">Template Aktif:</span>
-            <span className="text-xs font-bold text-stone-800 dark:text-stone-200">{selectedTemplate.name || selectedTemplate.type}</span>
+            <span className="text-xs font-bold text-stone-800 dark:text-stone-200">{selectedTemplate.name || selectedTemplate.code}</span>
             {allVendorsMode && (
-              <VendorBadge vendorId={selectedTemplate.vendorId} />
+              <VendorBadge vendorId={selectedTemplate.id} />
             )}
           </div>
           {allVendorsMode && (
