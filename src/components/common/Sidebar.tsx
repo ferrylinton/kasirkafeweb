@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
   const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'admin-dashboard', 'admin-top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -679,6 +679,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       </div>
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
                         REDIS
+                      </span>
+                    </button>
+
+                    {/* 10. Housekeeping Data & Retensi */}
+                    <button
+                      type="button"
+                      id="nav-admin-housekeeping-btn"
+                      onClick={() => handleNavClick('admin-housekeeping')}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-housekeeping'
+                          ? 'bg-orange-600 text-white shadow-xs font-bold'
+                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Sparkles className="w-4 h-4 shrink-0 text-orange-500" />
+                        <span className="truncate">Housekeeping Data</span>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                        ADMIN
                       </span>
                     </button>
 

@@ -27,6 +27,8 @@ export const fallbackStore: {
   revoked_sessions: string[];
   daily_counters: Record<string, number>;
   activity_logs: any[];
+  housekeeping_history: any[];
+  housekeeping_settings: any;
 } = {
   vendors: [],
   users: [],
@@ -40,7 +42,9 @@ export const fallbackStore: {
   login_history: [],
   revoked_sessions: [],
   daily_counters: {},
-  activity_logs: []
+  activity_logs: [],
+  housekeeping_history: [],
+  housekeeping_settings: null
 };
 
 export async function connectDB(): Promise<Db | null> {

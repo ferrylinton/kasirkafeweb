@@ -20,6 +20,7 @@ import { adminVendorRouter } from './server/routes/adminVendorRoutes';
 import { adminAnalyticsRouter } from './server/routes/adminAnalyticsRoutes';
 import { managerAnalyticsRouter } from './server/routes/managerAnalyticsRoutes';
 import { systemLogRouter } from './server/routes/systemLogRoutes';
+import { housekeepingRouter } from './server/routes/housekeepingRoutes';
 import { vendorMiddleware } from './server/vendorMiddleware';
 import { i18nMiddleware } from './server/i18n';
 import { initRetentionScheduler } from './server/retentionScheduler';
@@ -69,6 +70,7 @@ async function startServer() {
   app.use('/api/admin/analytics', adminAnalyticsRouter);
   app.use('/api/manager/analytics', managerAnalyticsRouter);
   app.use('/api/admin/system-logs', systemLogRouter);
+  app.use('/api/admin/housekeeping', housekeepingRouter);
 
   // Global Express API Error Handler (logs all 500s to Daily Rolling Logger)
   app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

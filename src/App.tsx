@@ -28,6 +28,8 @@ import { TopProductsScreen } from './components/screens/TopProductsScreen';
 import { IdleTimeoutModal } from './components/common/IdleTimeoutModal';
 import { AdminLogViewerScreen } from './components/screens/AdminLogViewerScreen';
 import { AdminLockedUsersScreen } from './components/screens/AdminLockedUsersScreen';
+import { HousekeepingScreen } from './components/screens/HousekeepingScreen';
+import { HousekeepingNotificationBanner } from './components/common/HousekeepingNotificationBanner';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -83,7 +85,8 @@ const MainLayout: React.FC = () => {
     'admin-templates',
     'admin-login-history',
     'admin-activity-logs',
-    'admin-locked-users'
+    'admin-locked-users',
+    'admin-housekeeping'
   ];
 
   const accountTabs = ['profile', 'settings'];
@@ -210,6 +213,11 @@ const MainLayout: React.FC = () => {
 
         {/* Main View Area */}
         <main className="w-full flex-1">
+          {/* End-of-Month Housekeeping Alert Banner */}
+          <HousekeepingNotificationBanner
+            onNavigateToHousekeeping={() => handleNavigateTab('admin-housekeeping')}
+          />
+
           {/* Operasional Kasir (Hanya role CASHIER dan role MANAGER) */}
           {isCashierOrManager && activeView === 'katalog' && (
             <CatalogScreen onNavigateToCart={() => handleNavigateTab('pesanan')} />
@@ -285,6 +293,9 @@ const MainLayout: React.FC = () => {
           )}
           {isAdmin && activeView === 'admin-locked-users' && (
             <AdminLockedUsersScreen />
+          )}
+          {isAdmin && activeView === 'admin-housekeeping' && (
+            <HousekeepingScreen />
           )}
         </main>
       </div>

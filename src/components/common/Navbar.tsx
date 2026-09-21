@@ -80,6 +80,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navAdminActivityLogs');
       case 'admin-locked-users':
         return 'User Terkunci (Redis Lockout)';
+      case 'admin-housekeeping':
+        return 'Housekeeping & Retensi Data';
       case 'profile':
         return t('navAccount');
       case 'settings':

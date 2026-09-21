@@ -14,7 +14,6 @@ import {
   PieChart as PieChartIcon,
   ChevronRight,
   ArrowUpRight,
-  Layers,
   Percent,
   CheckCircle2,
   AlertCircle,
@@ -27,8 +26,11 @@ import {
   CalendarCheck,
   Sparkles,
   Database,
-  ChevronDown
+  ChevronDown,
+  ChevronUp,
+  Check
 } from 'lucide-react';
+import * as Select from '@radix-ui/react-select';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -46,9 +48,22 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 
-type PeriodType = 'day' | 'week' | 'month' | 'year';
+type PeriodType = 'day' | 'week' | 'month';
 type MetricType = 'revenue' | 'orders';
 type ChartViewType = 'area' | 'bar' | 'line';
+
+export interface AdminChartDataItem {
+  label: string;
+  shortLabel?: string;
+  dayName?: string;
+  date?: string;
+  weekKey?: string;
+  monthKey?: string;
+  totalOrders: number;
+  totalRevenue: number;
+  averageTicket: number;
+  [key: string]: any;
+}
 
 interface VendorMeta {
   id: string;
@@ -92,12 +107,12 @@ interface AnalyticsData {
     today: { orders: number; revenue: number };
     thisWeek: { orders: number; revenue: number };
     thisMonth: { orders: number; revenue: number };
-    thisYear: { orders: number; revenue: number };
+    thisYear?: { orders: number; revenue: number };
   };
   daily: any[];
   weekly: any[];
   monthly: any[];
-  yearly: any[];
+  yearly?: any[];
   paymentMethods: Array<{
     method: string;
     count: number;
@@ -259,8 +274,7 @@ export const AdminDashboardScreen: React.FC = () => {
     const periodNames: Record<PeriodType, string> = {
       day: 'Per_Hari',
       week: 'Per_Minggu',
-      month: 'Per_Bulan',
-      year: 'Per_Tahun'
+      month: 'Per_Bulan'
     };
 
     if (format === 'json') {
@@ -313,20 +327,32 @@ export const AdminDashboardScreen: React.FC = () => {
   };
 
   // Current active dataset according to selected period
-  const activeDataset = useMemo(() => {
+  const activeDataset: AdminChartDataItem[] = useMemo(() => {
     if (!data) return [];
+    let list: any[] = [];
     switch (period) {
       case 'day':
-        return data.daily || [];
+        list = data.daily || [];
+        break;
       case 'week':
-        return data.weekly || [];
+        list = data.weekly || [];
+        break;
       case 'month':
-        return data.monthly || [];
-      case 'year':
-        return data.yearly || [];
+        list = data.monthly || [];
+        break;
       default:
-        return data.daily || [];
+        list = data.daily || [];
     }
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((item): item is NonNullable<typeof item> => item !== null && typeof item === 'object')
+      .map((item) => ({
+        ...item,
+        label: String(item.label || item.shortLabel || ''),
+        totalOrders: Number(item.totalOrders) || 0,
+        totalRevenue: Number(item.totalRevenue) || 0,
+        averageTicket: Number(item.averageTicket) || 0
+      }));
   }, [data, period]);
 
   // Helpers for IDR currency formatting
@@ -367,7 +393,6 @@ export const AdminDashboardScreen: React.FC = () => {
                 {period === 'day' && 'Transaksi Harian'}
                 {period === 'week' && 'Rekap Mingguan'}
                 {period === 'month' && 'Rekap Bulanan'}
-                {period === 'year' && 'Rekap Tahunan'}
               </p>
             </div>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300">
@@ -483,94 +508,173 @@ export const AdminDashboardScreen: React.FC = () => {
       </div>
 
       {/* Control Filter Bar */}
-      <div className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* 1. Periode Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-800/80 rounded-xl self-start overflow-x-auto max-w-full">
-            <button
-              type="button"
-              id="period-day-btn"
-              onClick={() => setPeriod('day')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                period === 'day'
-                  ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Per Hari (30 Hari)</span>
-            </button>
+      <div className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs space-y-3.5">
+        {/* Row 1: Periode Switcher & Vendor Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Periode Switcher (Radix UI Select) */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0">Periode:</span>
+            <Select.Root value={period} onValueChange={(val) => setPeriod(val as PeriodType)}>
+              <Select.Trigger
+                id="period-select-trigger"
+                aria-label="Pilih Periode Grafik"
+                className="inline-flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl text-xs font-bold bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs transition-all cursor-pointer w-full sm:w-[220px]"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  {period === 'day' && <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
+                  {period === 'week' && <CalendarDays className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
+                  {period === 'month' && <CalendarRange className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
+                  <Select.Value placeholder="Pilih Periode" />
+                </div>
+                <Select.Icon asChild>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform duration-200" />
+                </Select.Icon>
+              </Select.Trigger>
 
-            <button
-              type="button"
-              id="period-week-btn"
-              onClick={() => setPeriod('week')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                period === 'week'
-                  ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Per Minggu (12 Minggu)</span>
-            </button>
+              <Select.Portal>
+                <Select.Content
+                  position="popper"
+                  sideOffset={6}
+                  className="z-50 min-w-[230px] overflow-hidden rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xl p-1 text-xs animate-in fade-in-80 zoom-in-95"
+                >
+                  <Select.ScrollUpButton className="flex items-center justify-center h-6 text-stone-500 cursor-default">
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </Select.ScrollUpButton>
 
-            <button
-              type="button"
-              id="period-month-btn"
-              onClick={() => setPeriod('month')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                period === 'month'
-                  ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-              }`}
-            >
-              <CalendarRange className="w-3.5 h-3.5" />
-              <span>Per Bulan (3 Bulan Terakhir)</span>
-            </button>
+                  <Select.Viewport className="p-1 space-y-1">
+                    <Select.Item
+                      value="day"
+                      id="period-select-item-day"
+                      className="relative flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 dark:hover:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-950/40 focus:text-orange-600 dark:focus:text-orange-400 outline-none cursor-pointer data-[highlighted]:bg-orange-50 dark:data-[highlighted]:bg-orange-950/40 transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                        <Select.ItemText>Per Hari (30 Hari)</Select.ItemText>
+                      </div>
+                      <Select.ItemIndicator>
+                        <Check className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                      </Select.ItemIndicator>
+                    </Select.Item>
 
-            <button
-              type="button"
-              id="period-year-btn"
-              onClick={() => setPeriod('year')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                period === 'year'
-                  ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Per Tahun</span>
-            </button>
+                    <Select.Item
+                      value="week"
+                      id="period-select-item-week"
+                      className="relative flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 dark:hover:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-950/40 focus:text-orange-600 dark:focus:text-orange-400 outline-none cursor-pointer data-[highlighted]:bg-orange-50 dark:data-[highlighted]:bg-orange-950/40 transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="w-3.5 h-3.5 text-orange-500" />
+                        <Select.ItemText>Per Minggu (12 Minggu)</Select.ItemText>
+                      </div>
+                      <Select.ItemIndicator>
+                        <Check className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                      </Select.ItemIndicator>
+                    </Select.Item>
+
+                    <Select.Item
+                      value="month"
+                      id="period-select-item-month"
+                      className="relative flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 dark:hover:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-950/40 focus:text-orange-600 dark:focus:text-orange-400 outline-none cursor-pointer data-[highlighted]:bg-orange-50 dark:data-[highlighted]:bg-orange-950/40 transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CalendarRange className="w-3.5 h-3.5 text-orange-500" />
+                        <Select.ItemText>Per Bulan (3 Bulan Terakhir)</Select.ItemText>
+                      </div>
+                      <Select.ItemIndicator>
+                        <Check className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                      </Select.ItemIndicator>
+                    </Select.Item>
+                  </Select.Viewport>
+
+                  <Select.ScrollDownButton className="flex items-center justify-center h-6 text-stone-500 cursor-default">
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </Select.ScrollDownButton>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
           </div>
 
-          {/* 2. Controls: Vendor Selector + Metric Toggle + Chart Type */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Vendor Filter Dropdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">Vendor:</span>
-              <select
-                id="admin-dashboard-vendor-select"
-                value={selectedVendor}
-                onChange={(e) => setSelectedVendor(e.target.value)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+          {/* Vendor Filter Dropdown (Radix UI Select) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-start gap-2 w-full sm:w-auto">
+            <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0">Vendor:</span>
+            <Select.Root value={selectedVendor} onValueChange={(val) => setSelectedVendor(val)}>
+              <Select.Trigger
+                id="admin-dashboard-vendor-select-trigger"
+                aria-label="Pilih Filter Vendor"
+                className="inline-flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs transition-all cursor-pointer w-full sm:w-[240px]"
               >
-                <option value="all">🌟 Semua Vendor (Komparasi)</option>
-                {data?.vendors?.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <Store className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <Select.Value placeholder="Pilih Vendor" />
+                </div>
+                <Select.Icon asChild>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform duration-200" />
+                </Select.Icon>
+              </Select.Trigger>
 
-            {/* Metric Toggle: Nominal vs Jumlah Trx */}
-            <div className="flex items-center p-0.5 bg-stone-100 dark:bg-stone-800 rounded-xl">
+              <Select.Portal>
+                <Select.Content
+                  position="popper"
+                  sideOffset={6}
+                  className="z-50 min-w-[220px] max-w-[320px] max-h-[300px] overflow-hidden rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xl p-1 text-xs animate-in fade-in-80 zoom-in-95"
+                >
+                  <Select.ScrollUpButton className="flex items-center justify-center h-6 text-stone-500 cursor-default">
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </Select.ScrollUpButton>
+
+                  <Select.Viewport className="p-1 space-y-1">
+                    <Select.Item
+                      value="all"
+                      id="vendor-select-item-all"
+                      className="relative flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 dark:hover:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-950/40 focus:text-orange-600 dark:focus:text-orange-400 outline-none cursor-pointer data-[highlighted]:bg-orange-50 dark:data-[highlighted]:bg-orange-950/40 transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Select.ItemText>🌟 Semua Vendor (Komparasi)</Select.ItemText>
+                      </div>
+                      <Select.ItemIndicator>
+                        <Check className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
+                      </Select.ItemIndicator>
+                    </Select.Item>
+
+                    {data?.vendors?.map((v) => (
+                      <Select.Item
+                        key={v.id}
+                        value={v.id}
+                        id={`vendor-select-item-${v.id}`}
+                        className="relative flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 dark:hover:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-950/40 focus:text-orange-600 dark:focus:text-orange-400 outline-none cursor-pointer data-[highlighted]:bg-orange-50 dark:data-[highlighted]:bg-orange-950/40 transition-colors select-none"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Store className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          <Select.ItemText>
+                            {v.name} ({v.code})
+                          </Select.ItemText>
+                        </div>
+                        <Select.ItemIndicator>
+                          <Check className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
+                        </Select.ItemIndicator>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+
+                  <Select.ScrollDownButton className="flex items-center justify-center h-6 text-stone-500 cursor-default">
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </Select.ScrollDownButton>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </div>
+        </div>
+
+        {/* Row 2: Metric Toggle & Chart Type Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-stone-100 dark:border-stone-800/80">
+          {/* Metric Toggle: Nominal vs Jumlah Trx */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+            <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0">Metrik:</span>
+            <div className="flex items-center p-0.5 bg-stone-100 dark:bg-stone-800 rounded-xl flex-1 sm:flex-none">
               <button
                 type="button"
                 id="metric-revenue-btn"
                 onClick={() => setMetric('revenue')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
                   metric === 'revenue'
                     ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
@@ -582,7 +686,7 @@ export const AdminDashboardScreen: React.FC = () => {
                 type="button"
                 id="metric-orders-btn"
                 onClick={() => setMetric('orders')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
                   metric === 'orders'
                     ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
@@ -591,15 +695,19 @@ export const AdminDashboardScreen: React.FC = () => {
                 Jumlah Trx
               </button>
             </div>
+          </div>
 
-            {/* Chart Type Toggle */}
+          {/* Chart Type Toggle */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+            <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0">Tipe Grafik:</span>
             <div className="flex items-center p-0.5 bg-stone-100 dark:bg-stone-800 rounded-xl">
               <button
                 type="button"
                 id="chart-type-area-btn"
                 title="Area Chart"
+                aria-label="Area Chart"
                 onClick={() => setChartType('area')}
-                className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                className={`p-2 rounded-lg text-xs transition-all cursor-pointer ${
                   chartType === 'area'
                     ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
@@ -611,8 +719,9 @@ export const AdminDashboardScreen: React.FC = () => {
                 type="button"
                 id="chart-type-bar-btn"
                 title="Bar Chart"
+                aria-label="Bar Chart"
                 onClick={() => setChartType('bar')}
-                className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                className={`p-2 rounded-lg text-xs transition-all cursor-pointer ${
                   chartType === 'bar'
                     ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
@@ -624,8 +733,9 @@ export const AdminDashboardScreen: React.FC = () => {
                 type="button"
                 id="chart-type-line-btn"
                 title="Line Chart"
+                aria-label="Line Chart"
                 onClick={() => setChartType('line')}
-                className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                className={`p-2 rounded-lg text-xs transition-all cursor-pointer ${
                   chartType === 'line'
                     ? 'bg-white dark:bg-stone-700 text-orange-600 dark:text-orange-400 shadow-xs'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
@@ -679,7 +789,6 @@ export const AdminDashboardScreen: React.FC = () => {
                 {period === 'day' && `Hari ini: ${formatIDR(data?.summary.today.revenue || 0)}`}
                 {period === 'week' && `Minggu ini: ${formatIDR(data?.summary.thisWeek.revenue || 0)}`}
                 {period === 'month' && `Bulan ini: ${formatIDR(data?.summary.thisMonth.revenue || 0)}`}
-                {period === 'year' && `Tahun ini: ${formatIDR(data?.summary.thisYear.revenue || 0)}`}
               </span>
             </div>
           </div>
@@ -704,7 +813,6 @@ export const AdminDashboardScreen: React.FC = () => {
                 {period === 'day' && `Hari ini: ${data?.summary.today.orders || 0} pesanan`}
                 {period === 'week' && `Minggu ini: ${data?.summary.thisWeek.orders || 0} pesanan`}
                 {period === 'month' && `Bulan ini: ${data?.summary.thisMonth.orders || 0} pesanan`}
-                {period === 'year' && `Tahun ini: ${data?.summary.thisYear.orders || 0} pesanan`}
               </span>
             </div>
           </div>
@@ -898,7 +1006,6 @@ export const AdminDashboardScreen: React.FC = () => {
                 Grafik Penjualan {period === 'day' && 'Per Hari'}
                 {period === 'week' && 'Per Minggu'}
                 {period === 'month' && 'Per Bulan'}
-                {period === 'year' && 'Per Tahun'}
               </span>
               <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
                 ({metric === 'revenue' ? 'Nominal Omzet' : 'Jumlah Transaksi'})
@@ -1179,8 +1286,7 @@ export const AdminDashboardScreen: React.FC = () => {
             <h3 className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-white">
               Tabel Rekapitulasi Rinci ({period === 'day' && 'Per Hari'}
               {period === 'week' && 'Per Minggu'}
-              {period === 'month' && 'Per Bulan'}
-              {period === 'year' && 'Per Tahun'})
+              {period === 'month' && 'Per Bulan'})
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400">
               Rincian angka transaksi dan pendapatan tiap entitas dalam rentang waktu yang dipilih.
@@ -1234,9 +1340,9 @@ export const AdminDashboardScreen: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-              {activeDataset.map((row: any, idx: number) => (
+              {activeDataset.map((row: AdminChartDataItem, idx: number) => (
                 <tr
-                  key={row.date || row.weekKey || row.monthKey || row.yearKey || idx}
+                  key={row.date || row.weekKey || row.monthKey || idx}
                   className="hover:bg-stone-50/70 dark:hover:bg-stone-850/50 transition-colors"
                 >
                   <td className="py-3 px-4 font-semibold text-stone-900 dark:text-stone-100">
