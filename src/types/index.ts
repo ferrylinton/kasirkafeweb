@@ -25,7 +25,6 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
-  pin?: string;
   avatar?: string;
   createdAt?: string;
 }
@@ -227,7 +226,7 @@ export interface LoginHistoryEntry {
   email: string;
   name: string;
   role: UserRole;
-  loginMethod: 'PIN' | 'PASSWORD';
+  loginMethod: 'PASSWORD';
   ipAddress: string;
   userAgent?: string;
   device?: string;

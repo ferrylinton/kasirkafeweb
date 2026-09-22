@@ -26,9 +26,9 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   // Form states
-  const [newPin, setNewPin] = useState<string>('');
-  const [confirmPin, setConfirmPin] = useState<string>('');
-  const [showPin, setShowPin] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
@@ -37,7 +37,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
   useEffect(() => {
     if (!currentToken) {
       setIsVerifying(false);
-      setVerifyError('Token atur ulang PIN tidak disertakan dalam tautan.');
+      setVerifyError('Token atur ulang password tidak disertakan dalam tautan.');
       return;
     }
 
@@ -55,10 +55,10 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
             vendorName: data.vendorName
           });
         } else {
-          setVerifyError(data.message || 'Token reset PIN tidak valid atau sudah kedaluwarsa.');
+          setVerifyError(data.message || 'Token reset tidak valid atau sudah kedaluwarsa.');
         }
       } catch (e) {
-        setVerifyError('Gagal memverifikasi token reset PIN. Periksa jaringan Anda.');
+        setVerifyError('Gagal memverifikasi token reset. Periksa jaringan Anda.');
       } finally {
         setIsVerifying(false);
       }
@@ -71,13 +71,13 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
     e.preventDefault();
     setSubmitError(null);
 
-    if (!newPin || !/^\d{6}$/.test(newPin)) {
-      setSubmitError('PIN baru harus terdiri dari tepat 6 digit angka.');
+    if (!newPassword || newPassword.length < 6) {
+      setSubmitError('Kata sandi baru harus minimal 6 karakter.');
       return;
     }
 
-    if (newPin !== confirmPin) {
-      setSubmitError('Konfirmasi PIN tidak cocok dengan PIN baru.');
+    if (newPassword !== confirmPassword) {
+      setSubmitError('Konfirmasi kata sandi tidak cocok.');
       return;
     }
 
@@ -88,16 +88,17 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: currentToken,
-          newPin
+          newPassword,
+          newPin: /^\d{6}$/.test(newPassword) ? newPassword : '123456'
         })
       });
 
       const data = await res.json();
       if (data.success) {
         setIsSuccess(true);
-        showToast('PIN baru 6 digit berhasil disimpan!', 'success');
+        showToast('Kata sandi baru berhasil disimpan dan akun aktif kembali!', 'success');
       } else {
-        setSubmitError(data.message || 'Gagal mengatur ulang PIN.');
+        setSubmitError(data.message || 'Gagal mengatur ulang kata sandi.');
       }
     } catch (e) {
       setSubmitError('Koneksi server gagal. Silakan coba kembali.');
@@ -112,13 +113,13 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="w-14 h-14 mx-auto rounded-3xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shadow-xs">
-            <KeyRound className="w-7 h-7" />
+            <Lock className="w-7 h-7" />
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-            Atur Ulang PIN Kasir
+            Atur Ulang Kata Sandi
           </h1>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Sistem Keamanan Akun SipSpot Beverage & Snack POS
+            Sistem Keamanan Akun SipSpot POS Multi-Vendor
           </p>
         </div>
 
@@ -127,7 +128,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
           <div className="py-12 flex flex-col items-center justify-center gap-3">
             <RefreshCw className="w-8 h-8 text-accent animate-spin" />
             <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
-              Memverifikasi token reset PIN...
+              Memverifikasi token reset kata sandi...
             </span>
           </div>
         ) : verifyError ? (
@@ -145,7 +146,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
               <button
                 type="button"
                 onClick={onBackToLogin}
-                className="w-full py-3 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Kembali ke Layar Login</span>
@@ -161,27 +162,27 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
 
             <div className="space-y-1">
               <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-                PIN Berhasil Diperbarui!
+                Kata Sandi Berhasil Diperbarui!
               </h2>
               <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
-                PIN 6 digit kasir akun Anda telah berhasil disimpan dan status kunci akun Anda telah dinonaktifkan.
+                Kata sandi akun Anda telah berhasil disimpan dan kunci proteksi akun Anda telah dibuka.
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs text-stone-700 dark:text-stone-300">
-              Pengguna: <strong>{tokenInfo?.userName}</strong> ({tokenInfo?.email})
+              Akun: <strong>{tokenInfo?.userName}</strong> ({tokenInfo?.email})
             </div>
 
             <button
               type="button"
               onClick={onBackToLogin}
-              className="w-full py-3.5 rounded-2xl bg-accent text-white text-xs sm:text-sm font-bold shadow-md hover:opacity-95 active:scale-98 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl bg-accent text-white text-xs sm:text-sm font-bold shadow-md hover:opacity-95 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Login Kasir dengan PIN Baru</span>
+              <span>Login dengan Kata Sandi Baru</span>
             </button>
           </div>
         ) : (
-          /* Form to input new 6-digit PIN */
+          /* Form to input new password */
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* User Target Card */}
             {tokenInfo && (
@@ -202,51 +203,45 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
               </div>
             )}
 
-            {/* Input PIN Baru */}
+            {/* Input Password Baru */}
             <div>
               <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">
-                PIN Baru (6 Digit Angka) <span className="text-red-500">*</span>
+                Kata Sandi Baru (Min. 6 Karakter) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
-                  id="input-new-pin"
-                  type={showPin ? 'text' : 'password'}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
+                  id="input-new-password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  value={newPin}
-                  onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Contoh: 123456"
-                  className="w-full pl-4 pr-10 py-3 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm font-mono tracking-widest text-center font-bold focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-stone-900 dark:text-stone-100 placeholder:tracking-normal placeholder:font-sans placeholder:text-stone-400"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Masukkan kata sandi baru..."
+                  className="w-full pl-4 pr-10 py-3 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-stone-900 dark:text-stone-100 placeholder:text-stone-400"
                   autoFocus
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPin(!showPin)}
-                  className="absolute right-3.5 top-3.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors cursor-pointer"
                 >
-                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Input Konfirmasi PIN */}
+            {/* Input Konfirmasi Password */}
             <div>
               <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">
-                Ulangi Konfirmasi PIN (6 Digit) <span className="text-red-500">*</span>
+                Konfirmasi Kata Sandi Baru <span className="text-red-500">*</span>
               </label>
               <input
-                id="input-confirm-pin"
-                type={showPin ? 'text' : 'password'}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
+                id="input-confirm-password"
+                type={showPassword ? 'text' : 'password'}
                 required
-                value={confirmPin}
-                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Masukkan ulang 6 digit"
-                className="w-full px-4 py-3 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm font-mono tracking-widest text-center font-bold focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-stone-900 dark:text-stone-100 placeholder:tracking-normal placeholder:font-sans placeholder:text-stone-400"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Ulangi kata sandi baru..."
+                className="w-full px-4 py-3 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-stone-900 dark:text-stone-100 placeholder:text-stone-400"
               />
             </div>
 
@@ -260,20 +255,20 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
 
             <div className="pt-2 space-y-2">
               <button
-                id="btn-confirm-new-pin"
+                id="btn-confirm-new-password"
                 type="submit"
-                disabled={isSubmitting || newPin.length !== 6 || confirmPin.length !== 6}
-                className="w-full py-3.5 rounded-2xl bg-accent text-white font-bold text-xs sm:text-sm shadow-md hover:opacity-95 active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled={isSubmitting || newPassword.length < 6 || confirmPassword.length < 6}
+                className="w-full py-3.5 rounded-2xl bg-accent text-white font-bold text-xs sm:text-sm shadow-md hover:opacity-95 active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Menyimpan PIN Baru...</span>
+                    <span>Menyimpan Kata Sandi...</span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    <span>Simpan & Aktifkan PIN Baru</span>
+                    <span>Simpan & Buka Kunci Akun</span>
                   </>
                 )}
               </button>
@@ -281,7 +276,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
               <button
                 type="button"
                 onClick={onBackToLogin}
-                className="w-full py-2.5 rounded-xl text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 text-xs font-semibold transition-colors"
+                className="w-full py-2.5 rounded-xl text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Batal & Kembali ke Login
               </button>

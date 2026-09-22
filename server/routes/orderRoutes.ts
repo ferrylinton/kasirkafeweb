@@ -8,6 +8,7 @@ import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { logOrder } from '../dailyRollingLogger';
 import { IParam } from '@/src/types';
+import { serverProductCache } from '../cache/productCache';
 
 export const orderRouter = Router();
 
@@ -384,6 +385,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     } else {
       fallbackStore.orders.unshift({ ...orderDoc, _id: orderId });
     }
+
+    // Invalidate product cache so updated stock is immediately reflected in catalog
+    serverProductCache.invalidateProducts(activeVendorId);
 
     // Record system-wide activity log
     await recordActivityLog({

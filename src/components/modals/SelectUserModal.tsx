@@ -10,6 +10,7 @@ import {
   UserCheck,
   Sparkles,
   KeyRound,
+  Lock,
   RefreshCw,
   Mail,
   Building2,
@@ -535,12 +536,10 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                             </span>
                           )}
 
-                          {user.pin && (
-                            <span className="flex items-center gap-1 font-mono font-semibold text-[11px] text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-md">
-                              <KeyRound className="w-3 h-3 text-stone-400" />
-                              <span>PIN: {user.pin}</span>
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1 font-mono text-[11px] text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-md border border-stone-200/60 dark:border-stone-700/60">
+                            <Lock className="w-3 h-3 text-accent shrink-0" />
+                            <span>Password123!</span>
+                          </span>
                         </div>
                       </div>
                     </div>

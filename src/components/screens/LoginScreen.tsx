@@ -4,7 +4,6 @@ import {
   ShieldCheck,
   Sun,
   Moon,
-  Delete,
   KeyRound,
   Lock,
   ArrowRight,
@@ -19,7 +18,10 @@ import {
   X,
   Building2,
   Store,
-  CheckCircle2
+  CheckCircle2,
+  Mail,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -61,11 +63,12 @@ interface AlreadyLoggedInInfo {
   timestamp: string;
   isSelfManager: boolean;
   canManagerForceLogout: boolean;
-  pinAttempted?: string;
+  passwordAttempted?: string;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpenResetPin }) => {
   const {
+    loginWithPassword,
     loginWithPin,
     forceLogoutUser,
     idleTimedOut,
@@ -102,10 +105,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     try {
       const saved = localStorage.getItem('sipspot_selected_user');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.pin === '1234') parsed.pin = '123456';
-        if (parsed.pin === '8492') parsed.pin = '849201';
-        return parsed;
+        return JSON.parse(saved);
       }
     } catch (e) {}
     return {
@@ -130,8 +130,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   });
 
   const [isSelectModalOpen, setIsSelectModalOpen] = useState<boolean>(false);
-  const [pin, setPin] = useState<string>('');
-  const [email, setEmail] = useState<string>(selectedUser.email || 'manager@beverage.com');
+  const [email, setEmail] = useState<string>(() => {
+    try {
+      const savedEmail = localStorage.getItem('sipspot_saved_email');
+      if (savedEmail) return savedEmail;
+    } catch (e) {}
+    return selectedUser.email || 'manager@beverage.com';
+  });
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sipspot_remember_me') !== 'false';
+    } catch (e) {
+      return true;
+    }
+  });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Fetch selectable users & vendors from backend API
@@ -311,7 +325,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       };
       setSelectedUser(updatedUser);
       setEmail(updatedUser.email);
-      setPin('');
+      setPassword('');
       try {
         localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
       } catch (e) {}
@@ -337,7 +351,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       } catch (e) {}
     }
     setEmail(updatedUser.email);
-    setPin(''); // Reset PIN input so user can type cleanly
+    setPassword('');
     try {
       localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
     } catch (e) {}
@@ -345,34 +359,29 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     showToast(`${updatedUser.name} (${updatedUser.role === 'MANAGER' ? 'Manager' : 'Kasir'}) dipilih!`, 'success');
   };
 
-  const handlePinPress = (digit: string) => {
-    if (isLocked) {
-      showToast(`Akun terkunci selama 15 menit. Sisa waktu: ${formatLockoutTimer(remainingSeconds)}.`, 'error');
+  const attemptPasswordLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const cleanEmail = email.trim();
+    const cleanPassword = password;
+
+    if (!cleanEmail) {
+      showToast('Silakan masukkan alamat email akun Anda.', 'error');
       return;
     }
-    if (pin.length < 6) {
-      const nextPin = pin + digit;
-      setPin(nextPin);
-      if (nextPin.length === 6) {
-        attemptPinLogin(nextPin);
-      }
+    if (!cleanPassword) {
+      showToast('Silakan masukkan kata sandi akun Anda.', 'error');
+      return;
     }
-  };
 
-  const handlePinDelete = () => {
-    if (isLocked) return;
-    setPin(prev => prev.slice(0, -1));
-  };
-
-  const attemptPinLogin = async (pinValue: string) => {
     if (isLocked) {
       showToast(`Akun sedang terkunci. Coba lagi dalam ${formatLockoutTimer(remainingSeconds)}.`, 'error');
       return;
     }
 
-    const storageKey = getLockoutStorageKey(selectedUser.email);
+    const storageKey = getLockoutStorageKey(cleanEmail);
     setIsSubmitting(true);
-    const result = await loginWithPin(pinValue, selectedUser.email);
+    const result = await loginWithPassword(cleanEmail, cleanPassword);
     setIsSubmitting(false);
 
     if (result.success) {
@@ -382,6 +391,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       setAlreadyLoggedInData(null);
       try {
         localStorage.removeItem(storageKey);
+        if (rememberMe) {
+          localStorage.setItem('sipspot_saved_email', cleanEmail);
+          localStorage.setItem('sipspot_remember_me', 'true');
+        } else {
+          localStorage.removeItem('sipspot_saved_email');
+          localStorage.setItem('sipspot_remember_me', 'false');
+        }
       } catch (e) {}
       if (result.previousSessionsTerminated) {
         showToast(`Selamat datang, ${selectedUser.name}! Sesi di browser lain telah otomatis dikeluarkan.`, 'info');
@@ -389,21 +405,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         showToast(`Selamat datang, ${selectedUser.name}!`, 'success');
       }
     } else if (result.isAlreadyLoggedIn) {
-      setPin('');
       setAlreadyLoggedInData({
         userName: result.user?.name || selectedUser.name,
-        userEmail: result.user?.email || selectedUser.email,
+        userEmail: result.user?.email || cleanEmail,
         userRole: result.user?.role || selectedUser.role,
         device: result.activeSession?.device || 'Browser lain',
         ipAddress: result.activeSession?.ipAddress || '127.0.0.1',
         timestamp: result.activeSession?.timestamp || new Date().toISOString(),
         isSelfManager: result.isSelfManager ?? (selectedUser.role?.toUpperCase() === 'MANAGER'),
         canManagerForceLogout: true,
-        pinAttempted: pinValue
+        passwordAttempted: cleanPassword
       });
       showToast(result.message || 'Pengguna sedang aktif di browser lain. Satu akun tidak dapat digunakan bersamaan.', 'error');
     } else {
-      setPin('');
       if (result.isLocked) {
         const lockUntil = result.lockedUntil || (Date.now() + 15 * 60 * 1000);
         const remSec = result.remainingSeconds || (15 * 60);
@@ -429,7 +443,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             failedAttempts: newAttempts
           }));
         } catch (e) {}
-        showToast(result.message || `PIN salah. Sisa ${Math.max(0, 3 - newAttempts)} kesempatan sebelum akun terkunci.`, 'error');
+        showToast(result.message || `Kata sandi salah. Sisa ${Math.max(0, 3 - newAttempts)} kesempatan sebelum akun terkunci.`, 'error');
       }
     }
   };
@@ -439,8 +453,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     if (!alreadyLoggedInData) return;
     setIsForceLoggingOut(true);
     try {
-      if (alreadyLoggedInData.pinAttempted) {
-        const result = await loginWithPin(alreadyLoggedInData.pinAttempted, alreadyLoggedInData.userEmail, true);
+      if (alreadyLoggedInData.passwordAttempted || password) {
+        const result = await loginWithPassword(
+          alreadyLoggedInData.userEmail,
+          alreadyLoggedInData.passwordAttempted || password || 'Password123!',
+          true
+        );
         if (result.success) {
           setFailedAttempts(0);
           setIsLocked(false);
@@ -457,7 +475,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           reason: 'Dipaksa logout oleh Manager dari browser lain'
         });
         if (res.success) {
-          showToast('Sesi aktif di browser lain telah diputuskan. Silakan masukkan PIN untuk masuk.', 'success');
+          showToast('Sesi aktif di browser lain telah diputuskan. Silakan masukkan password untuk masuk.', 'success');
           setAlreadyLoggedInData(null);
         } else {
           showToast(res.message || 'Gagal memutuskan sesi', 'error');
@@ -481,29 +499,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     setIsForceLoggingOut(true);
 
     try {
-      if (alreadyLoggedInData.pinAttempted) {
-        const result = await loginWithPin(
-          alreadyLoggedInData.pinAttempted,
-          alreadyLoggedInData.userEmail,
-          true,
-          managerPin
-        );
-
-        if (result.success) {
-          setFailedAttempts(0);
-          setIsLocked(false);
-          setLockedUntil(null);
-          setAlreadyLoggedInData(null);
-          setIsManagerPromptOpen(false);
-          showToast(`Otorisasi Manager berhasil! Sesi sebelumnya telah diputus dan ${alreadyLoggedInData.userName} berhasil masuk.`, 'success');
-          return;
-        } else if (result.error === 'InvalidManagerPin' || result.message?.toLowerCase().includes('pin manager')) {
-          setManagerPinError(result.message || 'PIN Manager salah.');
-          setIsForceLoggingOut(false);
-          return;
-        }
-      }
-
       const res = await forceLogoutUser({
         targetEmail: alreadyLoggedInData.userEmail,
         managerPin,
@@ -511,10 +506,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       });
 
       if (res.success) {
-        showToast(`Sesi aktif untuk ${alreadyLoggedInData.userName} berhasil diputus oleh Manager! Silakan masuk kembali.`, 'success');
+        showToast(`Sesi aktif untuk ${alreadyLoggedInData.userName} berhasil diputus oleh Manager! Silakan masuk kembali dengan kata sandi Anda.`, 'success');
         setIsManagerPromptOpen(false);
         setAlreadyLoggedInData(null);
-        setPin('');
       } else {
         setManagerPinError(res.message || 'Gagal otorisasi Manager');
       }
@@ -877,17 +871,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
               </button>
             </div>
 
-            {/* Quick action to request PIN reset or reset via email when locked */}
+            {/* Quick action to request password reset or reset via email when locked */}
             <div className="pt-2 border-t border-red-200/80 dark:border-red-900/60 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-red-800/80 dark:text-red-300/80">Lupa PIN kasir?</span>
+              <span className="text-[11px] text-red-800/80 dark:text-red-300/80">Lupa kata sandi akun?</span>
               <button
                 type="button"
-                id="btn-lockout-forgot-pin"
+                id="btn-lockout-forgot-password"
                 onClick={() => setShowForgotPinModal(true)}
                 className="px-2.5 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <KeyRound className="w-3 h-3" />
-                <span>Reset PIN / Minta ke ADMIN</span>
+                <span>Reset Password / Minta ke ADMIN</span>
               </button>
             </div>
           </div>
@@ -922,125 +916,171 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           </div>
         )}
 
-        {/* 6-Digit PIN Keypad Card */}
-        <div className="w-full bg-white dark:bg-[#251e1c] rounded-3xl p-5 shadow-sm border border-stone-200/80 dark:border-stone-800 flex flex-col items-center">
-          <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 mb-6">
-            {t('enterPin')}
-          </span>
-          {/* 6 Dots indicator */}
-          <div className="flex gap-3 mb-5">
-            {[0, 1, 2, 3, 4, 5].map(index => {
-              const filled = index < pin.length;
-              return (
-                <div
-                  key={index}
-                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-all duration-200 ${
-                    filled
-                      ? 'bg-accent scale-110 shadow-xs'
-                      : 'border-2 border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800'
-                  }`}
-                />
-              );
-            })}
+        {/* Email & Password Login Card */}
+        <form
+          id="email-password-login-form"
+          onSubmit={attemptPasswordLogin}
+          className="w-full bg-white dark:bg-[#251e1c] rounded-3xl p-5 sm:p-6 shadow-sm border border-stone-200/80 dark:border-stone-800 flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-0.5 text-left">
+            <h3 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2">
+              <Lock className="w-4 h-4 text-accent" />
+              <span>{t('loginBtn') || 'Masuk ke Sistem POS'}</span>
+            </h3>
+            <p className="text-xs text-stone-500 dark:text-stone-400">
+              Silakan masukkan alamat email dan kata sandi akun Anda
+            </p>
           </div>
 
-          {/* Quick Helper presets for selected user & switcher */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-            {selectedUser.pin && !isLocked && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPin(selectedUser.pin!);
-                  attemptPinLogin(selectedUser.pin!);
-                }}
-                className="px-2.5 py-1 rounded-xl bg-accent text-white text-[10px] sm:text-[11px] font-bold shadow-xs hover:opacity-90 flex items-center gap-1.5 transition-all active:scale-95"
-                title="Gunakan PIN Akun Ini"
-              >
-                <KeyRound className="w-3 h-3" />
-                <span>PIN {selectedUser.name.split(' ')[0]}: {selectedUser.pin}</span>
-              </button>
-            )}
-          </div>
-
-          {/* 3x4 Number Keypad */}
-          <div className={`grid grid-cols-3 gap-2.5 w-full max-w-[280px] ${isLocked ? 'opacity-40 pointer-events-none' : ''}`}>
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
-              <button
-                key={num}
-                type="button"
-                onClick={() => handlePinPress(num)}
+          {/* Email Field */}
+          <div className="flex flex-col gap-1 text-left">
+            <label htmlFor="login-email-input" className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-accent" />
+              <span>Alamat Email Akun</span>
+            </label>
+            <div className="relative flex items-center">
+              <Mail className="w-4 h-4 absolute left-3.5 text-stone-400 pointer-events-none" />
+              <input
+                id="login-email-input"
+                type="email"
+                required
+                autoComplete="username email"
                 disabled={isSubmitting || isLocked}
-                className="h-14 rounded-2xl bg-stone-50 dark:bg-stone-900/90 hover:bg-stone-100 dark:hover:bg-stone-800 text-lg font-bold text-stone-800 dark:text-stone-200 active:scale-95 transition-all shadow-2xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                value={email}
+                onChange={e => {
+                  setEmail(e.target.value);
+                  if (!isLocked) checkLockoutStatus(e.target.value);
+                }}
+                placeholder="nama@email.com"
+                className="w-full pl-10 pr-4 py-3 bg-stone-50 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-700/80 rounded-2xl text-sm font-medium text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          {/* Password Field */}
+          <div className="flex flex-col gap-1 text-left">
+            <div className="flex items-center justify-between">
+              <label htmlFor="login-password-input" className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-accent" />
+                <span>Kata Sandi (Password)</span>
+              </label>
+              <button
+                type="button"
+                id="btn-forgot-password-link"
+                onClick={() => setShowForgotPinModal(true)}
+                className="text-[11px] font-semibold text-accent hover:underline cursor-pointer"
               >
-                {num}
+                Lupa Password?
               </button>
-            ))}
-            <div className="h-14" /> {/* Empty spacer */}
+            </div>
+            <div className="relative flex items-center">
+              <Lock className="w-4 h-4 absolute left-3.5 text-stone-400 pointer-events-none" />
+              <input
+                id="login-password-input"
+                type={showPassword ? 'text' : 'password'}
+                required
+                autoComplete="current-password"
+                disabled={isSubmitting || isLocked}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Masukkan kata sandi..."
+                className="w-full pl-10 pr-11 py-3 bg-stone-50 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-700/80 rounded-2xl text-sm font-medium text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute right-3 p-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors cursor-pointer"
+                title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Demo Credentials helper */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-stone-100/80 dark:bg-stone-900/60 border border-stone-200/60 dark:border-stone-800 text-xs">
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>Password Default:</span>
+            </span>
             <button
               type="button"
-              onClick={() => handlePinPress('0')}
-              disabled={isSubmitting || isLocked}
-              className="h-14 rounded-2xl bg-stone-50 dark:bg-stone-900/90 hover:bg-stone-100 dark:hover:bg-stone-800 text-lg font-bold text-stone-800 dark:text-stone-200 active:scale-95 transition-all shadow-2xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              id="quick-demo-password-btn"
+              onClick={() => {
+                setPassword('Password123!');
+                showToast('Password demo berhasil diisi: Password123!', 'info');
+              }}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-[#201918] border border-stone-200 dark:border-stone-700 hover:border-accent text-stone-700 dark:text-stone-300 hover:text-accent font-semibold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
             >
-              0
-            </button>
-            <button
-              type="button"
-              onClick={handlePinDelete}
-              disabled={isSubmitting || pin.length === 0 || isLocked}
-              className="h-14 rounded-2xl bg-stone-100 dark:bg-stone-900/50 hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-400 active:scale-95 transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Delete className="w-5 h-5" />
+              <KeyRound className="w-3 h-3 text-accent" />
+              <span>Isi Password123!</span>
             </button>
           </div>
 
+          {/* Remember Me Checkbox */}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-stone-600 dark:text-stone-400">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-stone-300 text-accent focus:ring-accent accent-orange-600"
+              />
+              <span>Ingat Alamat Email</span>
+            </label>
+          </div>
+
+          {/* Submit Button */}
           <button
-            type="button"
-            onClick={() => attemptPinLogin(pin)}
-            disabled={isSubmitting || pin.length < 6 || isLocked}
-            className="w-full mt-5 py-3.5 rounded-2xl bg-accent text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            id="login-submit-btn"
+            type="submit"
+            disabled={isSubmitting || isLocked || !email.trim() || !password}
+            className="w-full mt-1 py-3.5 px-5 rounded-2xl bg-accent hover:bg-accent/90 text-white font-bold text-sm shadow-md hover:shadow-lg active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             {isLocked ? (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Terkunci ({formatLockoutTimer(remainingSeconds)})</span>
+                <span>Akun Terkunci ({formatLockoutTimer(remainingSeconds)})</span>
               </>
             ) : isSubmitting ? (
-              'Memverifikasi...'
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Memverifikasi Akun...</span>
+              </>
             ) : (
               <>
-                <span>{t('openRegister')}</span>
+                <span>Masuk ke Sistem POS</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
 
-          {/* Action button: Forgot PIN */}
-          <div className="w-full mt-3 flex items-center justify-center">
+          {/* Action button: Forgot Password via email or admin */}
+          <div className="w-full pt-1 flex items-center justify-center">
             <button
-              id="btn-forgot-pin-link"
+              id="btn-forgot-credentials-link"
               type="button"
               onClick={() => setShowForgotPinModal(true)}
               className="py-1 px-3 rounded-xl text-xs font-semibold text-stone-500 hover:text-accent dark:text-stone-400 dark:hover:text-orange-400 hover:bg-stone-100 dark:hover:bg-stone-900 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Lupa PIN Kasir? Reset via Email atau Minta ke ADMIN</span>
+              <KeyRound className="w-3.5 h-3.5 text-stone-400" />
+              <span>Lupa Password? Reset via Email atau Minta ke ADMIN</span>
             </button>
           </div>
 
           {/* Action button to open Vendor Registration */}
-          <div className="w-full mt-3 pt-3 border-t border-stone-200/80 dark:border-stone-800 text-center">
+          <div className="w-full pt-3 border-t border-stone-200/80 dark:border-stone-800 text-center">
             <button
               id="btn-open-vendor-register"
               type="button"
               onClick={handleOpenRegister}
-              className="w-full py-2.5 px-4 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-100/60 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs font-bold transition-all flex items-center justify-center gap-2 group"
+              className="w-full py-2.5 px-4 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-100/60 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs font-bold transition-all flex items-center justify-center gap-2 group cursor-pointer"
             >
               <Store className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform" />
               <span>Daftar Mitra Vendor Baru (Role MANAGER)</span>
             </button>
           </div>
-        </div>
+        </form>
       </div>
 
       {/* Forgot PIN Modal */}

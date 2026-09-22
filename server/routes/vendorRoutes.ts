@@ -394,11 +394,14 @@ const vendorRegisterSchema = z.object({
     .trim()
     .min(3, 'Nama manager minimal 3 karakter')
     .max(30, 'Nama manager maksimal 30 karakter'),
+  password: z
+    .string()
+    .min(6, 'Password minimal 6 karakter')
+    .optional(),
   pin: z
     .string()
     .trim()
-    .length(6, 'PIN harus tepat 6 karakter')
-    .regex(/^\d{6}$/, 'PIN harus berupa 6 digit angka'),
+    .optional(),
   email: z
     .string()
     .trim()
@@ -534,8 +537,10 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    const { vendorName, managerName, pin, email, phone, address, currency } = parseResult.data;
+    const { vendorName, managerName, pin, password, email, phone, address, currency } = parseResult.data;
     const cleanEmail = email.toLowerCase().trim();
+    const rawPassword = password || pin || 'Password123!';
+    const rawPin = pin || (password && /^\d{6}$/.test(password) ? password : '123456');
 
     // 1. Strictly enforce uniqueness constraints
     const uniqueness = await checkVendorUniqueness({
@@ -604,7 +609,7 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
     };
 
     // 4. Create Manager User document (role: MANAGER)
-    const hashedPassword = await hashPassword(pin); // Securely hash PIN as default credential
+    const hashedPassword = await hashPassword(rawPassword); // Securely hash password as credential
     const userId = `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const newManagerUser: any = {
       id: userId,
@@ -612,7 +617,7 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       name: managerName.trim(),
       email: cleanEmail,
       password: hashedPassword,
-      pin: pin.trim(),
+      pin: rawPin.trim(),
       role: 'MANAGER',
       isEmailConfirmed: false,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -671,7 +676,7 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       vendorCode: vendorCode,
       confirmationToken,
       appUrl,
-      pin: pin.trim(),
+      pin: rawPin.trim(),
       expiresAt
     });
 

@@ -568,6 +568,10 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
       startDate = new Date(now.getTime() - 7 * 86400000);
       startDate.setHours(0, 0, 0, 0);
       periodLabel = `Per Minggu (7 Hari Terakhir: ${startDate.getDate()} ${INDONESIAN_MONTHS[startDate.getMonth()]} - ${now.getDate()} ${INDONESIAN_MONTHS[now.getMonth()]} ${now.getFullYear()})`;
+    } else if (period === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      periodLabel = `Per Tahun (${now.getFullYear()} - Dibatasi Retensi 3 Bulan Terakhir)`;
     } else {
       // 'month' - last 30 days
       startDate = new Date(now.getTime() - 30 * 86400000);

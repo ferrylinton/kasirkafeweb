@@ -1664,13 +1664,51 @@ async function updateUserPin(userIdOrEmail: string, newPin: string) {
 }
 
 /**
+ * Helper to update user password across MongoDB and fallbackStore
+ */
+async function updateUserPassword(userIdOrEmail: string, newPassword: string) {
+  const db = getDB();
+  const normalized = userIdOrEmail.toLowerCase().trim();
+  const hashedPassword = await hashPassword(newPassword);
+
+  // Update in fallback store
+  const fallbackIndex = fallbackStore.users.findIndex(
+    u => (u._id && u._id.toString() === userIdOrEmail) ||
+         (u.id && u.id === userIdOrEmail) ||
+         (u.email && u.email.toLowerCase().trim() === normalized)
+  );
+  if (fallbackIndex !== -1) {
+    fallbackStore.users[fallbackIndex].password = hashedPassword;
+    fallbackStore.users[fallbackIndex].updatedAt = new Date();
+  }
+
+  // Update in DB if available
+  if (db) {
+    try {
+      let query: any = {
+        email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      };
+      if (ObjectId.isValid(userIdOrEmail)) {
+        query = { _id: new ObjectId(userIdOrEmail) };
+      }
+      await db.collection('users').updateOne(
+        query,
+        { $set: { password: hashedPassword, updatedAt: new Date() } }
+      );
+    } catch (e) {
+      console.warn('DB error updateUserPassword:', e);
+    }
+  }
+}
+
+/**
  * -------------------------------------------------------------
  * FORGOT PIN & PIN RESET FLOW
  * -------------------------------------------------------------
  */
 
-// 1. Request Reset PIN Link via Email (Check whether email exists!)
-authRouter.post('/forgot-pin', async (req: Request, res: Response) => {
+// 1. Request Reset PIN/Password Link via Email (Check whether email exists!)
+const handleForgotCredentials = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string') {
@@ -1758,21 +1796,24 @@ authRouter.post('/forgot-pin', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: `Tautan atur ulang PIN telah berhasil dikirim ke ${normalizedEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
+      message: `Tautan atur ulang kredensial telah berhasil dikirim ke ${normalizedEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
       email: normalizedEmail,
       userName: user.name,
       resetUrl,
       token: resetToken
     });
   } catch (error: any) {
-    console.error('Error in /api/auth/forgot-pin:', error);
+    console.error('Error in forgot credentials:', error);
     return res.status(500).json({
       success: false,
       error: 'ServerError',
-      message: 'Gagal memproses permintaan reset PIN. Silakan coba beberapa saat lagi.'
+      message: 'Gagal memproses permintaan reset password/PIN. Silakan coba beberapa saat lagi.'
     });
   }
-});
+};
+
+authRouter.post('/forgot-pin', handleForgotCredentials);
+authRouter.post('/forgot-password', handleForgotCredentials);
 
 // 2. Verify Reset PIN Token
 authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
@@ -1831,25 +1872,37 @@ authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
   }
 });
 
-// 3. Confirm New PIN using Token
-authRouter.post('/reset-pin/confirm', async (req: Request, res: Response) => {
+// 3. Confirm New PIN or Password using Token
+const handleResetConfirm = async (req: Request, res: Response) => {
   try {
-    const { token, newPin } = req.body;
+    const { token, newPin, newPassword } = req.body;
     if (!token || typeof token !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN tidak disertakan.'
+        message: 'Token reset kredensial tidak disertakan.'
       });
     }
 
-    if (!newPin || !/^\d{6}$/.test(String(newPin).trim())) {
+    if (!newPin && !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Harap masukkan password baru (minimal 6 karakter) atau PIN baru 6 digit.'
+      });
+    }
+
+    if (newPin && !/^\d{6}$/.test(String(newPin).trim())) {
       return res.status(400).json({
         success: false,
         message: 'PIN baru harus terdiri dari 6 digit angka.'
       });
     }
 
-    const cleanPin = String(newPin).trim();
+    if (newPassword && String(newPassword).trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password baru minimal harus 6 karakter.'
+      });
+    }
 
     const db = getDB();
     let tokenEntry: any = null;
@@ -1867,14 +1920,14 @@ authRouter.post('/reset-pin/confirm', async (req: Request, res: Response) => {
     if (!tokenEntry) {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN tidak valid atau sudah digunakan.'
+        message: 'Token reset tidak valid atau sudah digunakan.'
       });
     }
 
     if (new Date(tokenEntry.expiresAt).getTime() < Date.now()) {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN sudah kedaluwarsa. Silakan ajukan permintaan reset PIN baru.'
+        message: 'Token reset sudah kedaluwarsa. Silakan ajukan permintaan reset baru.'
       });
     }
 
@@ -1886,8 +1939,17 @@ authRouter.post('/reset-pin/confirm', async (req: Request, res: Response) => {
       });
     }
 
-    // Update user PIN
-    await updateUserPin(user._id ? user._id.toString() : user.id, cleanPin);
+    const targetUserId = user._id ? user._id.toString() : user.id;
+
+    // Update password if provided
+    if (newPassword) {
+      await updateUserPassword(targetUserId, String(newPassword).trim());
+    }
+
+    // Update user PIN if provided
+    if (newPin) {
+      await updateUserPin(targetUserId, String(newPin).trim());
+    }
 
     // Mark token as used
     if (db) {
@@ -1902,40 +1964,43 @@ authRouter.post('/reset-pin/confirm', async (req: Request, res: Response) => {
     }
 
     // Auto unlock user in Redis lockout if locked
-    await unlockUserInRedis(tokenEntry.email, 'SYSTEM_SELF_RESET_PIN');
+    await unlockUserInRedis(tokenEntry.email, 'SYSTEM_SELF_RESET');
     clearUserLockout(tokenEntry.email);
 
     // Record activity log
     await recordActivityLog({
       action: 'PIN_RESET_COMPLETED',
       entity: 'USER',
-      entityId: user._id ? user._id.toString() : user.id,
+      entityId: targetUserId,
       entityName: user.name,
-      summary: `Pengguna ${user.name} (${tokenEntry.email}) berhasil mereset PIN 6 digit kasir melalui tautan email`,
+      summary: `Pengguna ${user.name} (${tokenEntry.email}) berhasil mereset kredensial akun melalui tautan email`,
       user: {
-        id: user._id ? user._id.toString() : user.id,
+        id: targetUserId,
         name: user.name,
         email: tokenEntry.email,
         role: user.role
       },
-      details: { email: tokenEntry.email },
+      details: { email: tokenEntry.email, passwordReset: !!newPassword, pinReset: !!newPin },
       req
     });
 
     return res.json({
       success: true,
-      message: 'PIN baru 6 digit Anda berhasil disimpan! Silakan login kasir dengan PIN baru Anda.',
+      message: 'Kredensial baru Anda berhasil disimpan! Silakan login dengan email dan password baru Anda.',
       email: tokenEntry.email,
       userName: user.name
     });
   } catch (error: any) {
-    console.error('Error in /api/auth/reset-pin/confirm:', error);
+    console.error('Error in reset confirm:', error);
     return res.status(500).json({
       success: false,
-      message: 'Gagal mengatur ulang PIN baru.'
+      message: 'Gagal mengatur ulang kredensial akun.'
     });
   }
-});
+};
+
+authRouter.post('/reset-pin/confirm', handleResetConfirm);
+authRouter.post('/reset-password/confirm', handleResetConfirm);
 
 // 4. User requests reset PIN to role ADMIN (Check whether email exists!)
 authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ScanBarcode, Sparkles, Coffee, CupSoda, GlassWater, Cookie, Plus, ShoppingBag } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, ScanBarcode, Sparkles, Coffee, CupSoda, GlassWater, Cookie, Plus, ShoppingBag, RotateCw, Zap } from 'lucide-react';
 import { Product, Category } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -7,6 +7,12 @@ import { DrinkModifierModal } from '../modals/DrinkModifierModal';
 import { useToast } from '../common/Toast';
 import { ProductImage } from '../common/ProductImage';
 import { getCategoryLabel } from '../../utils/i18nData';
+import {
+  getCachedCategories,
+  setCachedCategories,
+  getCachedProducts,
+  setCachedProducts
+} from '../../utils/productCache';
 
 interface CatalogScreenProps {
   onNavigateToCart?: () => void;
@@ -23,33 +29,76 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isFromCache, setIsFromCache] = useState<boolean>(false);
 
-  // Load categories and products from backend
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [catRes, prodRes] = await Promise.all([
-          fetch('/api/products/categories'),
-          fetch(`/api/products?category=${selectedCategory}&search=${encodeURIComponent(searchQuery)}`)
-        ]);
-        const catData = await catRes.json();
-        const prodData = await prodRes.json();
+  // Load categories and products with stale-while-revalidate caching
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // 1. Check local cache first for instant display
+    if (!forceRefresh) {
+      const cachedCat = getCachedCategories();
+      const cachedProd = getCachedProducts({ category: selectedCategory, search: searchQuery });
 
-        if (catData.success && catData.categories) {
-          setCategories(catData.categories);
-        }
-        if (prodData.success && prodData.products) {
-          setProducts(prodData.products);
-        }
-      } catch (err) {
-        console.warn('Could not fetch products, using offline state');
-      } finally {
-        setLoading(false);
+      if (cachedCat && cachedCat.categories?.length > 0) {
+        setCategories(cachedCat.categories);
       }
-    };
+      if (cachedProd && cachedProd.products) {
+        setProducts(cachedProd.products);
+        setLoading(false);
+        setIsFromCache(true);
+      }
+    }
 
-    fetchData();
-  }, [selectedCategory, searchQuery]);
+    if (forceRefresh) {
+      setIsRefreshing(true);
+    }
+
+    try {
+      const cacheBustQuery = forceRefresh ? '&bypassCache=true' : '';
+      const [catRes, prodRes] = await Promise.all([
+        fetch(`/api/products/categories${forceRefresh ? '?bypassCache=true' : ''}`),
+        fetch(`/api/products?category=${selectedCategory}&search=${encodeURIComponent(searchQuery)}${cacheBustQuery}`)
+      ]);
+      const catData = await catRes.json();
+      const prodData = await prodRes.json();
+
+      if (catData.success && catData.categories) {
+        setCategories(catData.categories);
+        setCachedCategories(catData.categories);
+      }
+      if (prodData.success && prodData.products) {
+        setProducts(prodData.products);
+        setCachedProducts(prodData.products, { category: selectedCategory, search: searchQuery });
+        setIsFromCache(prodData.cached === true);
+      }
+
+      if (forceRefresh) {
+        showToast('Katalog & kategori berhasil disegarkan dari server!', 'success');
+      }
+    } catch (err) {
+      console.warn('Could not fetch products, using cached/offline state');
+      if (forceRefresh) {
+        showToast('Gagal terhubung ke server, menggunakan data cache', 'warning');
+      }
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [selectedCategory, searchQuery, showToast]);
+
+  useEffect(() => {
+    loadData(false);
+  }, [loadData]);
+
+  const handleCategorySelect = (categoryCode: string) => {
+    // Check if category's products are already in cache for 0ms visual switch
+    const cachedProd = getCachedProducts({ category: categoryCode, search: searchQuery });
+    if (cachedProd) {
+      setProducts(cachedProd.products);
+      setIsFromCache(true);
+    }
+    setSelectedCategory(categoryCode);
+  };
 
   const getCategoryIcon = (code: string) => {
     switch (code.toLowerCase()) {
@@ -77,8 +126,8 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-5">
-      {/* 1. Search Bar with Barcode Icon matching mockup Image 5 */}
-      <div className="relative flex items-center">
+      {/* 1. Search Bar with Barcode Icon & Cache Refresh Button */}
+      <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
@@ -104,41 +153,66 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
             <ScanBarcode className="w-4 h-4" />
           </button>
         </div>
-      </div>
 
-      {/* 2. Horizontal Categories Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {/* Quick Cache Refresh Button */}
         <button
           type="button"
-          onClick={() => setSelectedCategory('all')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 ${
-            selectedCategory === 'all'
-              ? 'bg-accent text-white shadow-xs scale-102'
-              : 'bg-white dark:bg-[#251e1c] border border-stone-200/70 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
-          }`}
+          onClick={() => loadData(true)}
+          disabled={isRefreshing}
+          className="px-3.5 py-3 rounded-2xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 flex items-center gap-1.5 text-xs font-semibold shadow-xs transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+          title="Segarkan data katalog & kategori dari server (Bypass Cache)"
         >
-          <Sparkles className="w-4 h-4" />
-          <span>{t('allCategory')}</span>
+          <RotateCw className={`w-4 h-4 text-accent ${isRefreshing ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">Segarkan</span>
         </button>
+      </div>
 
-        {categories.map(cat => {
-          const active = selectedCategory === cat.code;
-          return (
-            <button
-              key={cat.code}
-              type="button"
-              onClick={() => setSelectedCategory(cat.code)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                active
-                  ? 'bg-accent text-white shadow-xs scale-102'
-                  : 'bg-white dark:bg-[#251e1c] border border-stone-200/70 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
-              }`}
-            >
-              {getCategoryIcon(cat.code)}
-              <span>{getCategoryLabel(cat.code, language) || cat.name}</span>
-            </button>
-          );
-        })}
+      {/* 2. Horizontal Categories Navigation with Cache Status Indicator */}
+      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleCategorySelect('all')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              selectedCategory === 'all'
+                ? 'bg-accent text-white shadow-xs scale-102'
+                : 'bg-white dark:bg-[#251e1c] border border-stone-200/70 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{t('allCategory')}</span>
+          </button>
+
+          {categories.map(cat => {
+            const active = selectedCategory === cat.code;
+            return (
+              <button
+                key={cat.code}
+                type="button"
+                onClick={() => handleCategorySelect(cat.code)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  active
+                    ? 'bg-accent text-white shadow-xs scale-102'
+                    : 'bg-white dark:bg-[#251e1c] border border-stone-200/70 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
+                }`}
+              >
+                {getCategoryIcon(cat.code)}
+                <span>{getCategoryLabel(cat.code, language) || cat.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Cache status pill */}
+        {isFromCache && (
+          <div
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0"
+            title="Produk & kategori dimuat seketika dari cache"
+          >
+            <Zap className="w-3.5 h-3.5 fill-emerald-500 text-emerald-500" />
+            <span>Cache Aktif (0ms)</span>
+          </div>
+        )}
       </div>
 
       {/* 3. Promotional Banner matching Image 5 (Rush Hour Deal) */}

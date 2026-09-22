@@ -31,6 +31,7 @@ import { useToast } from '../common/Toast';
 import { ProductImage } from '../common/ProductImage';
 import { CsvImportModal } from '../inventory/CsvImportModal';
 import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 interface InventoryScreenProps {
   allVendorsMode?: boolean;
@@ -152,6 +153,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         setProducts(prev =>
           prev.map(p => (p.id === product.id ? { ...p, stock: newStock } : p))
         );
+        // Invalidate client product cache
+        clearClientCatalogCache();
         // Refresh full stats
         fetchInventoryData();
       } else {
@@ -203,6 +206,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
       const data = await res.json();
       if (data.success) {
         showToast(data.message || t('stockUpdateSuccess'), 'success');
+        clearClientCatalogCache();
         setSelectedProductForEdit(null);
         fetchInventoryData();
       } else {
@@ -240,6 +244,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
       const data = await res.json();
       if (data.success) {
         showToast(data.message || 'Batas threshold berhasil diperbarui!', 'success');
+        clearClientCatalogCache();
         setShowBulkModal(false);
         fetchInventoryData();
       } else {
@@ -1387,7 +1392,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
           isOpen={showCsvImportModal}
           onClose={() => setShowCsvImportModal(false)}
           existingProducts={products}
-          onSuccess={fetchInventoryData}
+          onSuccess={() => {
+            clearClientCatalogCache();
+            fetchInventoryData();
+          }}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
+import { serverProductCache } from '../cache/productCache';
 
 export const productRouter = Router();
 
@@ -58,12 +59,63 @@ const productSchema = z.object({
 });
 
 /**
+ * GET /api/products/cache/stats
+ * Monitor cache performance
+ */
+productRouter.get('/cache/stats', (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    stats: serverProductCache.getStats()
+  });
+});
+
+/**
+ * POST /api/products/cache/clear
+ * Clear in-memory product and category cache
+ */
+productRouter.post('/cache/clear', (req: Request, res: Response) => {
+  const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+  const isAdmin = (req as any).user?.role === 'ADMIN';
+  const clearAll = req.query.all === 'true' && isAdmin;
+
+  if (clearAll) {
+    serverProductCache.clearAll();
+  } else {
+    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateCategories(activeVendorId);
+  }
+
+  return res.json({
+    success: true,
+    message: clearAll ? 'Semua cache server berhasil dibersihkan!' : `Cache vendor ${activeVendorId} berhasil dibersihkan!`,
+    stats: serverProductCache.getStats()
+  });
+});
+
+/**
  * GET /api/products/categories
- * Returns categories strictly partitioned by active vendor
+ * Returns categories strictly partitioned by active vendor (with Server In-Memory Cache)
  */
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
+    const cacheKey = `categories:${activeVendorId}`;
+
+    // 1. Check in-memory server cache
+    if (!bypassCache) {
+      const cached = serverProductCache.get<any>(cacheKey);
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        res.setHeader('X-Cache-Age-Ms', String(cached.ageMs));
+        return res.json({
+          ...cached.data,
+          cached: true,
+          cacheAgeMs: cached.ageMs
+        });
+      }
+    }
+
     const db = getDB();
     let categories: any[] = [];
 
@@ -86,9 +138,10 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
       }
     }
 
-    return res.json({
+    const payload = {
       success: true,
       vendorId: activeVendorId,
+      cached: false,
       categories: categories.map(c => ({
         id: c._id ? c._id.toString() : c.code,
         vendorId: c.vendorId || activeVendorId,
@@ -97,7 +150,16 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
         icon: c.icon,
         description: c.description
       }))
-    });
+    };
+
+    // Store in cache (5 minutes TTL)
+    serverProductCache.set(cacheKey, payload, 5 * 60 * 1000, [
+      'type:category',
+      `cat_vendor:${activeVendorId}`
+    ]);
+
+    res.setHeader('X-Cache', 'MISS');
+    return res.json(payload);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
@@ -144,6 +206,9 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
 
     fallbackStore.categories.push({ ...newCategory, _id: insertedId });
 
+    // Invalidate categories cache for active vendor
+    serverProductCache.invalidateCategories(activeVendorId);
+
     await recordActivityLog({
       action: 'CREATE',
       entity: 'CATEGORY',
@@ -166,7 +231,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
 
 /**
  * GET /api/products
- * Public / Authenticated catalog with query params: ?category=kopi&search=latte
+ * Public / Authenticated catalog with query params: ?category=kopi&search=latte (with Server Cache)
  */
 productRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -177,6 +242,25 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
+
+    const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
+    const cacheKey = `products:${targetVendor}:${category || 'all'}:${search || ''}`;
+
+    // 1. Check in-memory server cache
+    if (!bypassCache) {
+      const cached = serverProductCache.get<any>(cacheKey);
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        res.setHeader('X-Cache-Age-Ms', String(cached.ageMs));
+        return res.json({
+          ...cached.data,
+          cached: true,
+          cacheAgeMs: cached.ageMs
+        });
+      }
+    }
+
     const db = getDB();
     let products: any[] = [];
 
@@ -222,10 +306,11 @@ productRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    return res.json({
+    const payload = {
       success: true,
-      vendorId: isAllVendors ? 'all' : (requestedVendor || activeVendorId),
+      vendorId: targetVendor,
       isAllVendors,
+      cached: false,
       products: products.map(p => ({
         id: p._id ? p._id.toString() : p.id,
         vendorId: p.vendorId || 'vnd_sipspot_central',
@@ -240,7 +325,17 @@ productRouter.get('/', async (req: Request, res: Response) => {
         image: p.image,
         isAvailable: p.isAvailable !== false
       }))
-    });
+    };
+
+    // Cache products for 5 minutes
+    const vendorTag = isAllVendors ? 'type:all_vendors' : `vendor:${targetVendor}`;
+    serverProductCache.set(cacheKey, payload, 5 * 60 * 1000, [
+      'type:product',
+      vendorTag
+    ]);
+
+    res.setHeader('X-Cache', 'MISS');
+    return res.json(payload);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
@@ -482,6 +577,9 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       req
     });
 
+    // Invalidate product cache for active vendor
+    serverProductCache.invalidateProducts(activeVendorId);
+
     return res.json({
       success: true,
       message: `Batas peringatan stok berhasil diubah ke ${thresholdNum}!`
@@ -719,6 +817,9 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
       req
     });
 
+    // Invalidate product cache for active vendor
+    serverProductCache.invalidateProducts(activeVendorId);
+
     return res.json({
       success: true,
       message: `Import CSV berhasil: ${updatedCount} produk diperbarui, ${createdCount} produk baru ditambahkan.`,
@@ -840,6 +941,10 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       req
     });
 
+    // Invalidate product cache for product's vendor
+    const targetVendor = product.vendorId || req.vendorId || 'vnd_sipspot_central';
+    serverProductCache.invalidateProducts(targetVendor);
+
     return res.json({
       success: true,
       message: `Stok ${product.name} berhasil diperbarui menjadi ${newStock}!`,
@@ -910,6 +1015,9 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       },
       req
     });
+
+    // Invalidate product cache for active vendor
+    serverProductCache.invalidateProducts(activeVendorId);
 
     return res.status(201).json({
       success: true,
@@ -985,6 +1093,9 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       req
     });
 
+    // Invalidate product cache for active vendor
+    serverProductCache.invalidateProducts(activeVendorId);
+
     return res.json({ success: true, message: 'Produk / Stok berhasil diperbarui!' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -1052,6 +1163,9 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
       },
       req
     });
+
+    // Invalidate product cache for active vendor
+    serverProductCache.invalidateProducts(activeVendorId);
 
     return res.json({ success: true, message: 'Produk berhasil dihapus.' });
   } catch (err: any) {

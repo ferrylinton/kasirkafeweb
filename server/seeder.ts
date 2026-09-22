@@ -67,7 +67,6 @@ export async function seedDatabase() {
       name: 'Radit Admin Sistem',
       role: 'ADMIN',
       vendorId: 'vnd_admin',
-      pin: '999999',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -78,7 +77,6 @@ export async function seedDatabase() {
       name: 'Ferry Manager',
       role: 'MANAGER',
       vendorId: 'vnd_sipspot_central',
-      pin: '123456',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -89,7 +87,6 @@ export async function seedDatabase() {
       name: 'Sarah Barista',
       role: 'CASHIER',
       vendorId: 'vnd_sipspot_central',
-      pin: '849201',
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -100,7 +97,6 @@ export async function seedDatabase() {
       name: 'Budi Manager (Kulo)',
       role: 'MANAGER',
       vendorId: 'vnd_kopi_kulo_kemang',
-      pin: '223344',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -111,7 +107,6 @@ export async function seedDatabase() {
       name: 'Dewi Kasir (Kulo)',
       role: 'CASHIER',
       vendorId: 'vnd_kopi_kulo_kemang',
-      pin: '556677',
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -122,7 +117,6 @@ export async function seedDatabase() {
       name: 'Hendra Manager (Teh Poci)',
       role: 'MANAGER',
       vendorId: 'vnd_tehpoci_nusantara',
-      pin: '334455',
       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -133,7 +127,6 @@ export async function seedDatabase() {
       name: 'Rina Kasir (Teh Poci)',
       role: 'CASHIER',
       vendorId: 'vnd_tehpoci_nusantara',
-      pin: '667788',
       avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -602,7 +595,7 @@ export async function seedDatabase() {
       email: 'manager@beverage.com',
       name: 'Ferry Manager',
       role: 'MANAGER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.101',
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128.0',
       device: 'Chrome di macOS',
@@ -618,7 +611,7 @@ export async function seedDatabase() {
       email: 'cashier@beverage.com',
       name: 'Sarah Barista',
       role: 'CASHIER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.105',
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1',
       device: 'Safari di iPadOS',
@@ -666,7 +659,7 @@ export async function seedDatabase() {
       email: 'cashier@beverage.com',
       name: 'Sarah Barista',
       role: 'CASHIER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.108',
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/127.0 Mobile',
       device: 'Chrome di Android',
@@ -682,7 +675,7 @@ export async function seedDatabase() {
       email: 'manager@beverage.com',
       name: 'Ferry Manager',
       role: 'MANAGER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.101',
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/128.0',
       device: 'Chrome di macOS',
@@ -698,7 +691,7 @@ export async function seedDatabase() {
       email: 'cashier@beverage.com',
       name: 'Sarah Barista',
       role: 'CASHIER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.105',
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) Safari/604.1',
       device: 'Safari di iPadOS',
@@ -730,7 +723,7 @@ export async function seedDatabase() {
       email: 'cashier@beverage.com',
       name: 'Sarah Barista',
       role: 'CASHIER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.105',
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) Safari/604.1',
       device: 'Safari di iPadOS',
@@ -746,7 +739,7 @@ export async function seedDatabase() {
       email: 'manager@beverage.com',
       name: 'Ferry Manager',
       role: 'MANAGER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.101',
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/127.0',
       device: 'Chrome di macOS',
@@ -778,7 +771,7 @@ export async function seedDatabase() {
       email: 'manager@beverage.com',
       name: 'Ferry Manager',
       role: 'MANAGER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.101',
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/127.0',
       device: 'Chrome di macOS',
@@ -794,7 +787,7 @@ export async function seedDatabase() {
       email: 'cashier@beverage.com',
       name: 'Sarah Barista',
       role: 'CASHIER',
-      loginMethod: 'PIN',
+      loginMethod: 'PASSWORD',
       ipAddress: '192.168.1.105',
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) Safari/604.1',
       device: 'Safari di iPadOS',
@@ -924,14 +917,12 @@ export async function seedDatabase() {
           $set: {
             role: 'ADMIN',
             vendorId: 'vnd_admin',
-            pin: '999999',
             name: 'Radit Admin Sistem'
           }
         }
       );
-      // Migrate legacy 4-digit PINs to 6-digit PINs
-      await db.collection('users').updateMany({ pin: '1234' }, { $set: { pin: '123456' } });
-      await db.collection('users').updateMany({ pin: '8492' }, { $set: { pin: '849201' } });
+      // Remove all PIN data from existing users in MongoDB
+      await db.collection('users').updateMany({}, { $unset: { pin: "" } });
       // Ensure vendorId is set on legacy users
       await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       console.log('[Seeder] Users verified and synced in MongoDB.');

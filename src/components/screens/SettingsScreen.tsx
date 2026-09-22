@@ -13,18 +13,48 @@ import {
   CheckCircle2,
   Layers,
   Shield,
-  Clock
+  Clock,
+  Database,
+  Zap,
+  Trash2
 } from 'lucide-react';
 import { useTheme, THEME_ACCENTS } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 export const SettingsScreen: React.FC = () => {
   const { isDarkMode, toggleDarkMode, accent, setAccent } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const { simulateIdleWarning } = useAuth();
   const { showToast } = useToast();
+  const [clearingCache, setClearingCache] = React.useState(false);
+
+  const handleClearCatalogCache = async () => {
+    setClearingCache(true);
+    try {
+      // 1. Clear client cache (LocalStorage & memory)
+      clearClientCatalogCache();
+
+      // 2. Clear server cache via API
+      await fetch('/api/products/cache/clear', { method: 'POST' });
+
+      showToast(
+        language === 'id'
+          ? 'Cache produk dan kategori berhasil dibersihkan!'
+          : 'Product and category cache successfully cleared!',
+        'success'
+      );
+    } catch (err) {
+      showToast(
+        language === 'id' ? 'Gagal membersihkan cache server' : 'Failed to clear server cache',
+        'warning'
+      );
+    } finally {
+      setClearingCache(false);
+    }
+  };
 
   const handleResetDefaults = () => {
     // Default: Light mode, Coral Orange, Indonesian
@@ -475,7 +505,74 @@ export const SettingsScreen: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. System Information Card */}
+      {/* 6. Product & Category Cache Management */}
+      <section className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between gap-2 border-b border-stone-100 dark:border-stone-800/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold font-heading text-stone-900 dark:text-stone-100">
+                {language === 'id' ? 'Cache & Akselerasi Katalog' : 'Catalog Cache & Acceleration'}
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {language === 'id'
+                  ? 'Akselerasi visual 0ms untuk katalog produk dan kategori menggunakan memori lokal dan server cache TTL'
+                  : '0ms visual acceleration for product catalog & categories with local memory and server TTL cache'}
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+            {language === 'id' ? 'Aktif' : 'Active'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>{language === 'id' ? 'Client-Side In-Memory & LocalStorage' : 'Client In-Memory & Storage'}</span>
+            </div>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              {language === 'id'
+                ? 'Menyimpan produk & kategori untuk navigasi instan antar tab kategori tanpa re-render berlebih.'
+                : 'Caches products & categories for instant 0ms switching between categories.'}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>{language === 'id' ? 'Server-Side Tagged Cache (TTL 5 Menit)' : 'Server Tagged Cache (5m TTL)'}</span>
+            </div>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              {language === 'id'
+                ? 'Secara cerdas di-invalidasi otomatis saat terjadi restock inventaris, pesanan baru, atau impor CSV.'
+                : 'Automatically invalidated on inventory restock, new orders, or CSV import.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-[11px] text-stone-500 dark:text-stone-400">
+            {language === 'id'
+              ? 'Bersihkan cache jika ingin memaksa sinkronisasi ulang total data katalog.'
+              : 'Clear cache if you wish to force total catalog re-synchronization.'}
+          </p>
+          <button
+            type="button"
+            onClick={handleClearCatalogCache}
+            disabled={clearingCache}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#251e1c] hover:bg-stone-100 dark:hover:bg-stone-850 text-xs font-semibold text-rose-600 dark:text-rose-400 transition-all shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{clearingCache ? (language === 'id' ? 'Membersihkan...' : 'Clearing...') : (language === 'id' ? 'Bersihkan Cache' : 'Clear Cache')}</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 7. System Information Card */}
       <section className="p-5 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-3">
         <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100 font-bold text-xs uppercase tracking-wider">
           <Info className="w-3.5 h-3.5 text-stone-400" />

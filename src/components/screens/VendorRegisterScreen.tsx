@@ -39,6 +39,8 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
   // Form states
   const [vendorName, setVendorName] = useState('');
   const [managerName, setManagerName] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [email, setEmail] = useState('');
@@ -178,11 +180,11 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
       return;
     }
 
-    // 3. PIN: exact 6 digits
-    const cleanPin = pin.trim();
-    if (!/^\d{6}$/.test(cleanPin)) {
-      setFormError('PIN akses kasir harus tepat 6 digit angka.');
-      showToast('PIN harus berupa tepat 6 digit angka numerik.', 'error');
+    // 3. Password: at least 6 chars
+    const cleanPassword = password.trim();
+    if (cleanPassword.length < 6) {
+      setFormError('Kata sandi akun harus minimal 6 karakter.');
+      showToast('Kata sandi harus minimal 6 karakter.', 'error');
       return;
     }
 
@@ -220,7 +222,8 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
         body: JSON.stringify({
           vendorName: cleanVendorName,
           managerName: cleanManagerName,
-          pin: cleanPin,
+          password: cleanPassword,
+          pin: pin.trim() || (/^\d{6}$/.test(cleanPassword) ? cleanPassword : '123456'),
           email: cleanEmail,
           phone: phone.trim(),
           address: address.trim(),
@@ -686,47 +689,42 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
               )}
             </div>
 
-            {/* PIN (exactly 6 chars) */}
+            {/* Password (min 6 chars) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label
-                  htmlFor="input-vendor-pin"
+                  htmlFor="input-vendor-password"
                   className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 flex items-center gap-1.5"
                 >
                   <KeyRound size={14} className="text-orange-600" />
-                  <span>PIN Akses Kasir (6 Digit)</span>
+                  <span>Kata Sandi (Password Akun)</span>
                   <span className="text-rose-500">*</span>
                 </label>
-                <span className="text-[10px] text-stone-400 font-mono">
-                  {pin.length}/6
+                <span className="text-[10px] text-stone-400">
+                  Min. 6 karakter
                 </span>
               </div>
               <div className="relative">
                 <input
-                  id="input-vendor-pin"
-                  type={showPin ? 'text' : 'password'}
+                  id="input-vendor-password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={pin}
-                  onChange={(e) => {
-                    const onlyNums = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    setPin(onlyNums);
-                  }}
-                  placeholder="6 digit angka (misal: 123456)"
-                  className="w-full py-3 pl-3.5 pr-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-900 text-stone-900 dark:text-white text-sm font-mono tracking-widest placeholder:tracking-normal placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Buat kata sandi akun..."
+                  className="w-full py-3 pl-3.5 pr-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-900 text-stone-900 dark:text-white text-sm placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPin(!showPin)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1 cursor-pointer"
                 >
-                  {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">
-                Digunakan untuk login cepat PIN kasir dan otorisasi transaksi.
+                Digunakan bersama email untuk login ke sistem POS dan portal Manager.
               </p>
             </div>
           </div>
