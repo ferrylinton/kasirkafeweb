@@ -592,15 +592,7 @@ export const LoginScreen: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* Quick Select User Header Button */}
-          <button
-            type="button"
-            onClick={() => setIsSelectModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-accent border border-orange-200 dark:border-orange-800/50 text-xs font-semibold hover:bg-orange-100 transition-colors shadow-2xs"
-            title="Pilih Pengguna Login"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline sm:inline">{t('changeStaff')}</span>
-          </button>
+   
 
           <button
             onClick={() => setLanguage(language === 'id' ? 'en' : 'id')}
@@ -673,33 +665,8 @@ export const LoginScreen: React.FC = () => {
           </div>
         )}
 
-        {/* Vendor / Branch Selector Dropdown (Radix UI Select) */}
-        <div className="w-full mb-5 p-3 sm:p-3.5 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/90 dark:border-stone-800 shadow-2xs">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <label htmlFor="login-vendor-select" className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
-              <Store className="w-3.5 h-3.5 text-accent" />
-              <span>{t('selectVendorLabel')}</span>
-            </label>
-            {currentVendorData && (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200 dark:border-orange-800/60">
-                {currentVendorData.code}
-              </span>
-            )}
-          </div>
-          <RadixSelect
-            id="login-vendor-select"
-            value={selectedVendorId}
-            onValueChange={handleVendorChange}
-            options={vendorSelectOptions}
-            placeholder="Pilih Vendor / Cabang..."
-            prefixIcon={<Building2 className="w-4 h-4 text-accent" />}
-            ariaLabel="Pilih Vendor atau Cabang Toko"
-            className="bg-stone-50 dark:bg-stone-900 border-stone-200 dark:border-stone-700 py-2.5 text-xs font-semibold"
-          />
-        </div>
-
         {/* Selected User Profile Header (Foto Profil & Nama yang dipilih) */}
-        <div className="flex flex-col items-center text-center mb-6 w-full">
+        <div className="flex flex-col items-center text-center my-6 w-full">
           {/* Clickable Profile Photo */}
           <div
             onClick={() => setIsSelectModalOpen(true)}
@@ -768,21 +735,6 @@ export const LoginScreen: React.FC = () => {
               {isAdminRole ? 'ADMIN' : isManagerRole ? t('roleManager') : t('roleCashier')}
             </span>
           </div>
-
-          {/* Role Access Scope Badge */}
-          <div className="mt-1 flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300">
-              {isAdminRole
-                ? 'Hak Akses: Administrasi Sistem (Semua Vendor)'
-                : isManagerRole
-                ? 'Hak Akses: Operasional Kasir & Manajemen Toko'
-                : 'Hak Akses: Operasional Kasir'}
-            </span>
-          </div>
-
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-xs">
-            {selectedUser.email}
-          </p>
 
           {/* Vendor Affiliation Badge */}
           {currentVendorData && (
@@ -882,13 +834,9 @@ export const LoginScreen: React.FC = () => {
 
         {/* 6-Digit PIN Keypad Card */}
         <div className="w-full bg-white dark:bg-[#251e1c] rounded-3xl p-5 shadow-sm border border-stone-200/80 dark:border-stone-800 flex flex-col items-center">
-          <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+          <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 mb-6">
             {t('enterPin')}
           </span>
-          <span className="text-[11px] text-stone-400 mb-3">
-            Masukkan PIN 6-digit untuk <strong className="text-stone-700 dark:text-stone-200">{selectedUser.name}</strong>
-          </span>
-
           {/* 6 Dots indicator */}
           <div className="flex gap-3 mb-5">
             {[0, 1, 2, 3, 4, 5].map(index => {
@@ -922,15 +870,6 @@ export const LoginScreen: React.FC = () => {
                 <span>PIN {selectedUser.name.split(' ')[0]}: {selectedUser.pin}</span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => setIsSelectModalOpen(true)}
-              className="px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 text-[10px] sm:text-[11px] font-semibold border border-stone-200 dark:border-stone-700 flex items-center gap-1 transition-all"
-            >
-              <Users className="w-3 h-3 text-stone-400" />
-              <span>Pilih User Lain</span>
-            </button>
           </div>
 
           {/* 3x4 Number Keypad */}
@@ -986,12 +925,6 @@ export const LoginScreen: React.FC = () => {
             )}
           </button>
         </div>
-      </div>
-
-      {/* Footer Security Badge */}
-      <div className="flex items-center justify-center gap-1.5 text-stone-400 text-[11px] py-2">
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-        <span>{t('encryptionStandard')}</span>
       </div>
     </div>
   );

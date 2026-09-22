@@ -36,6 +36,9 @@ async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
 
+  // Favicon
+  //app.use('/favicon.ico', express.static('favicon.ico'));
+
   // Basic Middlewares
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: '10mb' }));

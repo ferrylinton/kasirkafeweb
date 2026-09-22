@@ -405,7 +405,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
     const avg = ords > 0 ? Math.round(rev / ords) : 0;
 
     return (
-      <div className="bg-white dark:bg-stone-900 p-3.5 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 text-xs min-w-[200px] z-50">
+      <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
         <div className="font-bold text-stone-900 dark:text-stone-100 border-b border-stone-100 dark:border-stone-800 pb-2 mb-2 flex items-center justify-between">
           <span>{label || dataItem?.label || 'Periode'}</span>
           {dataItem?.dayName && (

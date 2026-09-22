@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'admin-dashboard', 'admin-top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
   const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
@@ -282,12 +282,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     <TrendingUp className="w-4 h-4 shrink-0" />
                     <span className="truncate">Dashboard Transaksi</span>
                   </div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider ${currentTab === 'manager-dashboard'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400'
-                    }`}>
-                    CABANG
-                  </span>
                 </button>
 
                 {/* Top 10 Produk Terlaris (Khusus Vendor Manager) */}
@@ -304,12 +298,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     <Trophy className="w-4 h-4 shrink-0 text-amber-500" />
                     <span className="truncate">Top 10 Produk</span>
                   </div>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider ${currentTab === 'manager-top-products' || currentTab === 'top-products'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                    }`}>
-                    TERLARIS
-                  </span>
                 </button>
 
                 {/* Inventaris */}
@@ -392,9 +380,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     <ShieldCheck className="w-4 h-4 shrink-0" />
                     <span className="truncate">Login Histori</span>
                   </div>
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-                    Audit
-                  </span>
                 </button>
 
                 {/* Log Aktivitas Database (Khusus Manajer) */}
@@ -438,8 +423,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
             </div>
           )}
 
-          {/* Group 3: Administrasi Sistem (Role ADMIN & Role MANAGER) */}
-          {(isAdmin || isManager) && (
+          {/* Group 3: Administrasi Sistem (Role ADMIN) */}
+          {(isAdmin) && (
             <div>
               <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
