@@ -16,7 +16,6 @@ export interface TokenPayload {
   name: string;
   sessionId?: string;
   vendorId?: string;
-  clientId?: string;
 }
 
 // In-memory set of revoked session IDs for O(1) instantaneous lookup

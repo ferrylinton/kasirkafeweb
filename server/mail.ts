@@ -552,3 +552,454 @@ export async function sendLoginHistoryReportEmail(params: {
   }
 }
 
+/**
+ * Send vendor registration confirmation email with activation link
+ */
+export async function sendVendorConfirmationEmail(params: {
+  recipientEmail: string;
+  managerName: string;
+  vendorName: string;
+  vendorCode: string;
+  confirmationToken: string;
+  appUrl: string;
+  pin?: string;
+  expiresAt?: Date | string;
+}): Promise<{ success: boolean; confirmationUrl: string; messageId?: string; error?: string }> {
+  const {
+    recipientEmail,
+    managerName,
+    vendorName,
+    vendorCode,
+    confirmationToken,
+    appUrl,
+    pin
+  } = params;
+
+  const cleanAppUrl = appUrl.replace(/\/$/, '');
+  const confirmationUrl = `${cleanAppUrl}/api/vendors/confirm?token=${encodeURIComponent(confirmationToken)}`;
+  const directAppConfirmationUrl = `${cleanAppUrl}/?action=confirm-vendor&token=${encodeURIComponent(confirmationToken)}`;
+
+  const subject = `[SipSpot POS] Konfirmasi Pendaftaran Vendor - ${vendorName}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #221a18; padding: 24px 12px; margin: 0; }
+    .card { background-color: #ffffff; max-width: 540px; margin: 0 auto; border-radius: 20px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #f2dfdc; }
+    .header { text-align: center; border-bottom: 2px solid #fbf0ee; padding-bottom: 20px; margin-bottom: 24px; }
+    .badge { display: inline-block; background: #fff0ec; color: #ae3115; font-weight: 800; font-size: 13px; padding: 6px 16px; border-radius: 9999px; margin-bottom: 12px; }
+    .title { color: #221a18; font-size: 22px; font-weight: 800; margin: 0 0 6px 0; }
+    .subtitle { color: #785a53; font-size: 14px; margin: 0; }
+    .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; background-color: #fdfaf9; border-radius: 14px; overflow: hidden; border: 1px solid #f5e4e1; }
+    .info-table td { padding: 11px 16px; border-bottom: 1px solid #f5e4e1; }
+    .info-table tr:last-child td { border-bottom: none; }
+    .label { color: #80635d; font-weight: 600; width: 40%; }
+    .val { color: #1a1514; font-weight: 700; }
+    .cta-box { background: linear-gradient(135deg, #fff7f5 0%, #ffede8 100%); border: 1.5px solid #f8c9be; border-radius: 16px; padding: 24px; margin: 24px 0; text-align: center; }
+    .cta-btn { display: inline-block; background-color: #e04f26; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(224,79,38,0.3); text-align: center; }
+    .token-box { margin-top: 16px; font-size: 11px; color: #80635d; word-break: break-all; }
+    .token-code { display: inline-block; background-color: #ffffff; border: 1px dashed #d1aba2; padding: 6px 12px; border-radius: 8px; font-family: monospace; font-size: 12px; font-weight: bold; color: #ae3115; margin-top: 6px; }
+    .footer { text-align: center; font-size: 11px; color: #a18680; margin-top: 28px; border-top: 1px solid #fbf0ee; padding-top: 18px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="badge">☕ SipSpot POS Multivendor</div>
+      <h2 class="title">Konfirmasi Pendaftaran Vendor</h2>
+      <p class="subtitle">Selamat datang di platform point of sale SipSpot</p>
+    </div>
+
+    <p style="font-size: 14px; line-height: 1.6; color: #3b2c29; margin-bottom: 16px;">
+      Halo <strong>${managerName}</strong>,<br>
+      Terima kasih telah mendaftarkan vendor baru <strong>${vendorName}</strong>. Akun Anda telah dibuat dengan hak akses <strong>MANAGER</strong>.
+    </p>
+
+    <table class="info-table">
+      <tr>
+        <td class="label">Nama Vendor</td>
+        <td class="val">${vendorName}</td>
+      </tr>
+      <tr>
+        <td class="label">Kode Vendor</td>
+        <td class="val"><code>${vendorCode}</code></td>
+      </tr>
+      <tr>
+        <td class="label">Nama Manager</td>
+        <td class="val">${managerName}</td>
+      </tr>
+      <tr>
+        <td class="label">Peran (Role)</td>
+        <td class="val"><span style="display:inline-block; padding:3px 8px; border-radius:6px; background:#dcfce7; color:#15803d; font-size:11px;">MANAGER</span></td>
+      </tr>
+      <tr>
+        <td class="label">Email Terdaftar</td>
+        <td class="val">${recipientEmail}</td>
+      </tr>
+      ${pin ? `
+      <tr>
+        <td class="label">PIN Akses Kasir</td>
+        <td class="val"><code>•••••• (Tersimpan aman)</code></td>
+      </tr>` : ''}
+    </table>
+
+    <div class="cta-box">
+      <p style="font-size: 13px; font-weight: 700; color: #7f1d1d; margin: 0 0 14px 0;">
+        Klik tombol di bawah ini untuk mengonfirmasi email dan mengaktifkan akun vendor Anda:
+      </p>
+      <a href="${confirmationUrl}" target="_blank" class="cta-btn">
+        Konfirmasi &amp; Aktifkan Akun Vendor
+      </a>
+      <div class="token-box">
+        Atau salin tautan berikut ke browser:<br>
+        <a href="${confirmationUrl}" style="color: #ae3115; font-size: 11px;">${confirmationUrl}</a><br><br>
+        Kode Token Konfirmasi:<br>
+        <span class="token-code">${confirmationToken}</span>
+      </div>
+    </div>
+
+    <p style="font-size: 12px; color: #785a53; line-height: 1.5; margin-top: 16px;">
+      <em>Catatan: Tautan konfirmasi ini berlaku selama 24 jam. Setelah akun aktif, Anda dapat langsung mengelola katalog menu, stok bahan baku, kasir toko, dan memantau transaksi penjualan secara realtime.</em>
+    </p>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
+      Jika Anda tidak merasa mendaftarkan vendor ini, Anda dapat mengabaikan pesan ini.
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  let status: 'success' | 'failed' = 'failed';
+  let messageId: string | undefined;
+  let errorMessage: string | undefined;
+
+  if (!transporter) {
+    status = 'success';
+    messageId = `sim_vconf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[SMTP (Simulated)] Vendor confirmation email generated for ${recipientEmail}. Link: ${confirmationUrl}`);
+  } else {
+    try {
+      const info = await transporter.sendMail({
+        from: SMTP_FROM,
+        to: recipientEmail,
+        subject,
+        html
+      });
+      status = 'success';
+      messageId = info.messageId;
+      console.log(`[SMTP] Vendor confirmation email sent to ${recipientEmail}, MessageId: ${messageId}`);
+    } catch (err: any) {
+      status = 'failed';
+      errorMessage = err.message || 'SMTP delivery failed';
+      console.warn(`[SMTP] Failed to send vendor confirmation to ${recipientEmail}:`, errorMessage);
+    }
+  }
+
+  // Record log into database / fallbackStore
+  const logData: EmailLogEntry = {
+    recipientEmail,
+    subject,
+    templateCode: 'VENDOR_REGISTRATION_CONFIRMATION',
+    status,
+    errorMessage,
+    messageId,
+    sentAt: new Date()
+  };
+
+  const db = getDB();
+  if (db) {
+    try {
+      await db.collection('email_logs').insertOne(logData);
+    } catch (e) {
+      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+    }
+  } else {
+    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+  }
+
+  return {
+    success: status === 'success',
+    confirmationUrl,
+    messageId,
+    error: errorMessage
+  };
+}
+
+/**
+ * Send Pin Reset Link Email
+ */
+export async function sendPinResetEmail(params: {
+  recipientEmail: string;
+  userName: string;
+  resetToken: string;
+  resetUrl: string;
+  expiresInMinutes?: number;
+}): Promise<{ success: boolean; resetUrl: string; messageId?: string; error?: string }> {
+  const { recipientEmail, userName, resetToken, resetUrl, expiresInMinutes = 60 } = params;
+  const subject = `[SipSpot POS] Permintaan Reset PIN Kasir Akun Anda`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset PIN Kasir - SipSpot POS</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
+    .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
+    .logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 16px; background-color: #ffede8; color: #ae3115; font-size: 26px; margin-bottom: 18px; }
+    h1 { color: #ae3115; font-size: 22px; margin: 0 0 10px 0; font-weight: 800; }
+    p { font-size: 14px; line-height: 1.6; color: #57403a; margin: 0 0 16px 0; }
+    .action-card { background: #fffdfc; border: 1px solid #fae2dc; border-radius: 16px; padding: 22px; text-align: center; margin: 24px 0; }
+    .btn { display: inline-block; background-color: #ae3115; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 28px; border-radius: 12px; box-shadow: 0 4px 12px rgba(174, 49, 21, 0.25); }
+    .btn:hover { background-color: #93270e; }
+    .token-box { margin-top: 18px; font-size: 12px; color: #7f6660; line-height: 1.6; word-break: break-all; }
+    .token-code { display: inline-block; margin-top: 8px; font-family: monospace; font-size: 15px; font-weight: 800; color: #ae3115; background: #fff0eb; border: 1px dashed #e49f8f; padding: 6px 14px; border-radius: 8px; letter-spacing: 2px; }
+    .footer { font-size: 12px; color: #9c847e; text-align: center; margin-top: 26px; border-top: 1px solid #f2dfdc; padding-top: 16px; line-height: 1.5; }
+    .security-note { font-size: 12px; color: #826b65; background-color: #fff6f3; border-left: 3px solid #ae3115; padding: 10px 14px; border-radius: 6px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="text-align: center;">
+      <div class="logo-badge">🔐</div>
+      <h1>Permintaan Atur Ulang PIN</h1>
+      <p>Halo, <strong>${userName}</strong>!</p>
+      <p>Kami menerima permintaan untuk mengatur ulang PIN 6 digit kasir akun SipSpot POS Anda (<strong>${recipientEmail}</strong>).</p>
+    </div>
+
+    <div class="action-card">
+      <p style="font-size: 13px; font-weight: 700; color: #57403a; margin-bottom: 16px;">
+        Klik tombol di bawah ini untuk membuat PIN baru:
+      </p>
+      <a href="${resetUrl}" target="_blank" class="btn">
+        Atur Ulang PIN Kasir Sekarang
+      </a>
+      <div class="token-box">
+        Atau salin tautan berikut ke browser Anda:<br>
+        <a href="${resetUrl}" style="color: #ae3115; font-size: 11px;">${resetUrl}</a><br><br>
+        Kode Token Reset:<br>
+        <span class="token-code">${resetToken}</span>
+      </div>
+    </div>
+
+    <div class="security-note">
+      ⏱️ <strong>Batas Waktu:</strong> Tautan ini hanya berlaku selama <strong>${expiresInMinutes} menit</strong>.<br>
+      🛡️ Jika Anda tidak meminta reset PIN ini, akun Anda tetap aman dan Anda dapat mengabaikan email ini.
+    </div>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
+      Sistem Keamanan Terpadu SipSpot POS.
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  let status: 'success' | 'failed' = 'failed';
+  let messageId: string | undefined;
+  let errorMessage: string | undefined;
+
+  if (!transporter) {
+    status = 'success';
+    messageId = `sim_resetpin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[SMTP (Simulated)] PIN Reset Link email generated for ${recipientEmail}. Link: ${resetUrl}`);
+  } else {
+    try {
+      const info = await transporter.sendMail({
+        from: SMTP_FROM,
+        to: recipientEmail,
+        subject,
+        html
+      });
+      status = 'success';
+      messageId = info.messageId;
+      console.log(`[SMTP] PIN Reset Link sent to ${recipientEmail}, MessageId: ${messageId}`);
+    } catch (err: any) {
+      status = 'failed';
+      errorMessage = err.message || 'SMTP delivery failed';
+      console.warn(`[SMTP] Failed to send PIN reset to ${recipientEmail}:`, errorMessage);
+    }
+  }
+
+  const logData: EmailLogEntry = {
+    recipientEmail,
+    subject,
+    templateCode: 'PIN_RESET_LINK',
+    status,
+    errorMessage,
+    messageId,
+    sentAt: new Date()
+  };
+
+  const db = getDB();
+  if (db) {
+    try {
+      await db.collection('email_logs').insertOne(logData);
+    } catch (e) {
+      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+    }
+  } else {
+    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+  }
+
+  return {
+    success: status === 'success',
+    resetUrl,
+    messageId,
+    error: errorMessage
+  };
+}
+
+/**
+ * Send New PIN Generated by ADMIN to User's Email
+ */
+export async function sendAdminNewPinEmail(params: {
+  recipientEmail: string;
+  userName: string;
+  newPin: string;
+  adminEmail: string;
+  adminName?: string;
+  vendorName?: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { recipientEmail, userName, newPin, adminEmail, adminName = 'Administrator Sistem', vendorName = 'SipSpot POS' } = params;
+  const subject = `[SipSpot POS] PIN Kasir Baru Anda Telah Dibuat oleh Admin`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PIN Baru Akun SipSpot POS</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
+    .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
+    .logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 16px; background-color: #f3e8ff; color: #7e22ce; font-size: 26px; margin-bottom: 18px; }
+    h1 { color: #1e1b4b; font-size: 22px; margin: 0 0 10px 0; font-weight: 800; }
+    p { font-size: 14px; line-height: 1.6; color: #57403a; margin: 0 0 16px 0; }
+    .pin-display-card { background: #faf5ff; border: 2px dashed #a855f7; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0; }
+    .pin-title { font-size: 12px; font-weight: 700; color: #7e22ce; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .pin-code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 34px; font-weight: 900; color: #6b21a8; letter-spacing: 8px; margin: 6px 0; }
+    .info-table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    .info-table td { padding: 8px 4px; border-bottom: 1px solid #f3e8ff; }
+    .info-label { color: #7e706c; font-weight: 500; }
+    .info-val { font-weight: 700; color: #231917; text-align: right; }
+    .footer { font-size: 12px; color: #9c847e; text-align: center; margin-top: 26px; border-top: 1px solid #f2dfdc; padding-top: 16px; line-height: 1.5; }
+    .security-note { font-size: 12px; color: #581c87; background-color: #faf5ff; border-left: 3px solid #9333ea; padding: 12px 14px; border-radius: 6px; margin-top: 20px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="text-align: center;">
+      <div class="logo-badge">🛡️</div>
+      <h1>PIN Kasir Baru Diterbitkan</h1>
+      <p>Halo, <strong>${userName}</strong>!</p>
+      <p>Role <strong>ADMIN</strong> telah menyetujui permintaan dan membuatkan PIN 6 digit baru untuk akun Anda (<strong>${recipientEmail}</strong>).</p>
+    </div>
+
+    <div class="pin-display-card">
+      <div class="pin-title">PIN Kasir Baru Anda:</div>
+      <div class="pin-code">${newPin}</div>
+      <p style="font-size: 12px; color: #7e22ce; margin: 8px 0 0 0;">
+        Gunakan 6 digit angka di atas untuk membuka layar kasir SipSpot POS.
+      </p>
+    </div>
+
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Nama Pengguna</td>
+        <td class="info-val">${userName}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Alamat Email</td>
+        <td class="info-val">${recipientEmail}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Outlet / Vendor</td>
+        <td class="info-val">${vendorName}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Disetujui Oleh</td>
+        <td class="info-val">${adminName} (${adminEmail})</td>
+      </tr>
+      <tr>
+        <td class="info-label">Waktu Pembaruan</td>
+        <td class="info-val">${new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+      </tr>
+    </table>
+
+    <div class="security-note">
+      🔒 <strong>Catatan Keamanan:</strong> Jika akun Anda sebelumnya terkunci karena salah input PIN, sistem telah otomatis membuka kembali kunci akun Anda. Demi keamanan toko, jangan bagikan PIN ini kepada pihak yang tidak berkepentingan.
+    </div>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
+      Diterbitkan melalui Pusat Administrasi Sistem SipSpot POS.
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  let status: 'success' | 'failed' = 'failed';
+  let messageId: string | undefined;
+  let errorMessage: string | undefined;
+
+  if (!transporter) {
+    status = 'success';
+    messageId = `sim_adminpin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[SMTP (Simulated)] Admin generated new PIN ${newPin} for ${recipientEmail} by ${adminEmail}`);
+  } else {
+    try {
+      const info = await transporter.sendMail({
+        from: SMTP_FROM,
+        to: recipientEmail,
+        subject,
+        html
+      });
+      status = 'success';
+      messageId = info.messageId;
+      console.log(`[SMTP] Admin new PIN sent to ${recipientEmail}, MessageId: ${messageId}`);
+    } catch (err: any) {
+      status = 'failed';
+      errorMessage = err.message || 'SMTP delivery failed';
+      console.warn(`[SMTP] Failed to send admin new PIN to ${recipientEmail}:`, errorMessage);
+    }
+  }
+
+  const logData: EmailLogEntry = {
+    recipientEmail,
+    subject,
+    templateCode: 'ADMIN_NEW_PIN_DELIVERY',
+    status,
+    errorMessage,
+    messageId,
+    sentAt: new Date()
+  };
+
+  const db = getDB();
+  if (db) {
+    try {
+      await db.collection('email_logs').insertOne(logData);
+    } catch (e) {
+      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+    }
+  } else {
+    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+  }
+
+  return {
+    success: status === 'success',
+    messageId,
+    error: errorMessage
+  };
+}
+

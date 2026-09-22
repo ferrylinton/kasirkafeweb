@@ -30,9 +30,37 @@ import { AdminLogViewerScreen } from './components/screens/AdminLogViewerScreen'
 import { AdminLockedUsersScreen } from './components/screens/AdminLockedUsersScreen';
 import { HousekeepingScreen } from './components/screens/HousekeepingScreen';
 import { HousekeepingNotificationBanner } from './components/common/HousekeepingNotificationBanner';
+import { VendorRegisterScreen } from './components/screens/VendorRegisterScreen';
+import { ResetPinScreen } from './components/screens/ResetPinScreen';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const [resetPinToken, setResetPinToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('action') === 'reset-pin') {
+        return urlParams.get('token') || '';
+      }
+    }
+    return null;
+  });
+
+  const [isRegisteringVendor, setIsRegisteringVendor] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('action') === 'register-vendor' || urlParams.get('action') === 'confirm-vendor';
+    }
+    return false;
+  });
+
+  const [initialConfirmationToken, setInitialConfirmationToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('token') || null;
+    }
+    return null;
+  });
+
   const [currentTab, setCurrentTab] = useState<string>(() => {
     if (user?.role === 'ADMIN') {
       return 'admin-dashboard';
@@ -124,7 +152,40 @@ const MainLayout: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginScreen />;
+    if (resetPinToken !== null) {
+      return (
+        <ResetPinScreen
+          token={resetPinToken}
+          onBackToLogin={() => {
+            setResetPinToken(null);
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }}
+        />
+      );
+    }
+
+    if (isRegisteringVendor) {
+      return (
+        <VendorRegisterScreen
+          initialToken={initialConfirmationToken}
+          onBackToLogin={() => {
+            setIsRegisteringVendor(false);
+            setInitialConfirmationToken(null);
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }}
+        />
+      );
+    }
+    return (
+      <LoginScreen
+        onOpenRegister={() => setIsRegisteringVendor(true)}
+        onOpenResetPin={(tok) => setResetPinToken(tok || '')}
+      />
+    );
   }
 
   // Hak Akses Role

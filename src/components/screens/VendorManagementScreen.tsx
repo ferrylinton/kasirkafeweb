@@ -403,6 +403,21 @@ export const VendorManagementScreen: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
+            id="btn-copy-public-register-url"
+            onClick={() => {
+              const registerUrl = `${window.location.origin}/?action=register-vendor`;
+              navigator.clipboard.writeText(registerUrl);
+              showToast('Tautan pendaftaran vendor disalin ke clipboard!', 'success');
+            }}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 font-bold text-xs hover:border-orange-500/50 hover:text-orange-600 transition-all shadow-2xs active:scale-95 cursor-pointer"
+            title="Salin Tautan Pendaftaran Vendor Publik"
+          >
+            <Copy className="w-4 h-4 text-orange-600" />
+            <span className="hidden sm:inline">Tautan Registrasi</span>
+          </button>
+
+          <button
+            type="button"
             onClick={fetchVendors}
             disabled={isLoading}
             className="w-10 h-10 rounded-2xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:text-accent hover:border-accent/40 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"

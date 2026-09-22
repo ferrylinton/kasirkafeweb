@@ -4,8 +4,6 @@ import { authMiddleware, requireAdmin } from '../auth';
 import { getDB, fallbackStore } from '../db';
 import {
   VendorRecord,
-  generateClientId,
-  generateClientSecret,
   findVendorById,
   getAllVendors
 } from '../vendorMiddleware';
@@ -70,7 +68,7 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
           v.name.toLowerCase().includes(q) ||
           v.code.toLowerCase().includes(q) ||
           (v.email && v.email.toLowerCase().includes(q)) ||
-          (v.clientId && v.clientId.toLowerCase().includes(q))
+          v.id.toLowerCase().includes(q)
       );
     }
 
@@ -137,15 +135,11 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
 
     const idSuffix = Date.now().toString(36).slice(-4);
     const newVendorId = `vnd_${cleanCode.toLowerCase()}_${idSuffix}`;
-    const newClientId = generateClientId(cleanCode);
-    const newClientSecret = generateClientSecret(cleanCode);
 
     const newVendor: VendorRecord = {
       id: newVendorId,
       name: name.trim(),
       code: cleanCode,
-      clientId: newClientId,
-      clientSecret: newClientSecret,
       status: status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
       email: email ? email.trim() : '',
       phone: phone ? phone.trim() : '',
@@ -182,7 +176,6 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
       details: {
         vendorId: newVendor.id,
         code: newVendor.code,
-        clientId: newVendor.clientId,
         status: newVendor.status
       },
       req,
@@ -345,59 +338,6 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[AdminVendor] PATCH /:id/status error:', err);
-    return res.status(500).json({ success: false, error: 'Internal Server Error' });
-  }
-});
-
-/**
- * POST /api/admin/vendors/:id/regenerate-secret
- * Reissue Client Secret for a vendor
- */
-adminVendorRouter.post('/:id/regenerate-secret', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as unknown as IParam;
-    const vendor = await findVendorById(id);
-
-    if (!vendor) {
-      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
-    }
-
-    const newSecret = generateClientSecret(vendor.code || 'vnd');
-
-    const db = getDB();
-    if (db) {
-      await db.collection('vendors').updateOne(
-        { id },
-        { $set: { clientSecret: newSecret, updatedAt: new Date() } }
-      );
-    }
-
-    if (fallbackStore.vendors) {
-      const found = fallbackStore.vendors.find(v => v.id === id);
-      if (found) {
-        found.clientSecret = newSecret;
-        found.updatedAt = new Date();
-      }
-    }
-
-    await recordActivityLog({
-      action: 'UPDATE',
-      entity: 'VENDOR',
-      entityId: id,
-      entityName: vendor.name,
-      summary: `Admin meregenerasi Client Secret untuk vendor '${vendor.name}'`,
-      details: { clientId: vendor.clientId },
-      req,
-      vendorId: id
-    });
-
-    return res.json({
-      success: true,
-      message: `Client Secret baru berhasil dibuat untuk '${vendor.name}'.`,
-      clientSecret: newSecret
-    });
-  } catch (err: any) {
-    console.error('[AdminVendor] Regenerate Secret error:', err);
     return res.status(500).json({ success: false, error: 'Internal Server Error' });
   }
 });

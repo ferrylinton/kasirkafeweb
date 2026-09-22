@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, KeyRound, Edit2, Trash2, Shield, UserCheck, X, Check, Lock, ShieldAlert } from 'lucide-react';
+import { Users, UserPlus, KeyRound, Edit2, Trash2, Shield, UserCheck, X, Check, Lock, ShieldAlert, Mail, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
+import { AdminSendPinModal } from '../modals/AdminSendPinModal';
+
+interface PinResetRequest {
+  id: string;
+  userId: string;
+  email: string;
+  userName: string;
+  vendorId?: string;
+  role: string;
+  note?: string;
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  requestedAt: string;
+}
 
 interface UserManagementScreenProps {
   allVendorsMode?: boolean;
@@ -20,6 +33,19 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
+  // PIN Reset Requests (for role ADMIN)
+  const [pinResetRequests, setPinResetRequests] = useState<PinResetRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState<boolean>(false);
+  const [showAdminSendPinModal, setShowAdminSendPinModal] = useState<boolean>(false);
+  const [targetUserForPin, setTargetUserForPin] = useState<{
+    email: string;
+    name: string;
+    role?: string;
+    vendorName?: string;
+    requestId?: string;
+    note?: string;
+  } | null>(null);
+
   // Modal states
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
@@ -32,7 +58,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
     email: '',
     password: '',
     role: 'CASHIER' as UserRole,
-    pin: '1234',
+    pin: '123456',
     avatar: ''
   });
 
@@ -59,9 +85,32 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
     }
   };
 
+  const fetchPinResetRequests = async () => {
+    if (currentUser?.role !== 'ADMIN') return;
+    setLoadingRequests(true);
+    try {
+      const res = await fetch('/api/auth/admin/pin-reset-requests', {
+        headers: {
+          Authorization: `Bearer ${token || ''}`
+        }
+      });
+      const data = await res.json();
+      if (data.success && data.requests) {
+        setPinResetRequests(data.requests);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch PIN reset requests');
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
-  }, [token, allVendorsMode, selectedVendor]);
+    if (currentUser?.role === 'ADMIN') {
+      fetchPinResetRequests();
+    }
+  }, [token, allVendorsMode, selectedVendor, currentUser?.role]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,6 +280,109 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         </div>
       )}
 
+      {/* PIN Reset Requests Section for Role ADMIN */}
+      {currentUser?.role === 'ADMIN' && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#251e1c] border border-purple-200/80 dark:border-purple-900/40 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-heading">
+                    Permintaan Reset PIN Masuk
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    pinResetRequests.filter(r => r.status === 'PENDING').length > 0
+                      ? 'bg-purple-600 text-white animate-pulse'
+                      : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                  }`}>
+                    {pinResetRequests.filter(r => r.status === 'PENDING').length} Menunggu
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                  Daftar permohonan reset PIN kasir yang diajukan ke Role ADMIN
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchPinResetRequests}
+              disabled={loadingRequests}
+              className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+              title="Perbarui Permintaan"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingRequests ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {loadingRequests ? (
+            <div className="py-4 text-center text-xs text-stone-400">Memuat permintaan reset PIN...</div>
+          ) : pinResetRequests.filter(r => r.status === 'PENDING').length === 0 ? (
+            <div className="py-3 px-4 rounded-2xl bg-stone-50 dark:bg-stone-900/50 border border-stone-200/50 dark:border-stone-800/60 text-xs text-stone-500 dark:text-stone-400 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Tidak ada antrean permohonan reset PIN yang pending.</span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {pinResetRequests
+                .filter(r => r.status === 'PENDING')
+                .map(req => (
+                  <div
+                    key={req.id}
+                    className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-900 dark:text-stone-100">{req.userName}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-bold">
+                          {req.role}
+                        </span>
+                        {req.vendorId && (
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                            • {req.vendorId}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-stone-600 dark:text-stone-400 flex items-center gap-1.5 text-[11px]">
+                        <Mail className="w-3 h-3 text-purple-500" />
+                        <span className="font-semibold text-purple-900 dark:text-purple-300">{req.email}</span>
+                        <span>• {new Date(req.requestedAt).toLocaleString('id-ID')}</span>
+                      </div>
+                      {req.note && (
+                        <p className="text-[11px] text-stone-600 dark:text-stone-300 italic bg-white/60 dark:bg-stone-900/60 px-2.5 py-1 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                          Catatan: "{req.note}"
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTargetUserForPin({
+                          email: req.email,
+                          name: req.userName,
+                          role: req.role,
+                          vendorName: req.vendorId,
+                          requestId: req.id,
+                          note: req.note
+                        });
+                        setShowAdminSendPinModal(true);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Kirim PIN Baru ke Email</span>
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 2. User Cards */}
       {loading ? (
         <div className="space-y-3">
@@ -292,6 +444,24 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
+                  {currentUser?.role === 'ADMIN' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTargetUserForPin({
+                          email: u.email,
+                          name: u.name,
+                          role: u.role,
+                          vendorName: u.vendorId
+                        });
+                        setShowAdminSendPinModal(true);
+                      }}
+                      className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-400 transition-colors"
+                      title="Kirim PIN Baru ke Email Pengguna"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleOpenEdit(u)}
@@ -389,14 +559,14 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
 
                 <div>
                   <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    PIN Kasir (4 Digit)
+                    PIN Kasir (6 Digit)
                   </label>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={6}
                     value={formData.pin}
-                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
-                    placeholder="8492"
+                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                    placeholder="123456"
                     required
                     className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-mono"
                   />
@@ -507,13 +677,14 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
 
                 <div>
                   <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    PIN Kasir (4 Digit)
+                    PIN Kasir (6 Digit)
                   </label>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={6}
                     value={formData.pin}
-                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })}
+                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                    placeholder="123456"
                     className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-mono"
                   />
                 </div>
@@ -563,6 +734,23 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         onConfirm={handleDeleteUser}
         onCancel={() => setUserToDelete(null)}
       />
+
+      {/* Admin Send PIN Modal */}
+      {targetUserForPin && (
+        <AdminSendPinModal
+          isOpen={showAdminSendPinModal}
+          onClose={() => {
+            setShowAdminSendPinModal(false);
+            setTargetUserForPin(null);
+          }}
+          targetUser={targetUserForPin}
+          token={token}
+          onSuccess={() => {
+            fetchUsers();
+            fetchPinResetRequests();
+          }}
+        />
+      )}
     </div>
   );
 };

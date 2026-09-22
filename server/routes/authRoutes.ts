@@ -3,7 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { getDB, fallbackStore } from '../db';
 import { comparePassword, hashPassword, signToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken } from '../auth';
-import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent } from '../mail';
+import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPinResetEmail, sendAdminNewPinEmail } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
@@ -386,7 +386,6 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
         id: v.id,
         name: v.name,
         code: v.code,
-        clientId: v.clientId,
         status: v.status
       })),
       users: safeUsers
@@ -1607,3 +1606,608 @@ function renderRevokeHtml(params: {
 </html>
   `;
 }
+
+/**
+ * Helper to find user by email across MongoDB and fallbackStore
+ */
+async function findUserByEmail(email: string) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const db = getDB();
+  if (db) {
+    try {
+      const user = await db.collection('users').findOne({
+        email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      });
+      if (user) return user;
+    } catch (e) {
+      console.warn('DB error findUserByEmail, falling back to store:', e);
+    }
+  }
+  return fallbackStore.users.find(u => u.email && u.email.toLowerCase().trim() === normalizedEmail);
+}
+
+/**
+ * Helper to update user PIN across MongoDB and fallbackStore
+ */
+async function updateUserPin(userIdOrEmail: string, newPin: string) {
+  const db = getDB();
+  const normalized = userIdOrEmail.toLowerCase().trim();
+  
+  // Update in fallback store
+  const fallbackIndex = fallbackStore.users.findIndex(
+    u => (u._id && u._id.toString() === userIdOrEmail) ||
+         (u.id && u.id === userIdOrEmail) ||
+         (u.email && u.email.toLowerCase().trim() === normalized)
+  );
+  if (fallbackIndex !== -1) {
+    fallbackStore.users[fallbackIndex].pin = newPin;
+    fallbackStore.users[fallbackIndex].updatedAt = new Date();
+  }
+
+  // Update in DB if available
+  if (db) {
+    try {
+      let query: any = {
+        email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      };
+      if (ObjectId.isValid(userIdOrEmail)) {
+        query = { _id: new ObjectId(userIdOrEmail) };
+      }
+      await db.collection('users').updateOne(
+        query,
+        { $set: { pin: newPin, updatedAt: new Date() } }
+      );
+    } catch (e) {
+      console.warn('DB error updateUserPin:', e);
+    }
+  }
+}
+
+/**
+ * -------------------------------------------------------------
+ * FORGOT PIN & PIN RESET FLOW
+ * -------------------------------------------------------------
+ */
+
+// 1. Request Reset PIN Link via Email (Check whether email exists!)
+authRouter.post('/forgot-pin', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Alamat email wajib diisi.'
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Format alamat email tidak valid.'
+      });
+    }
+
+    // CHECK WHETHER EMAIL EXISTS
+    const user = await findUserByEmail(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'EmailNotFound',
+        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Silakan periksa kembali email Anda atau hubungi Administrator.'
+      });
+    }
+
+    // Generate secure token (valid for 60 minutes)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const tokenRecord = {
+      id: 'prt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      token: resetToken,
+      email: normalizedEmail,
+      userId: user._id ? user._id.toString() : user.id,
+      userName: user.name,
+      expiresAt,
+      createdAt: new Date(),
+      used: false
+    };
+
+    const db = getDB();
+    if (db) {
+      try {
+        await db.collection('pin_reset_tokens').insertOne(tokenRecord);
+      } catch (e) {
+        fallbackStore.pin_reset_tokens.unshift(tokenRecord);
+      }
+    } else {
+      fallbackStore.pin_reset_tokens.unshift(tokenRecord);
+    }
+
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    const resetUrl = `${protocol}://${host}/?action=reset-pin&token=${resetToken}`;
+
+    // Send email with reset PIN link
+    const mailResult = await sendPinResetEmail({
+      recipientEmail: normalizedEmail,
+      userName: user.name,
+      resetToken,
+      resetUrl,
+      expiresInMinutes: 60
+    });
+
+    // Record activity log
+    await recordActivityLog({
+      action: 'FORGOT_PIN_REQUEST',
+      entity: 'USER',
+      entityId: user._id ? user._id.toString() : user.id,
+      entityName: user.name,
+      summary: `Pengguna ${user.name} (${normalizedEmail}) meminta tautan atur ulang PIN ke email`,
+      user: {
+        id: user._id ? user._id.toString() : user.id,
+        name: user.name,
+        email: normalizedEmail,
+        role: user.role
+      },
+      details: { email: normalizedEmail, tokenCreated: true, mailSuccess: mailResult.success },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: `Tautan atur ulang PIN telah berhasil dikirim ke ${normalizedEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
+      email: normalizedEmail,
+      userName: user.name,
+      resetUrl,
+      token: resetToken
+    });
+  } catch (error: any) {
+    console.error('Error in /api/auth/forgot-pin:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'ServerError',
+      message: 'Gagal memproses permintaan reset PIN. Silakan coba beberapa saat lagi.'
+    });
+  }
+});
+
+// 2. Verify Reset PIN Token
+authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN tidak ditemukan.'
+      });
+    }
+
+    const db = getDB();
+    let tokenEntry: any = null;
+
+    if (db) {
+      try {
+        tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+      } catch (e) {
+        tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+      }
+    } else {
+      tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+    }
+
+    if (!tokenEntry) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN tidak valid atau sudah digunakan.'
+      });
+    }
+
+    if (new Date(tokenEntry.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN sudah kedaluwarsa. Silakan ajukan permintaan reset PIN baru.'
+      });
+    }
+
+    const user = await findUserByEmail(tokenEntry.email);
+    const vendor = user ? fallbackStore.vendors.find(v => v.id === user.vendorId) : null;
+
+    return res.json({
+      success: true,
+      email: tokenEntry.email,
+      userName: user ? user.name : tokenEntry.userName,
+      role: user ? user.role : 'CASHIER',
+      vendorName: vendor ? vendor.name : 'SipSpot POS'
+    });
+  } catch (error: any) {
+    console.error('Error in /api/auth/reset-pin/verify:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal memverifikasi token reset PIN'
+    });
+  }
+});
+
+// 3. Confirm New PIN using Token
+authRouter.post('/reset-pin/confirm', async (req: Request, res: Response) => {
+  try {
+    const { token, newPin } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN tidak disertakan.'
+      });
+    }
+
+    if (!newPin || !/^\d{6}$/.test(String(newPin).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'PIN baru harus terdiri dari 6 digit angka.'
+      });
+    }
+
+    const cleanPin = String(newPin).trim();
+
+    const db = getDB();
+    let tokenEntry: any = null;
+
+    if (db) {
+      try {
+        tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+      } catch (e) {
+        tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+      }
+    } else {
+      tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+    }
+
+    if (!tokenEntry) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN tidak valid atau sudah digunakan.'
+      });
+    }
+
+    if (new Date(tokenEntry.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token reset PIN sudah kedaluwarsa. Silakan ajukan permintaan reset PIN baru.'
+      });
+    }
+
+    const user = await findUserByEmail(tokenEntry.email);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pengguna akun tidak ditemukan.'
+      });
+    }
+
+    // Update user PIN
+    await updateUserPin(user._id ? user._id.toString() : user.id, cleanPin);
+
+    // Mark token as used
+    if (db) {
+      try {
+        await db.collection('pin_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
+      } catch (e) { }
+    }
+    const tokenIdx = fallbackStore.pin_reset_tokens.findIndex(t => t.token === token);
+    if (tokenIdx !== -1) {
+      fallbackStore.pin_reset_tokens[tokenIdx].used = true;
+      fallbackStore.pin_reset_tokens[tokenIdx].usedAt = new Date();
+    }
+
+    // Auto unlock user in Redis lockout if locked
+    await unlockUserInRedis(tokenEntry.email, 'SYSTEM_SELF_RESET_PIN');
+    clearUserLockout(tokenEntry.email);
+
+    // Record activity log
+    await recordActivityLog({
+      action: 'PIN_RESET_COMPLETED',
+      entity: 'USER',
+      entityId: user._id ? user._id.toString() : user.id,
+      entityName: user.name,
+      summary: `Pengguna ${user.name} (${tokenEntry.email}) berhasil mereset PIN 6 digit kasir melalui tautan email`,
+      user: {
+        id: user._id ? user._id.toString() : user.id,
+        name: user.name,
+        email: tokenEntry.email,
+        role: user.role
+      },
+      details: { email: tokenEntry.email },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: 'PIN baru 6 digit Anda berhasil disimpan! Silakan login kasir dengan PIN baru Anda.',
+      email: tokenEntry.email,
+      userName: user.name
+    });
+  } catch (error: any) {
+    console.error('Error in /api/auth/reset-pin/confirm:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal mengatur ulang PIN baru.'
+    });
+  }
+});
+
+// 4. User requests reset PIN to role ADMIN (Check whether email exists!)
+authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
+  try {
+    const { email, note } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Alamat email wajib diisi.'
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Format alamat email tidak valid.'
+      });
+    }
+
+    // CHECK WHETHER EMAIL EXISTS
+    const user = await findUserByEmail(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'EmailNotFound',
+        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Permintaan reset PIN ke ADMIN hanya berlaku untuk akun yang telah terdaftar.'
+      });
+    }
+
+    const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
+
+    const requestRecord = {
+      id: 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      userId: user._id ? user._id.toString() : user.id,
+      email: normalizedEmail,
+      name: user.name,
+      role: user.role,
+      vendorId: user.vendorId,
+      vendorName: vendor ? vendor.name : 'SipSpot POS',
+      note: note ? String(note).slice(0, 300) : 'Pengguna meminta reset PIN langsung ke role ADMIN',
+      status: 'PENDING',
+      requestedAt: new Date(),
+      ipAddress: req.ip || req.socket.remoteAddress || '-'
+    };
+
+    const db = getDB();
+    if (db) {
+      try {
+        await db.collection('pin_reset_requests').insertOne(requestRecord);
+      } catch (e) {
+        fallbackStore.pin_reset_requests.unshift(requestRecord);
+      }
+    } else {
+      fallbackStore.pin_reset_requests.unshift(requestRecord);
+    }
+
+    await recordActivityLog({
+      action: 'ADMIN_PIN_RESET_REQUESTED',
+      entity: 'USER',
+      entityId: user._id ? user._id.toString() : user.id,
+      entityName: user.name,
+      summary: `Pengguna ${user.name} (${normalizedEmail}) mengirimkan permintaan reset PIN ke Administrator`,
+      user: {
+        id: user._id ? user._id.toString() : user.id,
+        name: user.name,
+        email: normalizedEmail,
+        role: user.role
+      },
+      details: { requestId: requestRecord.id, vendorId: user.vendorId, note: requestRecord.note },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: 'Permintaan reset PIN telah berhasil dikirim ke Administrator. Role ADMIN akan memproses dan mengirimkan PIN baru ke email Anda.',
+      requestId: requestRecord.id,
+      user: {
+        name: user.name,
+        email: normalizedEmail,
+        role: user.role
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in /api/auth/pin-reset-requests:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'ServerError',
+      message: 'Gagal mengirimkan permintaan reset PIN ke Administrator.'
+    });
+  }
+});
+
+// 5. Admin: Get all PIN reset requests
+authRouter.get('/admin/pin-reset-requests', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = getDB();
+    let requests: any[] = [];
+    if (db) {
+      try {
+        requests = await db.collection('pin_reset_requests').find().sort({ requestedAt: -1 }).toArray();
+      } catch (e) {
+        requests = [...fallbackStore.pin_reset_requests];
+      }
+    } else {
+      requests = [...fallbackStore.pin_reset_requests];
+    }
+
+    requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+
+    return res.json({
+      success: true,
+      requests
+    });
+  } catch (error: any) {
+    console.error('Error fetching admin pin reset requests:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal mengambil daftar permintaan reset PIN'
+    });
+  }
+});
+
+// 6. Admin: Generate and Send New PIN to User's Email
+authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { email, customPin, requestId } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Alamat email pengguna wajib diisi.'
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await findUserByEmail(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pengguna dengan email tersebut tidak ditemukan dalam sistem.'
+      });
+    }
+
+    // Generate or validate 6-digit PIN
+    let newPin: string;
+    if (customPin) {
+      if (!/^\d{6}$/.test(String(customPin).trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'PIN baru harus berupa 6 digit angka.'
+        });
+      }
+      newPin = String(customPin).trim();
+    } else {
+      // Secure random 6-digit number
+      newPin = crypto.randomInt(100000, 999999).toString();
+    }
+
+    // Update user PIN in database and fallback store
+    await updateUserPin(user._id ? user._id.toString() : user.id, newPin);
+
+    // Auto unlock if user was locked out
+    await unlockUserInRedis(normalizedEmail, (req as any).user?.email || 'ADMIN');
+    clearUserLockout(normalizedEmail);
+
+    // Get vendor info
+    const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
+
+    // Send email to user with the new PIN
+    const adminEmail = (req as any).user?.email || 'admin@sipspot.id';
+    const adminName = (req as any).user?.name || 'Administrator Sistem';
+
+    const mailResult = await sendAdminNewPinEmail({
+      recipientEmail: normalizedEmail,
+      userName: user.name,
+      newPin,
+      adminEmail,
+      adminName,
+      vendorName: vendor ? vendor.name : 'SipSpot POS'
+    });
+
+    // If requestId was passed or pending request exists, mark as COMPLETED
+    const db = getDB();
+    if (requestId) {
+      if (db) {
+        try {
+          await db.collection('pin_reset_requests').updateOne(
+            { id: requestId },
+            {
+              $set: {
+                status: 'COMPLETED',
+                processedAt: new Date(),
+                processedBy: adminEmail,
+                newPinSent: true
+              }
+            }
+          );
+        } catch (e) { }
+      }
+      const reqIdx = fallbackStore.pin_reset_requests.findIndex(r => r.id === requestId);
+      if (reqIdx !== -1) {
+        fallbackStore.pin_reset_requests[reqIdx].status = 'COMPLETED';
+        fallbackStore.pin_reset_requests[reqIdx].processedAt = new Date();
+        fallbackStore.pin_reset_requests[reqIdx].processedBy = adminEmail;
+        fallbackStore.pin_reset_requests[reqIdx].newPinSent = true;
+      }
+    } else {
+      // Mark any pending request for this email as COMPLETED
+      if (db) {
+        try {
+          await db.collection('pin_reset_requests').updateMany(
+            { email: normalizedEmail, status: 'PENDING' },
+            {
+              $set: {
+                status: 'COMPLETED',
+                processedAt: new Date(),
+                processedBy: adminEmail,
+                newPinSent: true
+              }
+            }
+          );
+        } catch (e) { }
+      }
+      fallbackStore.pin_reset_requests.forEach(r => {
+        if (r.email === normalizedEmail && r.status === 'PENDING') {
+          r.status = 'COMPLETED';
+          r.processedAt = new Date();
+          r.processedBy = adminEmail;
+          r.newPinSent = true;
+        }
+      });
+    }
+
+    // Record activity log
+    await recordActivityLog({
+      action: 'ADMIN_SENT_NEW_PIN',
+      entity: 'USER',
+      entityId: user._id ? user._id.toString() : user.id,
+      entityName: user.name,
+      summary: `Role ADMIN (${adminEmail}) membuat dan mengirimkan PIN baru ke email pengguna ${user.name} (${normalizedEmail})`,
+      user: {
+        id: (req as any).user?.id || 'admin',
+        name: adminName,
+        email: adminEmail,
+        role: 'ADMIN'
+      },
+      details: {
+        targetUserEmail: normalizedEmail,
+        targetUserName: user.name,
+        vendorId: user.vendorId,
+        requestId: requestId || null,
+        mailSuccess: mailResult.success
+      },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: `PIN baru ${newPin} berhasil dibuat dan dikirimkan ke email ${normalizedEmail}!`,
+      newPin,
+      email: normalizedEmail,
+      userName: user.name,
+      mailSuccess: mailResult.success
+    });
+  } catch (error: any) {
+    console.error('Error in /api/auth/admin/send-new-pin:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal mengirim PIN baru ke email pengguna.'
+    });
+  }
+});

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
+import { AdminSendPinModal } from '../modals/AdminSendPinModal';
 
 export interface LockedUserItem {
   identifier: string;
@@ -62,6 +63,15 @@ export const AdminLockedUsersScreen: React.FC = () => {
   const [isUnlocking, setIsUnlocking] = useState<boolean>(false);
   const [showUnlockAllModal, setShowUnlockAllModal] = useState<boolean>(false);
   const [isUnlockingAll, setIsUnlockingAll] = useState<boolean>(false);
+
+  // Send New PIN Modal State
+  const [targetUserForPin, setTargetUserForPin] = useState<{
+    email: string;
+    name: string;
+    role?: string;
+    vendorName?: string;
+  } | null>(null);
+  const [showAdminSendPinModal, setShowAdminSendPinModal] = useState<boolean>(false);
 
   // Manual Lock Modal State (for test & security actions)
   const [showManualLockModal, setShowManualLockModal] = useState<boolean>(false);
@@ -694,18 +704,39 @@ export const AdminLockedUsersScreen: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Column 7: Action (Unlock) */}
+                      {/* Column 7: Action (Unlock & Send PIN) */}
                       <td className="py-4 px-5 text-right">
-                        <button
-                          type="button"
-                          id={`unlock-user-btn-${item.identifier.replace(/[^a-zA-Z0-9]/g, '_')}`}
-                          onClick={() => setSelectedUserToUnlock(item)}
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-all flex items-center gap-1.5 ml-auto cursor-pointer active:scale-95 shadow-2xs"
-                          title="Buka kunci user ini dari Redis"
-                        >
-                          <Unlock className="w-3.5 h-3.5" />
-                          <span>Buka Kunci</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {item.type === 'email' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTargetUserForPin({
+                                  email: item.email || item.identifier,
+                                  name: item.name || item.identifier,
+                                  role: item.role,
+                                  vendorName: item.vendorId
+                                });
+                                setShowAdminSendPinModal(true);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
+                              title="Buka Kunci & Terbitkan PIN Baru ke Email"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Kirim PIN Baru</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            id={`unlock-user-btn-${item.identifier.replace(/[^a-zA-Z0-9]/g, '_')}`}
+                            onClick={() => setSelectedUserToUnlock(item)}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs shrink-0"
+                            title="Buka kunci user ini dari Redis"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            <span>Buka Kunci</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -952,6 +983,22 @@ export const AdminLockedUsersScreen: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Admin Send PIN Modal */}
+      {targetUserForPin && (
+        <AdminSendPinModal
+          isOpen={showAdminSendPinModal}
+          onClose={() => {
+            setShowAdminSendPinModal(false);
+            setTargetUserForPin(null);
+          }}
+          targetUser={targetUserForPin}
+          token={token}
+          onSuccess={() => {
+            fetchLockedUsers(true);
+          }}
+        />
       )}
     </div>
   );

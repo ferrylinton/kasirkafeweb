@@ -18,7 +18,8 @@ import {
   RefreshCw,
   X,
   Building2,
-  Store
+  Store,
+  CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -28,6 +29,8 @@ import { SelectUserModal, SelectableUser } from '../modals/SelectUserModal';
 import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
+import { VendorRegisterScreen } from './VendorRegisterScreen';
+import { ForgotPinModal } from '../modals/ForgotPinModal';
 
 interface VendorItem {
   id: string;
@@ -35,6 +38,11 @@ interface VendorItem {
   code: string;
   clientId?: string;
   status?: string;
+}
+
+export interface LoginScreenProps {
+  onOpenRegister?: () => void;
+  onOpenResetPin?: (token?: string) => void;
 }
 
 const DEFAULT_VENDORS: VendorItem[] = [
@@ -56,7 +64,7 @@ interface AlreadyLoggedInInfo {
   pinAttempted?: string;
 }
 
-export const LoginScreen: React.FC = () => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpenResetPin }) => {
   const {
     loginWithPin,
     forceLogoutUser,
@@ -68,6 +76,26 @@ export const LoginScreen: React.FC = () => {
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const { showToast } = useToast();
+
+  const [internalShowRegister, setInternalShowRegister] = useState(false);
+  const [showForgotPinModal, setShowForgotPinModal] = useState<boolean>(false);
+  const [confirmedVendorNotice, setConfirmedVendorNotice] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('confirmed') === 'true') {
+        return params.get('vendorName') || 'Vendor Anda';
+      }
+    }
+    return null;
+  });
+
+  const handleOpenRegister = () => {
+    if (onOpenRegister) {
+      onOpenRegister();
+    } else {
+      setInternalShowRegister(true);
+    }
+  };
 
   // Selected User state (with localStorage persistence)
   const [selectedUser, setSelectedUser] = useState<SelectableUser>(() => {
@@ -513,6 +541,27 @@ export const LoginScreen: React.FC = () => {
     };
   });
 
+  if (internalShowRegister) {
+    return (
+      <VendorRegisterScreen
+        onBackToLogin={() => setInternalShowRegister(false)}
+        onRegistrationSuccess={() => {
+          setInternalShowRegister(false);
+          // Refetch selectable vendors & users so the new vendor appears immediately
+          fetch('/api/auth/selectable-users')
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.success) {
+                if (Array.isArray(data.vendors) && data.vendors.length > 0) setVendors(data.vendors);
+                if (Array.isArray(data.users) && data.users.length > 0) setAllUsers(data.users);
+              }
+            })
+            .catch(() => {});
+        }}
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen w-full bg-[#f8f5f2] dark:bg-[#1a1412] text-stone-900 dark:text-stone-100 flex flex-col justify-between p-4 sm:p-6 transition-colors font-sans"
@@ -611,6 +660,33 @@ export const LoginScreen: React.FC = () => {
 
       {/* Main Login Card */}
       <div className="w-full max-w-md mx-auto my-auto flex flex-col items-center">
+        {/* Vendor Registration Email Confirmed Banner */}
+        {confirmedVendorNotice && (
+          <div
+            id="vendor-confirmed-alert"
+            className="w-full mb-5 p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 dark:border-emerald-500/40 flex items-start gap-3 text-emerald-900 dark:text-emerald-200 transition-all shadow-xs"
+          >
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs sm:text-sm font-bold font-heading">Akun Vendor Aktif!</h4>
+              <p className="text-[11px] sm:text-xs text-emerald-800/90 dark:text-emerald-300/90 mt-0.5 leading-relaxed">
+                Pendaftaran untuk <strong>{confirmedVendorNotice}</strong> telah terkonfirmasi. Silakan pilih akun dan masukkan PIN Anda.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConfirmedVendorNotice(null)}
+              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-100 p-1 rounded-lg hover:bg-emerald-500/10 transition-colors"
+              title="Tutup"
+              aria-label="Tutup"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Remote Session Revocation Security Alert Banner */}
         {sessionRevoked && (
           <div
@@ -800,6 +876,20 @@ export const LoginScreen: React.FC = () => {
                 <span>Cek Status</span>
               </button>
             </div>
+
+            {/* Quick action to request PIN reset or reset via email when locked */}
+            <div className="pt-2 border-t border-red-200/80 dark:border-red-900/60 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-red-800/80 dark:text-red-300/80">Lupa PIN kasir?</span>
+              <button
+                type="button"
+                id="btn-lockout-forgot-pin"
+                onClick={() => setShowForgotPinModal(true)}
+                className="px-2.5 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound className="w-3 h-3" />
+                <span>Reset PIN / Minta ke ADMIN</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -924,8 +1014,47 @@ export const LoginScreen: React.FC = () => {
               </>
             )}
           </button>
+
+          {/* Action button: Forgot PIN */}
+          <div className="w-full mt-3 flex items-center justify-center">
+            <button
+              id="btn-forgot-pin-link"
+              type="button"
+              onClick={() => setShowForgotPinModal(true)}
+              className="py-1 px-3 rounded-xl text-xs font-semibold text-stone-500 hover:text-accent dark:text-stone-400 dark:hover:text-orange-400 hover:bg-stone-100 dark:hover:bg-stone-900 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Lupa PIN Kasir? Reset via Email atau Minta ke ADMIN</span>
+            </button>
+          </div>
+
+          {/* Action button to open Vendor Registration */}
+          <div className="w-full mt-3 pt-3 border-t border-stone-200/80 dark:border-stone-800 text-center">
+            <button
+              id="btn-open-vendor-register"
+              type="button"
+              onClick={handleOpenRegister}
+              className="w-full py-2.5 px-4 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-100/60 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs font-bold transition-all flex items-center justify-center gap-2 group"
+            >
+              <Store className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform" />
+              <span>Daftar Mitra Vendor Baru (Role MANAGER)</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Forgot PIN Modal */}
+      <ForgotPinModal
+        isOpen={showForgotPinModal}
+        onClose={() => setShowForgotPinModal(false)}
+        defaultEmail={selectedUser?.email || ''}
+        onOpenResetWithToken={(token) => {
+          setShowForgotPinModal(false);
+          if (onOpenResetPin) {
+            onOpenResetPin(token);
+          }
+        }}
+      />
     </div>
   );
 };

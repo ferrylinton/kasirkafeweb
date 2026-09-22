@@ -14,8 +14,6 @@ export async function seedDatabase() {
       id: 'vnd_admin',
       name: 'Admin',
       code: 'ADMIN',
-      clientId: 'client_admin_master_00',
-      clientSecret: 'sec_admin_master_9941a80c2f',
       status: 'ACTIVE',
       email: 'admin@sipspot.com',
       phone: '+628119999000',
@@ -28,8 +26,6 @@ export async function seedDatabase() {
       id: 'vnd_sipspot_central',
       name: 'SipSpot Coffee & Boba (Pusat)',
       code: 'SIPSPOT',
-      clientId: 'client_sipspot_central_01',
-      clientSecret: 'sec_sipspot_central_8872a91e4f',
       status: 'ACTIVE',
       email: 'pusat@sipspot.com',
       phone: '+628123456789',
@@ -42,8 +38,6 @@ export async function seedDatabase() {
       id: 'vnd_kopi_kulo_kemang',
       name: 'Kopi Kulo & Toast (Kemang)',
       code: 'KULO',
-      clientId: 'client_kopikulo_kemang_02',
-      clientSecret: 'sec_kopikulo_kemang_c14b09e27a',
       status: 'ACTIVE',
       email: 'kemang@kopikulo.co.id',
       phone: '+628219876543',
@@ -56,8 +50,6 @@ export async function seedDatabase() {
       id: 'vnd_tehpoci_nusantara',
       name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
       code: 'TEHPOCI',
-      clientId: 'client_tehpoci_nusantara_03',
-      clientSecret: 'sec_tehpoci_nusantara_d39f77218b',
       status: 'ACTIVE',
       email: 'admin@tehpoci-nusantara.id',
       phone: '+628571234987',
@@ -910,6 +902,11 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
+      // Strip any legacy clientId and clientSecret fields from vendors collection
+      await db.collection('vendors').updateMany(
+        {},
+        { $unset: { clientId: "", clientSecret: "" } }
+      );
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
       // 1. Users - upsert each by email so all vendors have their staff accounts

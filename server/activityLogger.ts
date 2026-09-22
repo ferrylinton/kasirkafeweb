@@ -3,7 +3,15 @@ import { ObjectId } from 'mongodb';
 import { getDB, fallbackStore } from './db';
 import { logDataMutation } from './dailyRollingLogger';
 
-export type ActivityAction = 'CREATE' | 'UPDATE' | 'DELETE';
+export type ActivityAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'FORGOT_PIN_REQUEST'
+  | 'PIN_RESET_COMPLETED'
+  | 'ADMIN_PIN_RESET_REQUESTED'
+  | 'ADMIN_SENT_NEW_PIN'
+  | 'VENDOR_REGISTER';
 export type ActivityEntity =
   | 'PRODUCT'
   | 'INVENTORY'
