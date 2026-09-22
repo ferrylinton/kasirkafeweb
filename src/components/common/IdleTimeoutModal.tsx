@@ -57,6 +57,12 @@ export const IdleTimeoutModal: React.FC = () => {
         aria-labelledby="idle-warning-title"
         aria-describedby="idle-warning-desc"
         className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-stone-950/75 backdrop-blur-md transition-all select-none"
+        style={{
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
+        }}
       >
         <motion.div
           id="idle-timeout-modal-card"

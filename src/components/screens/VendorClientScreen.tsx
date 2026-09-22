@@ -186,7 +186,7 @@ export const VendorClientScreen: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#251e1b] p-6 rounded-2xl border border-stone-200/70 dark:border-stone-800/80 shadow-xs">
         <div>

@@ -268,7 +268,7 @@ export const AdminLockedUsersScreen: React.FC = () => {
   const ipLockedCount = lockedUsers.filter(u => u.type === 'ip').length;
 
   return (
-    <div id="admin-locked-users-screen" className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div id="admin-locked-users-screen" className="min-h-screen pt-safe-nav pb-safe-screen px-safe w-full max-w-7xl mx-auto space-y-6">
       {/* Top Header Card */}
       <div className="bg-white dark:bg-[#201514] rounded-3xl p-6 sm:p-7 border border-stone-200/80 dark:border-stone-800 shadow-sm transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">

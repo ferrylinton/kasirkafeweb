@@ -82,6 +82,10 @@ export const HousekeepingNotificationBanner: React.FC<HousekeepingNotificationBa
     <div
       id="housekeeping-notification-banner"
       className="relative z-30 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md border-b border-amber-600/30"
+      style={{
+        paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
+      }}
     >
       <div className="max-w-7xl mx-auto px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm">
         {/* Left Side: Icon & Content */}
