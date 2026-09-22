@@ -31,6 +31,7 @@ export const fallbackStore: {
   housekeeping_settings: any;
   vendor_confirmations: any[];
   password_reset_tokens: any[];
+  password_reset_requests: any[];
 } = {
   vendors: [],
   users: [],
@@ -48,7 +49,8 @@ export const fallbackStore: {
   housekeeping_history: [],
   housekeeping_settings: null,
   vendor_confirmations: [],
-  password_reset_tokens: []
+  password_reset_tokens: [],
+  password_reset_requests: []
 };
 
 export async function connectDB(): Promise<Db | null> {

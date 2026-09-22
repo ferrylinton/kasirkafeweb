@@ -16,7 +16,6 @@ const createUserSchema = z.object({
   email: z.string().email('Format email tidak valid'),
   password: z.string().min(6, 'Password minimal 6 karakter'),
   role: z.enum(['MANAGER', 'CASHIER']),
-  pin: z.string().length(6, 'PIN harus 6 digit angka'),
   avatar: z.string().optional()
 });
 
@@ -24,7 +23,6 @@ const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
   role: z.enum(['MANAGER', 'CASHIER']).optional(),
-  pin: z.string().length(6, 'PIN harus 6 digit angka').optional(),
   avatar: z.string().optional(),
   newPassword: z.string().min(6).optional()
 });
@@ -84,7 +82,6 @@ userRouter.get('/', async (req: Request, res: Response) => {
         email: u.email,
         name: u.name,
         role: u.role,
-        pin: u.pin,
         avatar: u.avatar,
         createdAt: u.createdAt
       }))
@@ -108,7 +105,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    const { name, email, password, role, pin, avatar } = parsed.data;
+    const { name, email, password, role, avatar } = parsed.data;
     const activeVendorId = req.vendorId || 'vnd_sipspot_central';
     const db = getDB();
 
@@ -138,7 +135,6 @@ userRouter.post('/', async (req: Request, res: Response) => {
       password: hashedPassword,
       role,
       vendorId: activeVendorId,
-      pin,
       avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -181,8 +177,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
         vendorId: activeVendorId,
         email: newUser.email,
         name: newUser.name,
-        role: newUser.role,
-        pin: newUser.pin
+        role: newUser.role
       }
     });
   } catch (err: any) {
@@ -238,7 +233,6 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     if (parsed.data.name) updateFields.name = parsed.data.name;
     if (parsed.data.email) updateFields.email = parsed.data.email.toLowerCase();
     if (parsed.data.role) updateFields.role = parsed.data.role;
-    if (parsed.data.pin) updateFields.pin = parsed.data.pin;
     if (parsed.data.avatar !== undefined) updateFields.avatar = parsed.data.avatar;
     if (parsed.data.newPassword) {
       updateFields.password = await hashPassword(parsed.data.newPassword);

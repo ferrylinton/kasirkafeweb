@@ -35,7 +35,6 @@ export interface ParsedCsvRow {
   id?: string;
   name: string;
   category?: string;
-  subCategory?: string;
   price?: number;
   stock?: number;
   lowStockThreshold?: number;
@@ -116,7 +115,6 @@ function normalizeHeaderKey(header: string): string {
   if (['price', 'harga', 'hargasatuan', 'unitprice', 'cost', 'rp', 'hargajual'].includes(h)) return 'price';
   if (['stock', 'stok', 'qty', 'quantity', 'jumlah', 'count', 'stoksaatini'].includes(h)) return 'stock';
   if (['category', 'kategori', 'cat'].includes(h)) return 'category';
-  if (['subcategory', 'subkategori', 'subkategori2', 'kelompok'].includes(h)) return 'subCategory';
   if (['threshold', 'lowstockthreshold', 'lowstock', 'minstock', 'batasstok', 'min', 'batikperingatan'].includes(h)) return 'lowStockThreshold';
   if (['description', 'deskripsi', 'keterangan', 'desc', 'detail'].includes(h)) return 'description';
   if (['id', 'productid', 'kode', 'sku', 'idproduk'].includes(h)) return 'id';
@@ -227,7 +225,6 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
         id: rawId || undefined,
         name,
         category: rawObj.category ? rawObj.category.toLowerCase().trim() : undefined,
-        subCategory: rawObj.subCategory ? rawObj.subCategory.trim() : undefined,
         price,
         stock,
         lowStockThreshold,
@@ -356,7 +353,6 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
           id: r.id,
           name: r.name,
           category: r.category,
-          subCategory: r.subCategory,
           price: r.price,
           stock: r.stock,
           lowStockThreshold: r.lowStockThreshold,

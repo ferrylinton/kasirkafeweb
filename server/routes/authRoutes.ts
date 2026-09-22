@@ -3,7 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { getDB, fallbackStore } from '../db';
 import { comparePassword, hashPassword, signToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken } from '../auth';
-import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPinResetEmail, sendAdminNewPinEmail } from '../mail';
+import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPasswordResetEmail, sendAdminNewPasswordEmail } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
@@ -24,13 +24,11 @@ import { getRedisClient } from '../redis';
 export const authRouter = Router();
 
 const loginSchema = z.object({
-  email: z.string().email('Format email tidak valid').optional(),
-  password: z.string().min(4, 'Password minimal 4 karakter').optional(),
-  pin: z.string().length(6, 'PIN harus 6 digit angka').optional(),
+  email: z.string().email('Format email tidak valid'),
+  password: z.string().min(1, 'Password harus diisi'),
   forceLogout: z.boolean().optional(),
-  managerPin: z.string().length(6, 'PIN Manager harus 6 digit angka').optional()
-}).refine(data => (data.email && data.password) || data.pin, {
-  message: 'Harap masukkan email dan password, atau gunakan PIN 6 digit'
+  managerEmail: z.string().email('Format email manager tidak valid').optional(),
+  managerPassword: z.string().optional()
 });
 
 // Helper to get active sessions for a user
@@ -133,32 +131,30 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
   return uniqueSessionIds.size;
 }
 
-// Helper to find manager by 6-digit PIN
-export async function findManagerByPin(pin: string) {
+// Helper to verify manager credentials by email & password
+export async function verifyManagerCredentials(email: string, password: string) {
+  const normalizedEmail = email.toLowerCase().trim();
   const db = getDB();
   let manager: any = null;
 
   if (db) {
     try {
       manager = await db.collection('users').findOne({
-        role: 'MANAGER',
-        $or: [
-          { pin: pin },
-          ...(pin === '123456' ? [{ pin: '1234' }] : [])
-        ]
+        email: normalizedEmail,
+        role: 'MANAGER'
       });
     } catch (e) {}
   }
 
   if (!manager) {
     manager = fallbackStore.users.find(u => {
-      if (u.role !== 'MANAGER') return false;
-      const userPin = (u.pin === '1234') ? '123456' : u.pin;
-      return userPin === pin;
+      return u.email.toLowerCase().trim() === normalizedEmail && u.role === 'MANAGER';
     });
   }
 
-  return manager;
+  if (!manager) return null;
+  const match = await comparePassword(password, manager.password);
+  return match ? manager : null;
 }
 
 /**
@@ -359,11 +355,6 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
     }
 
     const safeUsers = usersList.map(u => {
-      let pin = u.pin;
-      if (pin === '1234') pin = '123456';
-      else if (pin === '8492') pin = '849201';
-      else if (!pin) pin = '123456';
-
       const vId = u.vendorId || 'vnd_sipspot_central';
       const vendor = vendorMap.get(vId);
 
@@ -373,10 +364,8 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
         email: u.email,
         role: u.role || 'CASHIER',
         avatar: u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        pin,
         vendorId: vId,
-        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)',
-        vendorCode: vendor?.code || 'SIPSPOT'
+        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)'
       };
     });
 
@@ -385,7 +374,6 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
       vendors: vendors.map(v => ({
         id: v.id,
         name: v.name,
-        code: v.code,
         status: v.status
       })),
       users: safeUsers
@@ -414,7 +402,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    const { email, password, pin } = parsed.data;
+    const { email, password } = parsed.data;
     const forwarded = req.headers['x-forwarded-for'];
     const ipAddress = typeof forwarded === 'string'
       ? forwarded.split(',')[0].trim()
@@ -449,27 +437,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     if (db) {
       try {
-        if (pin) {
-          if (email) {
-            user = await db.collection('users').findOne({ email: email.toLowerCase() });
-            // Check matching pin
-            if (user && user.pin !== pin) {
-              // Backward compatibility for 4-digit legacy
-              if (!(user.pin === '1234' && pin === '123456') && !(user.pin === '8492' && pin === '849201')) {
-                user = null;
-              }
-            }
-          } else {
-            user = await db.collection('users').findOne({ pin });
-            if (!user && pin === '123456') {
-              user = await db.collection('users').findOne({ pin: '1234' });
-            } else if (!user && pin === '849201') {
-              user = await db.collection('users').findOne({ pin: '8492' });
-            }
-          }
-        } else if (email) {
-          user = await db.collection('users').findOne({ email: email.toLowerCase() });
-        }
+        user = await db.collection('users').findOne({ email: email.toLowerCase() });
       } catch (err) {
         // Fallback to local
       }
@@ -477,28 +445,11 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     // Check fallback store if not found in db
     if (!user) {
-      if (pin) {
-        if (email) {
-          const u = fallbackStore.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-          if (u) {
-            const userPin = (u.pin === '1234') ? '123456' : (u.pin === '8492' ? '849201' : u.pin);
-            if (userPin === pin) {
-              user = u;
-            }
-          }
-        } else {
-          user = fallbackStore.users.find(u => {
-            const userPin = (u.pin === '1234') ? '123456' : (u.pin === '8492' ? '849201' : u.pin);
-            return userPin === pin;
-          });
-        }
-      } else if (email) {
-        user = fallbackStore.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      }
+      user = fallbackStore.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     }
 
     if (!user) {
-      const failReason = pin ? 'PIN kasir tidak cocok atau akun tidak ditemukan' : 'Email tidak terdaftar';
+      const failReason = 'Email tidak terdaftar';
       const failStatus = await recordUserFailedAttempt(email, ipAddress, failReason);
       logLogin({
         status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
@@ -506,7 +457,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         ipAddress,
         userAgent: req.headers['user-agent'] as string,
         req,
-        loginMethod: pin ? 'PIN' : 'PASSWORD',
+        loginMethod: 'PASSWORD',
         reason: failReason
       }).catch(() => {});
 
@@ -523,9 +474,45 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         });
       }
 
-      const msg = pin
-        ? `PIN salah. Percobaan gagal: ${failStatus.failedAttempts}/3. Sisa ${failStatus.attemptsRemaining} kesempatan sebelum akun terkunci 15 menit.`
-        : `Email atau akun tidak ditemukan. Percobaan gagal: ${failStatus.failedAttempts}/3. Sisa ${failStatus.attemptsRemaining} kesempatan.`;
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid Credentials',
+        isLocked: false,
+        failedAttempts: failStatus.failedAttempts,
+        attemptsRemaining: failStatus.attemptsRemaining,
+        message: `Email atau akun tidak ditemukan. Percobaan gagal: ${failStatus.failedAttempts}/3. Sisa ${failStatus.attemptsRemaining} kesempatan.`
+      });
+    }
+
+    // Check password
+    const match = await comparePassword(password, user.password);
+    if (!match) {
+      const failStatus = await recordUserFailedAttempt(email, ipAddress, 'Password akun salah');
+      logLogin({
+        status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        userId: user._id?.toString() || user.id,
+        ipAddress,
+        userAgent: req.headers['user-agent'] as string,
+        req,
+        loginMethod: 'PASSWORD',
+        reason: 'Password akun salah'
+      }).catch(() => {});
+
+      if (failStatus.isLocked) {
+        return res.status(423).json({
+          success: false,
+          error: 'Account Locked',
+          isLocked: true,
+          lockedUntil: failStatus.lockedUntil,
+          remainingSeconds: failStatus.remainingSeconds,
+          failedAttempts: failStatus.failedAttempts,
+          attemptsRemaining: 0,
+          message: 'Akun Anda telah terkunci selama 15 menit karena 3 kali gagal login. Silakan coba lagi nanti.'
+        });
+      }
 
       return res.status(401).json({
         success: false,
@@ -533,57 +520,15 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         isLocked: false,
         failedAttempts: failStatus.failedAttempts,
         attemptsRemaining: failStatus.attemptsRemaining,
-        message: msg
+        message: `Password salah. Percobaan gagal: ${failStatus.failedAttempts}/3. Sisa ${failStatus.attemptsRemaining} kesempatan sebelum akun terkunci 15 menit.`
       });
-    }
-
-    // If logging in via password
-    if (email && password) {
-      const match = await comparePassword(password, user.password);
-      if (!match) {
-        const failStatus = await recordUserFailedAttempt(email, ipAddress, 'Password akun salah');
-        logLogin({
-          status: failStatus.isLocked ? 'LOCKED' : 'FAILED',
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          userId: user._id?.toString() || user.id,
-          ipAddress,
-          userAgent: req.headers['user-agent'] as string,
-          req,
-          loginMethod: 'PASSWORD',
-          reason: 'Password akun salah'
-        }).catch(() => {});
-
-        if (failStatus.isLocked) {
-          return res.status(423).json({
-            success: false,
-            error: 'Account Locked',
-            isLocked: true,
-            lockedUntil: failStatus.lockedUntil,
-            remainingSeconds: failStatus.remainingSeconds,
-            failedAttempts: failStatus.failedAttempts,
-            attemptsRemaining: 0,
-            message: 'Akun Anda telah terkunci selama 15 menit karena 3 kali gagal login. Silakan coba lagi nanti.'
-          });
-        }
-
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid Credentials',
-          isLocked: false,
-          failedAttempts: failStatus.failedAttempts,
-          attemptsRemaining: failStatus.attemptsRemaining,
-          message: `Password salah. Percobaan gagal: ${failStatus.failedAttempts}/3. Sisa ${failStatus.attemptsRemaining} kesempatan sebelum akun terkunci 15 menit.`
-        });
-      }
     }
 
     // Authentication Succeeded -> Clear Lockout!
     await clearUserLockout(user.email, ipAddress);
 
     const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
-    const loginMethod: 'PIN' | 'PASSWORD' = pin ? 'PIN' : 'PASSWORD';
+    const loginMethod = 'PASSWORD';
     const device = parseUserAgent(userAgent);
 
     // SINGLE ACTIVE BROWSER POLICY:
@@ -726,7 +671,6 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         avatar: user.avatar,
-        pin: user.pin,
         vendorId: historyVendorId
       }
     });
@@ -782,7 +726,6 @@ authRouter.get('/me', authMiddleware, async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         avatar: user.avatar,
-        pin: user.pin,
         vendorId: resolvedVendorId
       }
     });
@@ -897,8 +840,7 @@ authRouter.put('/profile', authMiddleware, async (req: Request, res: Response) =
         email: user.email,
         name: updates.name,
         role: user.role,
-        avatar: updates.avatar,
-        pin: user.pin
+        avatar: updates.avatar
       }
     });
   } catch (err: any) {
@@ -1343,7 +1285,7 @@ authRouter.post('/revoke-session', authMiddleware, async (req: Request, res: Res
  */
 authRouter.post('/force-logout', async (req: Request, res: Response) => {
   try {
-    const { targetEmail, sessionId, managerPin, reason } = req.body;
+    const { targetEmail, sessionId, managerEmail: reqMgrEmail, managerPassword, reason } = req.body;
 
     if (!targetEmail && !sessionId) {
       return res.status(400).json({
@@ -1361,16 +1303,16 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const decoded = verifyToken(token);
-      if (decoded && decoded.role === 'MANAGER') {
+      if (decoded && (decoded.role === 'MANAGER' || decoded.role === 'ADMIN')) {
         isAuthorized = true;
         managerName = decoded.name;
         managerEmail = decoded.email;
       }
     }
 
-    // 2. Check if authorized via managerPin (6-digit PIN)
-    if (!isAuthorized && managerPin) {
-      const mgr = await findManagerByPin(managerPin);
+    // 2. Check if authorized via manager email & password
+    if (!isAuthorized && reqMgrEmail && managerPassword) {
+      const mgr = await verifyManagerCredentials(reqMgrEmail, managerPassword);
       if (mgr) {
         isAuthorized = true;
         managerName = mgr.name;
@@ -1378,8 +1320,8 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
       } else {
         return res.status(403).json({
           success: false,
-          error: 'InvalidManagerPin',
-          message: 'PIN Manager tidak valid. Hanya role Manager yang dapat melakukan force logout.'
+          error: 'InvalidManagerCredentials',
+          message: 'Kredensial Manager tidak valid. Hanya role Manager yang dapat melakukan force logout.'
         });
       }
     }
@@ -1388,7 +1330,7 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
-        message: 'Akses ditolak. Fitur Force Logout hanya dapat dilakukan oleh role Manager.'
+        message: 'Akses ditolak. Fitur Force Logout hanya dapat dilakukan oleh role Manager atau Administrator.'
       });
     }
 
@@ -1627,43 +1569,6 @@ async function findUserByEmail(email: string) {
 }
 
 /**
- * Helper to update user PIN across MongoDB and fallbackStore
- */
-async function updateUserPin(userIdOrEmail: string, newPin: string) {
-  const db = getDB();
-  const normalized = userIdOrEmail.toLowerCase().trim();
-  
-  // Update in fallback store
-  const fallbackIndex = fallbackStore.users.findIndex(
-    u => (u._id && u._id.toString() === userIdOrEmail) ||
-         (u.id && u.id === userIdOrEmail) ||
-         (u.email && u.email.toLowerCase().trim() === normalized)
-  );
-  if (fallbackIndex !== -1) {
-    fallbackStore.users[fallbackIndex].pin = newPin;
-    fallbackStore.users[fallbackIndex].updatedAt = new Date();
-  }
-
-  // Update in DB if available
-  if (db) {
-    try {
-      let query: any = {
-        email: { $regex: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-      };
-      if (ObjectId.isValid(userIdOrEmail)) {
-        query = { _id: new ObjectId(userIdOrEmail) };
-      }
-      await db.collection('users').updateOne(
-        query,
-        { $set: { pin: newPin, updatedAt: new Date() } }
-      );
-    } catch (e) {
-      console.warn('DB error updateUserPin:', e);
-    }
-  }
-}
-
-/**
  * Helper to update user password across MongoDB and fallbackStore
  */
 async function updateUserPassword(userIdOrEmail: string, newPassword: string) {
@@ -1703,11 +1608,11 @@ async function updateUserPassword(userIdOrEmail: string, newPassword: string) {
 
 /**
  * -------------------------------------------------------------
- * FORGOT PIN & PIN RESET FLOW
+ * FORGOT PASSWORD & PASSWORD RESET FLOW
  * -------------------------------------------------------------
  */
 
-// 1. Request Reset PIN/Password Link via Email (Check whether email exists!)
+// 1. Request Reset Password Link via Email
 const handleForgotCredentials = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -1756,20 +1661,20 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
     const db = getDB();
     if (db) {
       try {
-        await db.collection('pin_reset_tokens').insertOne(tokenRecord);
+        await db.collection('password_reset_tokens').insertOne(tokenRecord);
       } catch (e) {
-        fallbackStore.pin_reset_tokens.unshift(tokenRecord);
+        fallbackStore.password_reset_tokens.unshift(tokenRecord);
       }
     } else {
-      fallbackStore.pin_reset_tokens.unshift(tokenRecord);
+      fallbackStore.password_reset_tokens.unshift(tokenRecord);
     }
 
     const host = req.get('host') || 'localhost:3000';
     const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
-    const resetUrl = `${protocol}://${host}/?action=reset-pin&token=${resetToken}`;
+    const resetUrl = `${protocol}://${host}/?action=reset-password&token=${resetToken}`;
 
-    // Send email with reset PIN link
-    const mailResult = await sendPinResetEmail({
+    // Send email with reset password link
+    const mailResult = await sendPasswordResetEmail({
       recipientEmail: normalizedEmail,
       userName: user.name,
       resetToken,
@@ -1779,11 +1684,11 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
 
     // Record activity log
     await recordActivityLog({
-      action: 'FORGOT_PIN_REQUEST',
+      action: 'FORGOT_PASSWORD_REQUEST',
       entity: 'USER',
       entityId: user._id ? user._id.toString() : user.id,
       entityName: user.name,
-      summary: `Pengguna ${user.name} (${normalizedEmail}) meminta tautan atur ulang PIN ke email`,
+      summary: `Pengguna ${user.name} (${normalizedEmail}) meminta tautan atur ulang password ke email`,
       user: {
         id: user._id ? user._id.toString() : user.id,
         name: user.name,
@@ -1796,7 +1701,7 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: `Tautan atur ulang kredensial telah berhasil dikirim ke ${normalizedEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
+      message: `Tautan atur ulang password telah berhasil dikirim ke ${normalizedEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
       email: normalizedEmail,
       userName: user.name,
       resetUrl,
@@ -1807,22 +1712,22 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'ServerError',
-      message: 'Gagal memproses permintaan reset password/PIN. Silakan coba beberapa saat lagi.'
+      message: 'Gagal memproses permintaan reset password. Silakan coba beberapa saat lagi.'
     });
   }
 };
 
-authRouter.post('/forgot-pin', handleForgotCredentials);
 authRouter.post('/forgot-password', handleForgotCredentials);
+authRouter.post('/forgot-pin', handleForgotCredentials);
 
-// 2. Verify Reset PIN Token
-authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
+// 2. Verify Reset Password Token
+const handleResetVerify = async (req: Request, res: Response) => {
   try {
     const token = req.query.token as string;
     if (!token) {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN tidak ditemukan.'
+        message: 'Token reset password tidak ditemukan.'
       });
     }
 
@@ -1831,25 +1736,28 @@ authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
 
     if (db) {
       try {
-        tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+        tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
+        if (!tokenEntry) {
+          tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+        }
       } catch (e) {
-        tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+        tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
       }
     } else {
-      tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+      tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
     }
 
     if (!tokenEntry) {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN tidak valid atau sudah digunakan.'
+        message: 'Token reset password tidak valid atau sudah digunakan.'
       });
     }
 
     if (new Date(tokenEntry.expiresAt).getTime() < Date.now()) {
       return res.status(400).json({
         success: false,
-        message: 'Token reset PIN sudah kedaluwarsa. Silakan ajukan permintaan reset PIN baru.'
+        message: 'Token reset password sudah kedaluwarsa. Silakan ajukan permintaan reset password baru.'
       });
     }
 
@@ -1864,40 +1772,29 @@ authRouter.get('/reset-pin/verify', async (req: Request, res: Response) => {
       vendorName: vendor ? vendor.name : 'SipSpot POS'
     });
   } catch (error: any) {
-    console.error('Error in /api/auth/reset-pin/verify:', error);
+    console.error('Error in reset verify:', error);
     return res.status(500).json({
       success: false,
-      message: 'Gagal memverifikasi token reset PIN'
+      message: 'Gagal memverifikasi token reset password'
     });
   }
-});
+};
 
-// 3. Confirm New PIN or Password using Token
+authRouter.get('/reset-password/verify', handleResetVerify);
+authRouter.get('/reset-pin/verify', handleResetVerify);
+
+// 3. Confirm New Password using Token
 const handleResetConfirm = async (req: Request, res: Response) => {
   try {
-    const { token, newPin, newPassword } = req.body;
+    const { token, newPassword } = req.body;
     if (!token || typeof token !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Token reset kredensial tidak disertakan.'
+        message: 'Token reset tidak disertakan.'
       });
     }
 
-    if (!newPin && !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Harap masukkan password baru (minimal 6 karakter) atau PIN baru 6 digit.'
-      });
-    }
-
-    if (newPin && !/^\d{6}$/.test(String(newPin).trim())) {
-      return res.status(400).json({
-        success: false,
-        message: 'PIN baru harus terdiri dari 6 digit angka.'
-      });
-    }
-
-    if (newPassword && String(newPassword).trim().length < 6) {
+    if (!newPassword || String(newPassword).trim().length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Password baru minimal harus 6 karakter.'
@@ -1909,12 +1806,15 @@ const handleResetConfirm = async (req: Request, res: Response) => {
 
     if (db) {
       try {
-        tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+        tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
+        if (!tokenEntry) {
+          tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
+        }
       } catch (e) {
-        tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+        tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
       }
     } else {
-      tokenEntry = fallbackStore.pin_reset_tokens.find(t => t.token === token && !t.used);
+      tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
     }
 
     if (!tokenEntry) {
@@ -1941,26 +1841,20 @@ const handleResetConfirm = async (req: Request, res: Response) => {
 
     const targetUserId = user._id ? user._id.toString() : user.id;
 
-    // Update password if provided
-    if (newPassword) {
-      await updateUserPassword(targetUserId, String(newPassword).trim());
-    }
-
-    // Update user PIN if provided
-    if (newPin) {
-      await updateUserPin(targetUserId, String(newPin).trim());
-    }
+    // Update password
+    await updateUserPassword(targetUserId, String(newPassword).trim());
 
     // Mark token as used
     if (db) {
       try {
+        await db.collection('password_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
         await db.collection('pin_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
       } catch (e) { }
     }
-    const tokenIdx = fallbackStore.pin_reset_tokens.findIndex(t => t.token === token);
+    const tokenIdx = fallbackStore.password_reset_tokens.findIndex(t => t.token === token);
     if (tokenIdx !== -1) {
-      fallbackStore.pin_reset_tokens[tokenIdx].used = true;
-      fallbackStore.pin_reset_tokens[tokenIdx].usedAt = new Date();
+      fallbackStore.password_reset_tokens[tokenIdx].used = true;
+      fallbackStore.password_reset_tokens[tokenIdx].usedAt = new Date();
     }
 
     // Auto unlock user in Redis lockout if locked
@@ -1969,24 +1863,24 @@ const handleResetConfirm = async (req: Request, res: Response) => {
 
     // Record activity log
     await recordActivityLog({
-      action: 'PIN_RESET_COMPLETED',
+      action: 'PASSWORD_RESET_COMPLETED',
       entity: 'USER',
       entityId: targetUserId,
       entityName: user.name,
-      summary: `Pengguna ${user.name} (${tokenEntry.email}) berhasil mereset kredensial akun melalui tautan email`,
+      summary: `Pengguna ${user.name} (${tokenEntry.email}) berhasil mereset password akun melalui tautan email`,
       user: {
         id: targetUserId,
         name: user.name,
         email: tokenEntry.email,
         role: user.role
       },
-      details: { email: tokenEntry.email, passwordReset: !!newPassword, pinReset: !!newPin },
+      details: { email: tokenEntry.email, passwordReset: true },
       req
     });
 
     return res.json({
       success: true,
-      message: 'Kredensial baru Anda berhasil disimpan! Silakan login dengan email dan password baru Anda.',
+      message: 'Password baru Anda berhasil disimpan! Silakan login dengan email dan password baru Anda.',
       email: tokenEntry.email,
       userName: user.name
     });
@@ -1994,16 +1888,16 @@ const handleResetConfirm = async (req: Request, res: Response) => {
     console.error('Error in reset confirm:', error);
     return res.status(500).json({
       success: false,
-      message: 'Gagal mengatur ulang kredensial akun.'
+      message: 'Gagal mengatur ulang password akun.'
     });
   }
 };
 
-authRouter.post('/reset-pin/confirm', handleResetConfirm);
 authRouter.post('/reset-password/confirm', handleResetConfirm);
+authRouter.post('/reset-pin/confirm', handleResetConfirm);
 
-// 4. User requests reset PIN to role ADMIN (Check whether email exists!)
-authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
+// 4. User requests reset password to role ADMIN
+const handlePasswordResetRequest = async (req: Request, res: Response) => {
   try {
     const { email, note } = req.body;
     if (!email || typeof email !== 'string') {
@@ -2030,7 +1924,7 @@ authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'EmailNotFound',
-        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Permintaan reset PIN ke ADMIN hanya berlaku untuk akun yang telah terdaftar.'
+        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Permintaan reset password ke ADMIN hanya berlaku untuk akun yang telah terdaftar.'
       });
     }
 
@@ -2044,7 +1938,7 @@ authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
       role: user.role,
       vendorId: user.vendorId,
       vendorName: vendor ? vendor.name : 'SipSpot POS',
-      note: note ? String(note).slice(0, 300) : 'Pengguna meminta reset PIN langsung ke role ADMIN',
+      note: note ? String(note).slice(0, 300) : 'Pengguna meminta reset password langsung ke role ADMIN',
       status: 'PENDING',
       requestedAt: new Date(),
       ipAddress: req.ip || req.socket.remoteAddress || '-'
@@ -2053,20 +1947,20 @@ authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
     const db = getDB();
     if (db) {
       try {
-        await db.collection('pin_reset_requests').insertOne(requestRecord);
+        await db.collection('password_reset_requests').insertOne(requestRecord);
       } catch (e) {
-        fallbackStore.pin_reset_requests.unshift(requestRecord);
+        fallbackStore.password_reset_requests.unshift(requestRecord);
       }
     } else {
-      fallbackStore.pin_reset_requests.unshift(requestRecord);
+      fallbackStore.password_reset_requests.unshift(requestRecord);
     }
 
     await recordActivityLog({
-      action: 'ADMIN_PIN_RESET_REQUESTED',
+      action: 'ADMIN_PASSWORD_RESET_REQUESTED',
       entity: 'USER',
       entityId: user._id ? user._id.toString() : user.id,
       entityName: user.name,
-      summary: `Pengguna ${user.name} (${normalizedEmail}) mengirimkan permintaan reset PIN ke Administrator`,
+      summary: `Pengguna ${user.name} (${normalizedEmail}) mengirimkan permintaan reset password ke Administrator`,
       user: {
         id: user._id ? user._id.toString() : user.id,
         name: user.name,
@@ -2079,7 +1973,7 @@ authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: 'Permintaan reset PIN telah berhasil dikirim ke Administrator. Role ADMIN akan memproses dan mengirimkan PIN baru ke email Anda.',
+      message: 'Permintaan reset password telah berhasil dikirim ke Administrator. Role ADMIN akan memproses dan mengirimkan password baru ke email Anda.',
       requestId: requestRecord.id,
       user: {
         name: user.name,
@@ -2088,28 +1982,34 @@ authRouter.post('/pin-reset-requests', async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error('Error in /api/auth/pin-reset-requests:', error);
+    console.error('Error in password reset requests:', error);
     return res.status(500).json({
       success: false,
       error: 'ServerError',
-      message: 'Gagal mengirimkan permintaan reset PIN ke Administrator.'
+      message: 'Gagal mengirimkan permintaan reset password ke Administrator.'
     });
   }
-});
+};
 
-// 5. Admin: Get all PIN reset requests
-authRouter.get('/admin/pin-reset-requests', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+authRouter.post('/password-reset-requests', handlePasswordResetRequest);
+authRouter.post('/pin-reset-requests', handlePasswordResetRequest);
+
+// 5. Admin: Get all password reset requests
+const handleAdminGetResetRequests = async (req: Request, res: Response) => {
   try {
     const db = getDB();
     let requests: any[] = [];
     if (db) {
       try {
-        requests = await db.collection('pin_reset_requests').find().sort({ requestedAt: -1 }).toArray();
+        requests = await db.collection('password_reset_requests').find().sort({ requestedAt: -1 }).toArray();
+        if (requests.length === 0) {
+          requests = await db.collection('pin_reset_requests').find().sort({ requestedAt: -1 }).toArray();
+        }
       } catch (e) {
-        requests = [...fallbackStore.pin_reset_requests];
+        requests = [...fallbackStore.password_reset_requests];
       }
     } else {
-      requests = [...fallbackStore.pin_reset_requests];
+      requests = [...fallbackStore.password_reset_requests];
     }
 
     requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
@@ -2119,18 +2019,21 @@ authRouter.get('/admin/pin-reset-requests', authMiddleware, requireAdmin, async 
       requests
     });
   } catch (error: any) {
-    console.error('Error fetching admin pin reset requests:', error);
+    console.error('Error fetching admin reset requests:', error);
     return res.status(500).json({
       success: false,
-      message: 'Gagal mengambil daftar permintaan reset PIN'
+      message: 'Gagal mengambil daftar permintaan reset password'
     });
   }
-});
+};
 
-// 6. Admin: Generate and Send New PIN to User's Email
-authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+authRouter.get('/admin/password-reset-requests', authMiddleware, requireAdmin, handleAdminGetResetRequests);
+authRouter.get('/admin/pin-reset-requests', authMiddleware, requireAdmin, handleAdminGetResetRequests);
+
+// 6. Admin: Generate and Send New Password to User's Email
+const handleAdminSendNewPassword = async (req: Request, res: Response) => {
   try {
-    const { email, customPin, requestId } = req.body;
+    const { email, customPassword, customPin, requestId } = req.body;
     if (!email || typeof email !== 'string') {
       return res.status(400).json({
         success: false,
@@ -2147,23 +2050,24 @@ authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req:
       });
     }
 
-    // Generate or validate 6-digit PIN
-    let newPin: string;
-    if (customPin) {
-      if (!/^\d{6}$/.test(String(customPin).trim())) {
+    // Generate or validate password
+    const pwdInput = customPassword || customPin;
+    let newPassword: string;
+    if (pwdInput) {
+      if (String(pwdInput).trim().length < 6) {
         return res.status(400).json({
           success: false,
-          message: 'PIN baru harus berupa 6 digit angka.'
+          message: 'Password baru minimal harus 6 karakter.'
         });
       }
-      newPin = String(customPin).trim();
+      newPassword = String(pwdInput).trim();
     } else {
-      // Secure random 6-digit number
-      newPin = crypto.randomInt(100000, 999999).toString();
+      // Secure random 8-character password
+      newPassword = crypto.randomBytes(4).toString('hex');
     }
 
-    // Update user PIN in database and fallback store
-    await updateUserPin(user._id ? user._id.toString() : user.id, newPin);
+    // Update user password in database and fallback store
+    await updateUserPassword(user._id ? user._id.toString() : user.id, newPassword);
 
     // Auto unlock if user was locked out
     await unlockUserInRedis(normalizedEmail, (req as any).user?.email || 'ADMIN');
@@ -2172,14 +2076,14 @@ authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req:
     // Get vendor info
     const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
 
-    // Send email to user with the new PIN
+    // Send email to user with the new password
     const adminEmail = (req as any).user?.email || 'admin@sipspot.id';
     const adminName = (req as any).user?.name || 'Administrator Sistem';
 
-    const mailResult = await sendAdminNewPinEmail({
+    const mailResult = await sendAdminNewPasswordEmail({
       recipientEmail: normalizedEmail,
       userName: user.name,
-      newPin,
+      newPassword,
       adminEmail,
       adminName,
       vendorName: vendor ? vendor.name : 'SipSpot POS'
@@ -2190,60 +2094,60 @@ authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req:
     if (requestId) {
       if (db) {
         try {
-          await db.collection('pin_reset_requests').updateOne(
+          await db.collection('password_reset_requests').updateOne(
             { id: requestId },
             {
               $set: {
                 status: 'COMPLETED',
                 processedAt: new Date(),
                 processedBy: adminEmail,
-                newPinSent: true
+                newPasswordSent: true
               }
             }
           );
         } catch (e) { }
       }
-      const reqIdx = fallbackStore.pin_reset_requests.findIndex(r => r.id === requestId);
+      const reqIdx = fallbackStore.password_reset_requests.findIndex((r: any) => r.id === requestId);
       if (reqIdx !== -1) {
-        fallbackStore.pin_reset_requests[reqIdx].status = 'COMPLETED';
-        fallbackStore.pin_reset_requests[reqIdx].processedAt = new Date();
-        fallbackStore.pin_reset_requests[reqIdx].processedBy = adminEmail;
-        fallbackStore.pin_reset_requests[reqIdx].newPinSent = true;
+        fallbackStore.password_reset_requests[reqIdx].status = 'COMPLETED';
+        fallbackStore.password_reset_requests[reqIdx].processedAt = new Date();
+        fallbackStore.password_reset_requests[reqIdx].processedBy = adminEmail;
+        (fallbackStore.password_reset_requests[reqIdx] as any).newPasswordSent = true;
       }
     } else {
       // Mark any pending request for this email as COMPLETED
       if (db) {
         try {
-          await db.collection('pin_reset_requests').updateMany(
+          await db.collection('password_reset_requests').updateMany(
             { email: normalizedEmail, status: 'PENDING' },
             {
               $set: {
                 status: 'COMPLETED',
                 processedAt: new Date(),
                 processedBy: adminEmail,
-                newPinSent: true
+                newPasswordSent: true
               }
             }
           );
         } catch (e) { }
       }
-      fallbackStore.pin_reset_requests.forEach(r => {
+      fallbackStore.password_reset_requests.forEach((r: any) => {
         if (r.email === normalizedEmail && r.status === 'PENDING') {
           r.status = 'COMPLETED';
           r.processedAt = new Date();
           r.processedBy = adminEmail;
-          r.newPinSent = true;
+          (r as any).newPasswordSent = true;
         }
       });
     }
 
     // Record activity log
     await recordActivityLog({
-      action: 'ADMIN_SENT_NEW_PIN',
+      action: 'ADMIN_SENT_NEW_PASSWORD',
       entity: 'USER',
       entityId: user._id ? user._id.toString() : user.id,
       entityName: user.name,
-      summary: `Role ADMIN (${adminEmail}) membuat dan mengirimkan PIN baru ke email pengguna ${user.name} (${normalizedEmail})`,
+      summary: `Role ADMIN (${adminEmail}) membuat dan mengirimkan password baru ke email pengguna ${user.name} (${normalizedEmail})`,
       user: {
         id: (req as any).user?.id || 'admin',
         name: adminName,
@@ -2262,17 +2166,20 @@ authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, async (req:
 
     return res.json({
       success: true,
-      message: `PIN baru ${newPin} berhasil dibuat dan dikirimkan ke email ${normalizedEmail}!`,
-      newPin,
+      message: `Password baru berhasil dibuat dan dikirimkan ke email ${normalizedEmail}!`,
+      newPassword,
       email: normalizedEmail,
       userName: user.name,
       mailSuccess: mailResult.success
     });
   } catch (error: any) {
-    console.error('Error in /api/auth/admin/send-new-pin:', error);
+    console.error('Error in send new password:', error);
     return res.status(500).json({
       success: false,
-      message: 'Gagal mengirim PIN baru ke email pengguna.'
+      message: 'Gagal mengirim password baru ke email pengguna.'
     });
   }
-});
+};
+
+authRouter.post('/admin/send-new-password', authMiddleware, requireAdmin, handleAdminSendNewPassword);
+authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, handleAdminSendNewPassword);

@@ -196,7 +196,7 @@ systemLogRouter.post('/test', async (req: Request, res: Response) => {
           name: req.user?.name,
           role: req.user?.role,
           userId: req.user?.userId,
-          loginMethod: 'PIN',
+          loginMethod: 'PASSWORD',
           req,
           details: { isManualTest: true, ...details }
         });

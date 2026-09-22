@@ -7,13 +7,9 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 export interface Vendor {
   id: string;
   name: string;
-  code: string;
   clientId: string;
   clientSecret?: string;
   status: 'ACTIVE' | 'SUSPENDED';
-  email?: string;
-  phone?: string;
-  address?: string;
   currency?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -42,7 +38,6 @@ export interface Product {
   vendorId?: string;
   name: string;
   category: 'kopi' | 'teh' | 'jus' | 'cemilan' | string;
-  subCategory?: string;
   price: number;
   stock: number;
   lowStockThreshold?: number;

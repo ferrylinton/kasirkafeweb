@@ -277,8 +277,6 @@ managerAnalyticsRouter.get('/transactions', async (req: Request, res: Response) 
       vendor: {
         id: vendor?.id || vendorId,
         name: vendor?.name || 'Vendor Toko',
-        code: vendor?.code || 'VENDOR',
-        address: vendor?.address || '',
         currency: vendor?.currency || 'IDR'
       },
       retention: {
@@ -372,19 +370,18 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount ?? o.total ?? 0), 0);
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = vendor?.code || 'VENDOR';
 
     // JSON Format Export
     if (format === 'json') {
+      const safeVendorFileName = (vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="transaksi_${vendorCode.toLowerCase()}_3bulan_${period}_${formatDateYMD(now)}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="transaksi_${safeVendorFileName}_3bulan_${period}_${formatDateYMD(now)}.json"`);
 
       return res.status(200).json({
         exportMeta: {
           title: `Laporan Transaksi - ${vendorName}`,
           vendorId,
           vendorName,
-          vendorCode,
           period,
           periodDescription: periodTitle,
           retentionPolicy: '3 Bulan (90 Hari Terakhir)',
@@ -548,7 +545,6 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
     const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '10', 10), 1), 50);
 
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = vendor?.code || 'VENDOR';
 
     // Reference now: 2026-09-20 (or current runtime date)
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
@@ -725,9 +721,7 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
       },
       vendor: {
         id: vendorId,
-        name: vendorName,
-        code: vendorCode,
-        address: vendor?.address || ''
+        name: vendorName
       },
       topProducts: top10,
       allProductsCount: allRanked.length,
@@ -769,7 +763,6 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     const format = ((req.query.format as string) || 'csv').toLowerCase();
 
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = vendor?.code || 'VENDOR';
 
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
     const cutoffDate = getCutoffDate();
@@ -877,14 +870,14 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     }));
 
     if (format === 'json') {
+      const safeVendorFileName = (vendorName || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${vendorCode.toLowerCase()}_${period}_${formatDateYMD(now)}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${safeVendorFileName}_${period}_${formatDateYMD(now)}.json"`);
       return res.json({
         exportDate: new Date().toISOString(),
         vendor: {
           id: vendorId,
-          name: vendorName,
-          code: vendorCode
+          name: vendorName
         },
         period: periodTitle,
         retentionPolicy: `${RETENTION_MONTHS} Bulan (${RETENTION_DAYS} Hari Terakhir)`,

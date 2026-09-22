@@ -18,20 +18,13 @@ export const vendorRouter = Router();
 
 const vendorCreateSchema = z.object({
   name: z.string().min(2, 'Nama vendor minimal 2 karakter'),
-  code: z.string().min(2, 'Kode vendor minimal 2 karakter').max(10, 'Kode maksimal 10 karakter'),
-  email: z.string().email('Format email tidak valid').optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
   currency: z.string().default('IDR'),
   status: z.enum(['ACTIVE', 'SUSPENDED']).default('ACTIVE')
 });
 
 const vendorUpdateSchema = z.object({
   name: z.string().min(2).optional(),
-  code: z.string().min(2).max(10).optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
+  currency: z.string().optional(),
   status: z.enum(['ACTIVE', 'SUSPENDED']).optional()
 });
 
@@ -147,29 +140,13 @@ vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res:
       });
     }
 
-    const { name, code, email, phone, address, currency, status } = parsed.data;
-    const cleanCode = code.toUpperCase().trim();
-
-    // Check if code or name exists
-    const vendors = await getAllVendors();
-    const existing = vendors.find(v => v.code === cleanCode);
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        error: 'DuplicateVendorCode',
-        message: `Kode vendor '${cleanCode}' sudah digunakan.`
-      });
-    }
-
-    const vendorId = `vnd_${cleanCode.toLowerCase()}_${Date.now().toString(36)}`;
+    const { name, currency, status } = parsed.data;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'vnd';
+    const vendorId = `vnd_${slug}_${Date.now().toString(36)}`;
     const newVendor: VendorRecord = {
       id: vendorId,
       name: name.trim(),
-      code: cleanCode,
       status: status || 'ACTIVE',
-      email: email || '',
-      phone: phone || '',
-      address: address || '',
       currency: currency || 'IDR',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -190,11 +167,10 @@ vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res:
     const defaultManager = {
       id: `usr_mgr_${vendorId}`,
       vendorId: newVendor.id,
-      email: `manager@${cleanCode.toLowerCase()}.com`,
+      email: `manager@${slug}.com`,
       password: '$2a$10$wTfZM2w1v25vR9F1.f4tseXFkU6q8XQY5pX8c2.E6m2D6797j7x9q', // Password123!
       name: `Manager ${name}`,
       role: 'MANAGER',
-      pin: '123456',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -202,11 +178,10 @@ vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res:
     const defaultCashier = {
       id: `usr_csh_${vendorId}`,
       vendorId: newVendor.id,
-      email: `kasir@${cleanCode.toLowerCase()}.com`,
+      email: `kasir@${slug}.com`,
       password: '$2a$10$wTfZM2w1v25vR9F1.f4tseXFkU6q8XQY5pX8c2.E6m2D6797j7x9q', // Password123!
       name: `Kasir ${name}`,
       role: 'CASHIER',
-      pin: '849201',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -224,10 +199,9 @@ vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res:
       entity: 'USER',
       entityId: newVendor.id,
       entityName: newVendor.name,
-      summary: `Mendaftarkan vendor baru ${newVendor.name} (${newVendor.code})`,
+      summary: `Mendaftarkan vendor baru ${newVendor.name}`,
       details: {
         vendorId: newVendor.id,
-        code: newVendor.code,
         status: newVendor.status
       },
       req
@@ -358,7 +332,6 @@ vendorRouter.get('/test-isolation', async (req: Request, res: Response) => {
       success: true,
       testedVendorId: targetVendorId,
       vendorName: currentVendor?.name || 'Unknown',
-      vendorCode: currentVendor?.code,
       isolationStatus: 'STRICT_TENANT_ISOLATION_ACTIVE',
       dataSummary: {
         totalProductsVisible: products.length,
@@ -398,16 +371,10 @@ const vendorRegisterSchema = z.object({
     .string()
     .min(6, 'Password minimal 6 karakter')
     .optional(),
-  pin: z
-    .string()
-    .trim()
-    .optional(),
   email: z
     .string()
     .trim()
     .email('Format email tidak valid'),
-  phone: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
   currency: z.string().default('IDR')
 });
 
@@ -537,10 +504,9 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    const { vendorName, managerName, pin, password, email, phone, address, currency } = parseResult.data;
+    const { vendorName, managerName, password, email, currency } = parseResult.data;
     const cleanEmail = email.toLowerCase().trim();
-    const rawPassword = password || pin || 'Password123!';
-    const rawPin = pin || (password && /^\d{6}$/.test(password) ? password : '123456');
+    const rawPassword = password || 'Password123!';
 
     // 1. Strictly enforce uniqueness constraints
     const uniqueness = await checkVendorUniqueness({
@@ -576,33 +542,19 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Generate unique vendor identifier & client credentials
+    // 2. Generate unique vendor identifier
     const slug = vendorName
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
-      .slice(0, 10);
+      .slice(0, 10) || 'vnd';
     const randomSuffix = crypto.randomBytes(3).toString('hex');
     const vendorId = `vnd_${slug}_${randomSuffix}`;
-
-    // Unique upper code (3 to 6 alphanumeric)
-    let vendorCode = vendorName
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6);
-    if (vendorCode.length < 3) {
-      vendorCode = (vendorCode + 'VND').slice(0, 5);
-    }
-    vendorCode = `${vendorCode}${crypto.randomBytes(1).toString('hex').toUpperCase()}`;
 
     // 3. Create Vendor document
     const newVendor: VendorRecord = {
       id: vendorId,
       name: vendorName.trim(),
-      code: vendorCode,
       status: 'ACTIVE',
-      email: cleanEmail,
-      phone: phone || '',
-      address: address || '',
       currency: currency || 'IDR',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -617,7 +569,6 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       name: managerName.trim(),
       email: cleanEmail,
       password: hashedPassword,
-      pin: rawPin.trim(),
       role: 'MANAGER',
       isEmailConfirmed: false,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -673,10 +624,8 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       recipientEmail: cleanEmail,
       managerName: managerName.trim(),
       vendorName: vendorName.trim(),
-      vendorCode: vendorCode,
       confirmationToken,
       appUrl,
-      pin: rawPin.trim(),
       expiresAt
     });
 
@@ -691,7 +640,6 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       req,
       details: {
         vendorName: vendorName.trim(),
-        vendorCode: vendorCode,
         managerName: managerName.trim(),
         email: cleanEmail,
         role: 'MANAGER',
@@ -702,7 +650,7 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
     await writeDailyLog({
       level: 'INFO',
       category: 'AUTH',
-      message: `Pendaftaran vendor baru berhasil: "${vendorName.trim()}" (${vendorCode}) oleh Manager "${managerName.trim()}" (${cleanEmail}). Email konfirmasi terkirim.`,
+      message: `Pendaftaran vendor baru berhasil: "${vendorName.trim()}" oleh Manager "${managerName.trim()}" (${cleanEmail}). Email konfirmasi terkirim.`,
       vendorId: vendorId,
       performer: {
         id: userId,
@@ -712,7 +660,6 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       },
       details: {
         vendorId,
-        vendorCode,
         email: cleanEmail,
         confirmationToken: confirmationToken.slice(0, 10) + '...',
         emailSent: emailResult.success
@@ -726,7 +673,6 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       vendor: {
         id: vendorId,
         name: vendorName.trim(),
-        code: vendorCode,
         status: 'ACTIVE',
         isEmailConfirmed: false
       },
@@ -1047,7 +993,6 @@ vendorRouter.post('/resend-confirmation', async (req: Request, res: Response) =>
       recipientEmail: cleanEmail,
       managerName: confirmation.managerName,
       vendorName: confirmation.vendorName,
-      vendorCode: 'SPS',
       confirmationToken: newToken,
       appUrl
     });

@@ -287,7 +287,7 @@ export async function sendLoginAlertEmail(params: {
   recipientEmail: string;
   userName: string;
   role: string;
-  loginMethod: 'PIN' | 'PASSWORD';
+  loginMethod?: 'PASSWORD' | 'AUTO';
   ipAddress: string;
   userAgent?: string;
   device?: string;
@@ -299,7 +299,7 @@ export async function sendLoginAlertEmail(params: {
     recipientEmail,
     userName,
     role,
-    loginMethod,
+    loginMethod = 'PASSWORD',
     ipAddress,
     userAgent,
     device = parseUserAgent(userAgent),
@@ -318,7 +318,7 @@ export async function sendLoginAlertEmail(params: {
     timeZone: 'Asia/Jakarta'
   }) + ' WIB';
 
-  const methodLabel = loginMethod === 'PIN' ? 'PIN Cepat Kasir (4 Digit)' : 'Email & Password';
+  const methodLabel = 'Email & Password';
 
   const subject = `[Keamanan SipSpot] Notifikasi Login Baru - Akun ${userName}`;
 
@@ -559,20 +559,16 @@ export async function sendVendorConfirmationEmail(params: {
   recipientEmail: string;
   managerName: string;
   vendorName: string;
-  vendorCode: string;
   confirmationToken: string;
   appUrl: string;
-  pin?: string;
   expiresAt?: Date | string;
 }): Promise<{ success: boolean; confirmationUrl: string; messageId?: string; error?: string }> {
   const {
     recipientEmail,
     managerName,
     vendorName,
-    vendorCode,
     confirmationToken,
-    appUrl,
-    pin
+    appUrl
   } = params;
 
   const cleanAppUrl = appUrl.replace(/\/$/, '');
@@ -624,10 +620,6 @@ export async function sendVendorConfirmationEmail(params: {
         <td class="val">${vendorName}</td>
       </tr>
       <tr>
-        <td class="label">Kode Vendor</td>
-        <td class="val"><code>${vendorCode}</code></td>
-      </tr>
-      <tr>
         <td class="label">Nama Manager</td>
         <td class="val">${managerName}</td>
       </tr>
@@ -639,11 +631,6 @@ export async function sendVendorConfirmationEmail(params: {
         <td class="label">Email Terdaftar</td>
         <td class="val">${recipientEmail}</td>
       </tr>
-      ${pin ? `
-      <tr>
-        <td class="label">PIN Akses Kasir</td>
-        <td class="val"><code>•••••• (Tersimpan aman)</code></td>
-      </tr>` : ''}
     </table>
 
     <div class="cta-box">
@@ -731,9 +718,9 @@ export async function sendVendorConfirmationEmail(params: {
 }
 
 /**
- * Send Pin Reset Link Email
+ * Send Password Reset Link Email
  */
-export async function sendPinResetEmail(params: {
+export async function sendPasswordResetEmail(params: {
   recipientEmail: string;
   userName: string;
   resetToken: string;
@@ -741,7 +728,7 @@ export async function sendPinResetEmail(params: {
   expiresInMinutes?: number;
 }): Promise<{ success: boolean; resetUrl: string; messageId?: string; error?: string }> {
   const { recipientEmail, userName, resetToken, resetUrl, expiresInMinutes = 60 } = params;
-  const subject = `[SipSpot POS] Permintaan Reset PIN Kasir Akun Anda`;
+  const subject = `[SipSpot POS] Permintaan Reset Kata Sandi Akun Anda`;
 
   const html = `
 <!DOCTYPE html>
@@ -749,7 +736,7 @@ export async function sendPinResetEmail(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset PIN Kasir - SipSpot POS</title>
+  <title>Reset Kata Sandi - SipSpot POS</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
     .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
@@ -769,17 +756,17 @@ export async function sendPinResetEmail(params: {
   <div class="card">
     <div style="text-align: center;">
       <div class="logo-badge">🔐</div>
-      <h1>Permintaan Atur Ulang PIN</h1>
+      <h1>Permintaan Atur Ulang Kata Sandi</h1>
       <p>Halo, <strong>${userName}</strong>!</p>
-      <p>Kami menerima permintaan untuk mengatur ulang PIN 6 digit kasir akun SipSpot POS Anda (<strong>${recipientEmail}</strong>).</p>
+      <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun SipSpot POS Anda (<strong>${recipientEmail}</strong>).</p>
     </div>
 
     <div class="action-card">
       <p style="font-size: 13px; font-weight: 700; color: #57403a; margin-bottom: 16px;">
-        Klik tombol di bawah ini untuk membuat PIN baru:
+        Klik tombol di bawah ini untuk membuat kata sandi baru:
       </p>
       <a href="${resetUrl}" target="_blank" class="btn">
-        Atur Ulang PIN Kasir Sekarang
+        Atur Ulang Kata Sandi Sekarang
       </a>
       <div class="token-box">
         Atau salin tautan berikut ke browser Anda:<br>
@@ -791,7 +778,7 @@ export async function sendPinResetEmail(params: {
 
     <div class="security-note">
       ⏱️ <strong>Batas Waktu:</strong> Tautan ini hanya berlaku selama <strong>${expiresInMinutes} menit</strong>.<br>
-      🛡️ Jika Anda tidak meminta reset PIN ini, akun Anda tetap aman dan Anda dapat mengabaikan email ini.
+      🛡️ Jika Anda tidak meminta reset kata sandi ini, akun Anda tetap aman dan Anda dapat mengabaikan email ini.
     </div>
 
     <div class="footer">
@@ -809,8 +796,8 @@ export async function sendPinResetEmail(params: {
 
   if (!transporter) {
     status = 'success';
-    messageId = `sim_resetpin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    console.log(`[SMTP (Simulated)] PIN Reset Link email generated for ${recipientEmail}. Link: ${resetUrl}`);
+    messageId = `sim_resetpass_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[SMTP (Simulated)] Password Reset Link email generated for ${recipientEmail}. Link: ${resetUrl}`);
   } else {
     try {
       const info = await transporter.sendMail({
@@ -821,18 +808,18 @@ export async function sendPinResetEmail(params: {
       });
       status = 'success';
       messageId = info.messageId;
-      console.log(`[SMTP] PIN Reset Link sent to ${recipientEmail}, MessageId: ${messageId}`);
+      console.log(`[SMTP] Password Reset Link sent to ${recipientEmail}, MessageId: ${messageId}`);
     } catch (err: any) {
       status = 'failed';
       errorMessage = err.message || 'SMTP delivery failed';
-      console.warn(`[SMTP] Failed to send PIN reset to ${recipientEmail}:`, errorMessage);
+      console.warn(`[SMTP] Failed to send password reset to ${recipientEmail}:`, errorMessage);
     }
   }
 
   const logData: EmailLogEntry = {
     recipientEmail,
     subject,
-    templateCode: 'PIN_RESET_LINK',
+    templateCode: 'PASSWORD_RESET_LINK',
     status,
     errorMessage,
     messageId,
@@ -858,19 +845,24 @@ export async function sendPinResetEmail(params: {
   };
 }
 
+// Backward compatibility alias
+export const sendPinResetEmail = sendPasswordResetEmail;
+
 /**
- * Send New PIN Generated by ADMIN to User's Email
+ * Send New Password Generated by ADMIN to User's Email
  */
-export async function sendAdminNewPinEmail(params: {
+export async function sendAdminNewPasswordEmail(params: {
   recipientEmail: string;
   userName: string;
-  newPin: string;
+  newPassword?: string;
+  newPin?: string;
   adminEmail: string;
   adminName?: string;
   vendorName?: string;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const { recipientEmail, userName, newPin, adminEmail, adminName = 'Administrator Sistem', vendorName = 'SipSpot POS' } = params;
-  const subject = `[SipSpot POS] PIN Kasir Baru Anda Telah Dibuat oleh Admin`;
+  const { recipientEmail, userName, newPassword, newPin, adminEmail, adminName = 'Administrator Sistem', vendorName = 'SipSpot POS' } = params;
+  const passwordToDisplay = newPassword || newPin || 'PasswordBaru123!';
+  const subject = `[SipSpot POS] Kata Sandi Baru Anda Telah Dibuat oleh Admin`;
 
   const html = `
 <!DOCTYPE html>
@@ -878,16 +870,16 @@ export async function sendAdminNewPinEmail(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PIN Baru Akun SipSpot POS</title>
+  <title>Kata Sandi Baru Akun SipSpot POS</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
     .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
     .logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 16px; background-color: #f3e8ff; color: #7e22ce; font-size: 26px; margin-bottom: 18px; }
     h1 { color: #1e1b4b; font-size: 22px; margin: 0 0 10px 0; font-weight: 800; }
     p { font-size: 14px; line-height: 1.6; color: #57403a; margin: 0 0 16px 0; }
-    .pin-display-card { background: #faf5ff; border: 2px dashed #a855f7; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0; }
-    .pin-title { font-size: 12px; font-weight: 700; color: #7e22ce; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    .pin-code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 34px; font-weight: 900; color: #6b21a8; letter-spacing: 8px; margin: 6px 0; }
+    .password-display-card { background: #faf5ff; border: 2px dashed #a855f7; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0; }
+    .password-title { font-size: 12px; font-weight: 700; color: #7e22ce; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .password-code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 24px; font-weight: 900; color: #6b21a8; letter-spacing: 2px; margin: 6px 0; }
     .info-table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
     .info-table td { padding: 8px 4px; border-bottom: 1px solid #f3e8ff; }
     .info-label { color: #7e706c; font-weight: 500; }
@@ -900,16 +892,16 @@ export async function sendAdminNewPinEmail(params: {
   <div class="card">
     <div style="text-align: center;">
       <div class="logo-badge">🛡️</div>
-      <h1>PIN Kasir Baru Diterbitkan</h1>
+      <h1>Kata Sandi Baru Diterbitkan</h1>
       <p>Halo, <strong>${userName}</strong>!</p>
-      <p>Role <strong>ADMIN</strong> telah menyetujui permintaan dan membuatkan PIN 6 digit baru untuk akun Anda (<strong>${recipientEmail}</strong>).</p>
+      <p>Role <strong>ADMIN</strong> telah menyetujui permintaan dan membuatkan kata sandi baru untuk akun Anda (<strong>${recipientEmail}</strong>).</p>
     </div>
 
-    <div class="pin-display-card">
-      <div class="pin-title">PIN Kasir Baru Anda:</div>
-      <div class="pin-code">${newPin}</div>
+    <div class="password-display-card">
+      <div class="password-title">Kata Sandi Baru Anda:</div>
+      <div class="password-code">${passwordToDisplay}</div>
       <p style="font-size: 12px; color: #7e22ce; margin: 8px 0 0 0;">
-        Gunakan 6 digit angka di atas untuk membuka layar kasir SipSpot POS.
+        Gunakan kata sandi di atas untuk masuk ke sistem SipSpot POS.
       </p>
     </div>
 
@@ -937,7 +929,7 @@ export async function sendAdminNewPinEmail(params: {
     </table>
 
     <div class="security-note">
-      🔒 <strong>Catatan Keamanan:</strong> Jika akun Anda sebelumnya terkunci karena salah input PIN, sistem telah otomatis membuka kembali kunci akun Anda. Demi keamanan toko, jangan bagikan PIN ini kepada pihak yang tidak berkepentingan.
+      🔒 <strong>Catatan Keamanan:</strong> Jika akun Anda sebelumnya terkunci karena salah input kata sandi, sistem telah otomatis membuka kembali kunci akun Anda. Demi keamanan toko, jangan bagikan kata sandi ini kepada pihak yang tidak berkepentingan.
     </div>
 
     <div class="footer">
@@ -955,8 +947,8 @@ export async function sendAdminNewPinEmail(params: {
 
   if (!transporter) {
     status = 'success';
-    messageId = `sim_adminpin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    console.log(`[SMTP (Simulated)] Admin generated new PIN ${newPin} for ${recipientEmail} by ${adminEmail}`);
+    messageId = `sim_adminpass_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[SMTP (Simulated)] Admin generated new password for ${recipientEmail} by ${adminEmail}`);
   } else {
     try {
       const info = await transporter.sendMail({
@@ -967,18 +959,18 @@ export async function sendAdminNewPinEmail(params: {
       });
       status = 'success';
       messageId = info.messageId;
-      console.log(`[SMTP] Admin new PIN sent to ${recipientEmail}, MessageId: ${messageId}`);
+      console.log(`[SMTP] Admin new password sent to ${recipientEmail}, MessageId: ${messageId}`);
     } catch (err: any) {
       status = 'failed';
       errorMessage = err.message || 'SMTP delivery failed';
-      console.warn(`[SMTP] Failed to send admin new PIN to ${recipientEmail}:`, errorMessage);
+      console.warn(`[SMTP] Failed to send admin new password to ${recipientEmail}:`, errorMessage);
     }
   }
 
   const logData: EmailLogEntry = {
     recipientEmail,
     subject,
-    templateCode: 'ADMIN_NEW_PIN_DELIVERY',
+    templateCode: 'ADMIN_NEW_PASSWORD_DELIVERY',
     status,
     errorMessage,
     messageId,
@@ -1002,4 +994,7 @@ export async function sendAdminNewPinEmail(params: {
     error: errorMessage
   };
 }
+
+// Backward compatibility alias
+export const sendAdminNewPinEmail = sendAdminNewPasswordEmail;
 

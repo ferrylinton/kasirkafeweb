@@ -48,7 +48,6 @@ function requireInventoryWriteAccess(req: Request, res: Response, next: () => vo
 const productSchema = z.object({
   name: z.string().min(2, 'Nama produk minimal 2 karakter'),
   category: z.string().min(1, 'Kategori wajib dipilih'),
-  subCategory: z.string().optional(),
   price: z.number().min(0, 'Harga tidak boleh negatif'),
   stock: z.number().int().min(0, 'Stok minimal 0'),
   lowStockThreshold: z.number().int().min(0).default(10),
@@ -316,7 +315,6 @@ productRouter.get('/', async (req: Request, res: Response) => {
         vendorId: p.vendorId || 'vnd_sipspot_central',
         name: p.name,
         category: p.category,
-        subCategory: p.subCategory,
         price: p.price,
         stock: p.stock,
         lowStockThreshold: typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10,
@@ -392,7 +390,6 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
         vendorId: p.vendorId || 'vnd_sipspot_central',
         name: p.name,
         category: p.category,
-        subCategory: p.subCategory,
         price: p.price,
         stock,
         lowStockThreshold: threshold,
@@ -676,12 +673,6 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           existing.category = newCat;
         }
 
-        // Subcategory
-        if (item.subCategory && typeof item.subCategory === 'string' && item.subCategory.trim() !== '') {
-          updateFields.subCategory = item.subCategory.trim();
-          existing.subCategory = item.subCategory.trim();
-        }
-
         // Description
         if (item.description && typeof item.description === 'string') {
           updateFields.description = item.description.trim();
@@ -738,7 +729,6 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         const newPrice = item.price !== undefined && !isNaN(Number(item.price)) ? Math.max(0, Math.round(Number(item.price))) : 0;
         const newThreshold = item.lowStockThreshold !== undefined && !isNaN(Number(item.lowStockThreshold)) ? Math.max(0, Math.floor(Number(item.lowStockThreshold))) : 10;
         const newCat = (item.category && String(item.category).trim().toLowerCase()) || 'kopi';
-        const newSubCat = item.subCategory ? String(item.subCategory).trim() : 'Katalog Baru';
         const newDesc = item.description ? String(item.description).trim() : '';
         const newImg = item.image ? String(item.image).trim() : '';
 
@@ -746,7 +736,6 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           vendorId: activeVendorId,
           name: rawName,
           category: newCat,
-          subCategory: newSubCat,
           price: newPrice,
           stock: newStock,
           lowStockThreshold: newThreshold,
@@ -1008,7 +997,6 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
         id: insertedId,
         name: newProd.name,
         category: newProd.category,
-        subCategory: newProd.subCategory,
         price: newProd.price,
         stock: newProd.stock,
         lowStockThreshold: newProd.lowStockThreshold

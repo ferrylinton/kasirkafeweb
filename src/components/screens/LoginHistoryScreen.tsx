@@ -1010,17 +1010,8 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
                         {/* 3. Metode Login */}
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-stone-800/90 text-stone-800 dark:text-stone-200 border border-stone-200/80 dark:border-stone-700/70 font-bold text-[11px]">
-                            {entry.loginMethod === 'PIN' ? (
-                              <>
-                                <KeyRound className="w-3.5 h-3.5 text-accent" />
-                                <span>PIN 4-Digit</span>
-                              </>
-                            ) : (
-                              <>
-                                <Lock className="w-3.5 h-3.5 text-blue-500" />
-                                <span>Password</span>
-                              </>
-                            )}
+                            <Lock className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Password</span>
                           </span>
                         </td>
 
@@ -1204,17 +1195,8 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
                       <div>
                         <span className="text-[10px] text-stone-400 dark:text-stone-500 uppercase font-bold block">Metode</span>
                         <span className="inline-flex items-center gap-1 font-semibold text-stone-800 dark:text-stone-200 text-[11px] mt-0.5">
-                          {entry.loginMethod === 'PIN' ? (
-                            <>
-                              <KeyRound className="w-3 h-3 text-accent" />
-                              <span>PIN 4-Digit</span>
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3 h-3 text-blue-500" />
-                              <span>Password</span>
-                            </>
-                          )}
+                          <Lock className="w-3 h-3 text-blue-500" />
+                          <span>Password</span>
                         </span>
                       </div>
 
@@ -1356,17 +1338,8 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
                       <div>
                         <span className="text-stone-400 dark:text-stone-500 block text-[10px] uppercase font-bold">Metode</span>
                         <span className="font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1 mt-0.5">
-                          {entry.loginMethod === 'PIN' ? (
-                            <>
-                              <KeyRound className="w-3 h-3 text-accent" />
-                              <span>PIN 4-Digit</span>
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3 h-3 text-blue-500" />
-                              <span>Password</span>
-                            </>
-                          )}
+                          <Lock className="w-3 h-3 text-blue-500" />
+                          <span>Password</span>
                         </span>
                       </div>
 
@@ -1580,7 +1553,7 @@ export const LoginHistoryScreen: React.FC<LoginHistoryScreenProps> = ({ allVendo
               <div className="flex justify-between py-1 border-b border-stone-200/40 dark:border-stone-800/40">
                 <span className="text-stone-400 font-medium">Metode:</span>
                 <span className="font-bold text-stone-800 dark:text-stone-200">
-                  {selectedEntryForDetail.loginMethod === 'PIN' ? 'PIN Kasir 4-Digit' : 'Email & Password'}
+                  Email & Password
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-stone-200/40 dark:border-stone-800/40">

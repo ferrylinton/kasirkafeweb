@@ -390,7 +390,7 @@ export async function getLockedUsersFromRedis(): Promise<LockedUserDetail[]> {
             lockedUntil: record.lockedUntil,
             remainingSeconds: remainingSec,
             lastAttemptAt: record.lastAttemptAt || now,
-            reason: record.reason || '3 kali gagal login (PIN/Password)',
+            reason: record.reason || '3 kali gagal login (Password)',
             source: 'redis'
           });
         }
@@ -422,7 +422,7 @@ export async function getLockedUsersFromRedis(): Promise<LockedUserDetail[]> {
           lockedUntil: memRecord.lockedUntil,
           remainingSeconds: remainingSec,
           lastAttemptAt: memRecord.lastAttemptAt,
-          reason: memRecord.reason || '3 kali gagal login (PIN/Password)',
+          reason: memRecord.reason || '3 kali gagal login (Password)',
           source: 'fallback_memory'
         });
       }

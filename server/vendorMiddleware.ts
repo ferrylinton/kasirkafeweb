@@ -5,11 +5,7 @@ import { verifyToken } from './auth';
 export interface VendorRecord {
   id: string;
   name: string;
-  code: string;
   status: 'ACTIVE' | 'SUSPENDED';
-  email?: string;
-  phone?: string;
-  address?: string;
   logo?: string;
   currency?: string;
   createdAt: Date | string;

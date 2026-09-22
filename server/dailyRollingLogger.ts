@@ -237,7 +237,7 @@ export async function logLogin(params: {
   ipAddress?: string;
   userAgent?: string;
   reason?: string;
-  loginMethod?: 'PIN' | 'PASSWORD' | 'AUTO';
+  loginMethod?: 'PASSWORD' | 'AUTO';
   req?: Request;
   details?: Record<string, any>;
 }): Promise<DailyLogEntry> {
@@ -249,10 +249,10 @@ export async function logLogin(params: {
   let msg = '';
   switch (params.status) {
     case 'SUCCESS':
-      msg = `Login berhasil untuk akun ${params.name || params.email || 'User'} (${params.role || 'STAFF'}) via ${params.loginMethod || 'PIN'}`;
+      msg = `Login berhasil untuk akun ${params.name || params.email || 'User'} (${params.role || 'STAFF'}) via ${params.loginMethod || 'PASSWORD'}`;
       break;
     case 'FAILED':
-      msg = `Percobaan login gagal untuk email/PIN: ${params.email || 'N/A'}. Alasan: ${params.reason || 'Kredensial tidak valid'}`;
+      msg = `Percobaan login gagal untuk email: ${params.email || 'N/A'}. Alasan: ${params.reason || 'Kredensial tidak valid'}`;
       break;
     case 'LOCKED':
       msg = `Akun ${params.email || 'N/A'} diblokir sementara (15 menit) karena 3x gagal login berturut-turut`;

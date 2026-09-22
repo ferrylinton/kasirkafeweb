@@ -66,8 +66,6 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
       filtered = filtered.filter(
         v =>
           v.name.toLowerCase().includes(q) ||
-          v.code.toLowerCase().includes(q) ||
-          (v.email && v.email.toLowerCase().includes(q)) ||
           v.id.toLowerCase().includes(q)
       );
     }
@@ -109,41 +107,21 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
  */
 adminVendorRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { name, code, email, phone, address, currency, status } = req.body;
+    const { name, currency, status } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Nama vendor wajib diisi.' });
     }
 
-    if (!code || typeof code !== 'string' || !code.trim()) {
-      return res.status(400).json({ success: false, message: 'Kode singkatan vendor wajib diisi.' });
-    }
-
-    const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-    if (!cleanCode) {
-      return res.status(400).json({ success: false, message: 'Kode vendor tidak valid (harus alfanumerik).' });
-    }
-
-    // Check duplicate code
-    const existing = await getAllVendors();
-    if (existing.some(v => v.code.toUpperCase() === cleanCode)) {
-      return res.status(400).json({
-        success: false,
-        message: `Kode vendor '${cleanCode}' sudah digunakan. Gunakan kode lain.`
-      });
-    }
-
+    const cleanName = name.trim();
     const idSuffix = Date.now().toString(36).slice(-4);
-    const newVendorId = `vnd_${cleanCode.toLowerCase()}_${idSuffix}`;
+    const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'vnd';
+    const newVendorId = `vnd_${slug}_${idSuffix}`;
 
     const newVendor: VendorRecord = {
       id: newVendorId,
-      name: name.trim(),
-      code: cleanCode,
+      name: cleanName,
       status: status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
-      email: email ? email.trim() : '',
-      phone: phone ? phone.trim() : '',
-      address: address ? address.trim() : '',
       currency: currency ? currency.trim() : 'IDR',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -172,10 +150,9 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
       entity: 'VENDOR',
       entityId: newVendor.id,
       entityName: newVendor.name,
-      summary: `Admin membuat vendor baru '${newVendor.name}' (${newVendor.code})`,
+      summary: `Admin membuat vendor baru '${newVendor.name}'`,
       details: {
         vendorId: newVendor.id,
-        code: newVendor.code,
         status: newVendor.status
       },
       req,
@@ -200,7 +177,7 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
 adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const { name, code, email, phone, address, currency, status } = req.body;
+    const { name, currency, status } = req.body;
 
     const vendor = await findVendorById(id);
     if (!vendor) {
@@ -214,23 +191,6 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
     if (name && typeof name === 'string' && name.trim()) {
       updates.name = name.trim();
     }
-    if (code && typeof code === 'string' && code.trim()) {
-      const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-      if (cleanCode && cleanCode !== vendor.code) {
-        // Verify unique
-        const existing = await getAllVendors();
-        if (existing.some(v => v.id !== id && v.code.toUpperCase() === cleanCode)) {
-          return res.status(400).json({
-            success: false,
-            message: `Kode vendor '${cleanCode}' sudah digunakan oleh vendor lain.`
-          });
-        }
-        updates.code = cleanCode;
-      }
-    }
-    if (typeof email === 'string') updates.email = email.trim();
-    if (typeof phone === 'string') updates.phone = phone.trim();
-    if (typeof address === 'string') updates.address = address.trim();
     if (typeof currency === 'string') updates.currency = currency.trim();
     if (status === 'ACTIVE' || status === 'SUSPENDED') {
       if ((id === 'vnd_sipspot_central' || id === 'vnd_admin') && status === 'SUSPENDED') {
@@ -386,7 +346,7 @@ adminVendorRouter.delete('/:id', async (req: Request, res: Response) => {
       entityId: id,
       entityName: vendor.name,
       summary: `Admin menghapus vendor '${vendor.name}' (${id})`,
-      details: { deletedVendorId: id, vendorCode: vendor.code },
+      details: { deletedVendorId: id },
       req,
       vendorId: id
     });

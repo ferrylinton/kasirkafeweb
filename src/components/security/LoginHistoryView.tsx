@@ -410,17 +410,8 @@ export const LoginHistoryView: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-1">
-                          {entry.loginMethod === 'PIN' ? (
-                            <>
-                              <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                              <span>{language === 'en' ? 'Quick PIN' : 'PIN Cepat'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3.5 h-3.5 text-blue-500" />
-                              <span>Password</span>
-                            </>
-                          )}
+                          <Lock className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Password</span>
                         </div>
 
                         <div className="text-[11px] text-stone-400 dark:text-stone-500">

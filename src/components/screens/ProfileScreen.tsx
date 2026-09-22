@@ -370,8 +370,6 @@ export const ProfileScreen: React.FC = () => {
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 truncate">{user?.email}</p>
               <div className="flex items-center gap-3 mt-1.5 text-[11px] text-stone-400 flex-wrap">
-                <span>PIN Kasir: <strong className="text-stone-700 dark:text-stone-300">{user?.pin ? '••••••' : 'Belum disetel'}</strong></span>
-                <span className="text-stone-300 dark:text-stone-700">•</span>
                 <button
                   type="button"
                   onClick={scrollToAvatarSection}

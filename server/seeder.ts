@@ -13,11 +13,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_admin',
       name: 'Admin',
-      code: 'ADMIN',
       status: 'ACTIVE',
-      email: 'admin@sipspot.com',
-      phone: '+628119999000',
-      address: 'Headquarters / Server Central Admin',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date()
@@ -25,11 +21,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_sipspot_central',
       name: 'SipSpot Coffee & Boba (Pusat)',
-      code: 'SIPSPOT',
       status: 'ACTIVE',
-      email: 'pusat@sipspot.com',
-      phone: '+628123456789',
-      address: 'Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date()
@@ -37,11 +29,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_kopi_kulo_kemang',
       name: 'Kopi Kulo & Toast (Kemang)',
-      code: 'KULO',
       status: 'ACTIVE',
-      email: 'kemang@kopikulo.co.id',
-      phone: '+628219876543',
-      address: 'Jl. Kemang Raya No. 12B, Jakarta Selatan',
       currency: 'IDR',
       createdAt: new Date('2026-02-15'),
       updatedAt: new Date()
@@ -49,11 +37,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_tehpoci_nusantara',
       name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
-      code: 'TEHPOCI',
       status: 'ACTIVE',
-      email: 'admin@tehpoci-nusantara.id',
-      phone: '+628571234987',
-      address: 'Grand Mall Bekasi Lt. Ground No. 18',
       currency: 'IDR',
       createdAt: new Date('2026-03-01'),
       updatedAt: new Date()
@@ -151,7 +135,6 @@ export async function seedDatabase() {
       price: 28000,
       stock: 28,
       description: 'Arabika Gayo, Fresh Milk',
-      subCategory: 'Kopi Segar',
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtNMfSOkPEgLdVc2vKwY45wCgzwwn4srarfAclzt4f_z1t2GCXiXjKzKyLTw4Qb8HF_DbCT7aVAnSQEmWwHcfzRoFT7jXlEGDi9-Syypy9Jfw4AYn5_pfnyO7wbmT7XnhAnvqvJK8cZzK5Vv7IGXNv6tuat4pduj-j3JDy_TgWxA1oG-n8JqvJJGHe8FFYHRmRoIuEyWYwXNfISAcW7eYXrJwGpLW2jC44VdVHli4si8Q_iL9P2f3tLg',
       isAvailable: true
@@ -162,7 +145,6 @@ export async function seedDatabase() {
       price: 26000,
       stock: 19,
       description: 'Steep 16 Jam, Gula Aren Murni',
-      subCategory: 'Kopi Segar',
       tag: 'Favorit Barista',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCvJdh749nH1gR2JunVywYMQZwKd2m2nffiuj2Mvs2KMwqC9BBJ49yOGr_9_JunjgM9BxcD5KR_nAPO1VF42jGfY5qhEuGwJ-gqaQi1vwD8pJlZvZIq9eBfOaUmi26UhKFA9phssHpmNM6n-B0JgNOtDATqeCk3I9xvzv0PVXhp0xgpiC68lFuRhz08JtMKVwm0mgVxahNDoLqkP0RVYozDd8OtNWaJeeeAdnrDckAcMSSOjFMVUACykA',
       isAvailable: true
@@ -173,7 +155,6 @@ export async function seedDatabase() {
       price: 29000,
       stock: 20,
       description: 'Double espresso shot, madagascar vanilla, salted caramel drizzles',
-      subCategory: 'Signature Espresso',
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA3nRgdjGnqjynsqzx5F2To8GoeiFzh-DW-eLq11HogGzQtZ2WKL6j2VrNlG8FGeztHN07Lunlrzb0tVO3hD2Wa0Ogc2n15NQmlOwBrUWdFGOYvR28xkISb08HbMXkYYMqiKH5Q3KwV0GSodGTQpdTzimlb7_J9qpWyHVf9hm14yI6zgyOiC5lKUWtOFSq78X7baLmSyw-13RQBCqVHMeIFTgwfI84p6knVpLuhkLG1tGIzn5dHiJHauw',
       isAvailable: true
@@ -184,7 +165,6 @@ export async function seedDatabase() {
       price: 30000,
       stock: 34,
       description: 'Wangi Melati, Pure Matcha Uji Asli',
-      subCategory: 'Artisan Tea',
       tag: 'Matcha Uji',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyUf2Pv_hsauF8bNxe7DbZfgv8KjnRNMji6pTuhzjaaKuZQJJ8goHYZ1vwnWe7W0qb2PfiNWEpMbADXDOn6FkTmlVOnf5ijPtDH3tUl_MDNWySfMhcrwvDjWK7Qvd9ZEQ4w6OeerwlFMEvmpe9Am8t57ie6yPyFRckYlRx7Av9IjDKBIxYkpjqLzqSOIcehmbGogUhaf9E0XGBlkrOsAGpD0GbzX18XoH4v5gDtjW-5U4ZrUfu8mciBw',
       isAvailable: true
@@ -195,7 +175,6 @@ export async function seedDatabase() {
       price: 25000,
       stock: 15,
       description: 'Bergamot Note, Fresh Cream, Boba Lembut',
-      subCategory: 'Artisan Tea',
       tag: 'Populer',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDRLFgKetXqgXN7L2j8MWsu9Q1Eb9yHwzyH6-ASIfUwawAa9Enj3XMOj3yT86b_LEmCuXDTFvluCM0F10enTo2U0OLeQqJdWeFTImS0m-nw__5a8Kmthg-b5xhuPnnPAVecNG8akkmHvu1HieuycWai8C2Zowe1OYFo5Xgu3Riec6vW3kaRaS_yvZxwYE4x3PGxUXGKVuLk3FdzMBRvjKWTPYXCwhbmsDJE-tXXL4nh8a9666-msWD1JA',
       isAvailable: true
@@ -206,7 +185,6 @@ export async function seedDatabase() {
       price: 22000,
       stock: 25,
       description: 'Daun teh hijau melati dingin segar aroma alami',
-      subCategory: 'Artisan Tea',
       tag: 'Segar Alami',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEDdNAgqpFDYomBUwebjH1cUlD6u-s6RdfV_B3Zb2sErpLrfWBAlI-B4p9ghPK0MgP7u-BExqyPi0O6Fy5nc1a9JyE3lDkxO1GyavPWK6Rmk67W9jItT13snorCP72I1AEUd4jAYXNMKn2Lz44DGZ6HM9_iOY7NSczXkEJzmmMyq-3b2vxTM-puw_0iCpUshE4u_GwKW-TTggh5T670zI2UA3bRKmSkfrEPZWMX1SqFzQj0F5diM9zYQ',
       isAvailable: true
@@ -217,7 +195,6 @@ export async function seedDatabase() {
       price: 32000,
       stock: 22,
       description: 'Mangga Harum Manis, Nata de Coco, Chia Seed',
-      subCategory: 'Cold-Pressed',
       tag: '100% Buah Asli',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA214agMyoRUOTHtl6f0KAbXn_zJMECP7woU_OtmC93inU5O1qM5MclDciInpj44f0qLM8WWK1B2JHsIvFLMvLRjvrAKYlmGsw_pe959wyisWjhJbgzB4-lo35bufA_rJi8FENB_IGS5fQ8aOVuYFjCzaoBdfq9NsX0if5hyAJbwywBpXL1xb3bVw7al16zdBhF8c5Gc6KxnOlBV2-7YkAuapgkybmUh9vVVzOKUx8chHfxhEiTOpYh0A',
       isAvailable: true
@@ -228,7 +205,6 @@ export async function seedDatabase() {
       price: 35000,
       stock: 11,
       description: 'Buah Naga Merah, Strawberry Segar, Sparkling Soda',
-      subCategory: 'Cold-Pressed',
       tag: 'Segar & Asam',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBOVXfWtFg9LCiGW5J0ud5qjQ0jGXJMeAczCs-pbDuX3RAR6hCtNrdxaMfeEUbGqkxEsXZa2mL9kEU1UBgCQ71XrzS1oVfn0Bk9BEYOItPZZ1otsDaOWYZdTqYnbo89dHJwf8WiOMUqDDcupTXFTxIc1Vl86Ei2gMwcKXBPtYrHTGShQCjjcVeYI_4OWcFWVAr5Rx8duqgdwCpRbMOvKIpAO6bKkiQBPFI5C_XOTBE9wab0Nj86w21Y9Q',
       isAvailable: true
@@ -239,7 +215,6 @@ export async function seedDatabase() {
       price: 28000,
       stock: 18,
       description: 'Perpaduan puree mangga dan beri tropis segar',
-      subCategory: 'Cold-Pressed',
       tag: 'Segar Favorit',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsJDrQVcuTN15ytH6JXl2Sy1VxvsGMvJXf-uUvj-Cb8PrNhnnWViYvbqt5iYdo5tOkmdoUOoAGQyzqygOJaIomUHbcGWh68FXlZAm7maoXw8duNaOEuU40MckVywC0bynGatT1MLvbjyce6fsgcqhT0XmnqgVCRgC3XFamT00-1Y5E2HMq6ccb5Rn4pZFXHPpPQ2D-tpTrlrRWvLghCVS3qLc3PjAKjk2kh_Vli28UF9GS_LwWvg61Zw',
       isAvailable: true
@@ -250,7 +225,6 @@ export async function seedDatabase() {
       price: 22000,
       stock: 15,
       description: 'Pastry Prancis lapis butter renyah dan gurih wangi',
-      subCategory: 'Bakery',
       tag: 'Fresh Baked',
       image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80',
       isAvailable: true
@@ -261,7 +235,6 @@ export async function seedDatabase() {
       price: 24000,
       stock: 12,
       description: 'Pastry cokelat lumer premium khas artisan bakery',
-      subCategory: 'Bakery',
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&auto=format&fit=crop&q=80',
       isAvailable: true
@@ -272,7 +245,6 @@ export async function seedDatabase() {
       price: 25000,
       stock: 30,
       description: 'Kentang goreng garing dibalut minyak truffle & taburan oregano',
-      subCategory: 'Finger Food',
       tag: 'Cemilan Asin',
       image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?w=400&auto=format&fit=crop&q=80',
       isAvailable: true
@@ -284,7 +256,6 @@ export async function seedDatabase() {
       stock: 20,
       lowStockThreshold: 15,
       description: 'Singkong goreng merekah lembut dengan taburan keju cheddar melimpah',
-      subCategory: 'Finger Food',
       tag: 'Tradisional',
       image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -297,7 +268,6 @@ export async function seedDatabase() {
       stock: 0,
       lowStockThreshold: 10,
       description: 'Pastry red velvet lembut dengan cream cheese leleh khas artisan',
-      subCategory: 'Bakery',
       tag: 'Habis / Out of Stock',
       image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&auto=format&fit=crop&q=80',
       isAvailable: false,
@@ -311,7 +281,6 @@ export async function seedDatabase() {
       stock: 35,
       lowStockThreshold: 10,
       description: 'Signature Jus alpukat murni berpadu espresso mantap dengan topping es krim cokelat lezat',
-      subCategory: 'Signature Kulo',
       tag: 'Best Seller',
       image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -324,7 +293,6 @@ export async function seedDatabase() {
       stock: 25,
       lowStockThreshold: 8,
       description: 'Espresso double shot harum berpadu sirup Baileys non-alkohol dan krim susu gurih',
-      subCategory: 'Spesial Kopi',
       tag: 'Artisan',
       image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -337,7 +305,6 @@ export async function seedDatabase() {
       stock: 45,
       lowStockThreshold: 12,
       description: 'Perpaduan biji kopi pilihan, susu segar creamy dan gula aren organik murni',
-      subCategory: 'Kopi Favorit',
       tag: 'Favorit Pelanggan',
       image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -350,7 +317,6 @@ export async function seedDatabase() {
       stock: 20,
       lowStockThreshold: 5,
       description: 'Roti bakar tebal panggang renyah dengan lelehan keju mozarella & cheddar gurih',
-      subCategory: 'Kulo Toast',
       tag: 'Cemilan Hangat',
       image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -363,7 +329,6 @@ export async function seedDatabase() {
       stock: 18,
       lowStockThreshold: 5,
       description: 'Croissant waffle renyah di luar lembut di dalam dengan taburan karamel wangi',
-      subCategory: 'Kulo Bakery',
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1588685912170-07e0c7e2b7e5?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -377,7 +342,6 @@ export async function seedDatabase() {
       stock: 50,
       lowStockThreshold: 15,
       description: 'Teh melati wangi sepat legit khas seduh tanah liat dengan bongkahan gula batu asli',
-      subCategory: 'Teh Tradisional',
       tag: 'Khas Poci',
       image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -390,7 +354,6 @@ export async function seedDatabase() {
       stock: 80,
       lowStockThreshold: 20,
       description: 'Es teh melati jumbo 22oz segar pelepas dahaga harum alami',
-      subCategory: 'Teh Dingin',
       tag: 'Super Segar',
       image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -403,7 +366,6 @@ export async function seedDatabase() {
       stock: 30,
       lowStockThreshold: 8,
       description: 'Dimsum kulit transparan dengan isian udang utuh segar kenyal manis gurih',
-      subCategory: 'Dimsum Kukus',
       tag: 'Chef Choice',
       image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -416,7 +378,6 @@ export async function seedDatabase() {
       stock: 40,
       lowStockThreshold: 10,
       description: 'Siomay daging ayam dan udang padat dengan saus cocolan cabai merah gurih pedas',
-      subCategory: 'Dimsum Kukus',
       tag: 'Terlaris',
       image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
@@ -895,10 +856,10 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
-      // Strip any legacy clientId and clientSecret fields from vendors collection
+      // Strip any legacy clientId, clientSecret, code, email, phone, address fields from vendors collection
       await db.collection('vendors').updateMany(
         {},
-        { $unset: { clientId: "", clientSecret: "" } }
+        { $unset: { clientId: "", clientSecret: "", code: "", email: "", phone: "", address: "" } }
       );
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
@@ -942,6 +903,7 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
+      await db.collection('products').updateMany({}, { $unset: { subCategory: "" } });
       await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
       console.log('[Seeder] Products verified and synced in MongoDB.');
 
