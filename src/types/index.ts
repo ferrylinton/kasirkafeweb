@@ -11,8 +11,6 @@ export interface Vendor {
   email?: string;
   phone?: string;
   address?: string;
-  clientId: string;
-  clientSecret?: string;
   status: 'ACTIVE' | 'SUSPENDED';
   currency?: string;
   createdAt?: string;

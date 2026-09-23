@@ -38,7 +38,6 @@ interface VendorItem {
   id: string;
   name: string;
   code: string;
-  clientId?: string;
   status?: string;
 }
 

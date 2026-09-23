@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'activity-logs':
         return t('navActivityLogs');
       case 'vendor-client':
-        return 'Vendor & Klien ID (M2M)';
+        return 'Informasi & Profil Vendor';
       case 'manager-dashboard':
         return 'Dashboard Transaksi Cabang';
       case 'manager-top-products':

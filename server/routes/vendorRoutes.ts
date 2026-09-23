@@ -126,7 +126,7 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
 
 /**
  * POST /api/vendors
- * Register a new Vendor / Client with unique Client ID and Client Secret
+ * Register a new Vendor
  * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
  */
 vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
@@ -271,28 +271,6 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
       success: true,
       message: 'Vendor berhasil diperbarui.',
       vendor: { ...vendor, ...updateData }
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * POST /api/vendors/:id/regenerate-secret
- * Generates a new cryptographically secure Client Secret for the vendor
- * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
- */
-vendorRouter.post('/:id/regenerate-secret', authMiddleware, requireManager, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as unknown as IParam;
-    const vendor = await findVendorById(id);
-    if (!vendor) {
-      return res.status(404).json({ success: false, error: 'Vendor tidak ditemukan' });
-    }
-
-    return res.json({
-      success: true,
-      vendor
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });

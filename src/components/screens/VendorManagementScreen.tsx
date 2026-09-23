@@ -7,11 +7,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ShieldCheck,
-  Key,
   Copy,
-  Check,
-  Eye,
-  EyeOff,
   Edit2,
   Trash2,
   Power,
@@ -42,8 +38,6 @@ export interface AdminVendorItem {
   id: string;
   name: string;
   code: string;
-  clientId: string;
-  clientSecret?: string;
   status: 'ACTIVE' | 'SUSPENDED';
   email?: string;
   phone?: string;
@@ -70,10 +64,6 @@ export const VendorManagementScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
 
-  // Secrets visibility state: vendorId -> boolean
-  const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>({});
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<'CREATE' | 'EDIT'>('CREATE');
@@ -90,10 +80,6 @@ export const VendorManagementScreen: React.FC = () => {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  // Regenerate Secret Modal Confirmation
-  const [vendorToRegenerate, setVendorToRegenerate] = useState<AdminVendorItem | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
 
   // Delete Confirmation Modal
   const [vendorToDelete, setVendorToDelete] = useState<AdminVendorItem | null>(null);
@@ -130,20 +116,6 @@ export const VendorManagementScreen: React.FC = () => {
       fetchVendors();
     }
   }, [isAdmin, statusFilter, token]);
-
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(label);
-    showToast(`${label} disalin ke clipboard!`, 'success');
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
-
-  const toggleSecretVisibility = (id: string) => {
-    setVisibleSecrets(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
 
   // Open Create Modal
   const handleOpenCreateModal = () => {
@@ -275,36 +247,6 @@ export const VendorManagementScreen: React.FC = () => {
     }
   };
 
-  // Confirm Regenerate Secret
-  const handleConfirmRegenerate = async () => {
-    if (!vendorToRegenerate) return;
-    setIsRegenerating(true);
-    try {
-      const res = await fetch(`/api/admin/vendors/${vendorToRegenerate.id}/regenerate-secret`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token || ''}`
-        }
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`Client Secret baru berhasil dibuat untuk ${vendorToRegenerate.name}`, 'success');
-        setVendors(prev =>
-          prev.map(v =>
-            v.id === vendorToRegenerate.id ? { ...v, clientSecret: data.clientSecret } : v
-          )
-        );
-        setVendorToRegenerate(null);
-      } else {
-        showToast(data.message || 'Gagal meregenerasi secret', 'error');
-      }
-    } catch {
-      showToast('Terjadi kesalahan saat meregenerasi secret', 'error');
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
   // Confirm Delete Vendor
   const handleConfirmDelete = async () => {
     if (!vendorToDelete) return;
@@ -340,7 +282,6 @@ export const VendorManagementScreen: React.FC = () => {
         v.name.toLowerCase().includes(q) ||
         v.code.toLowerCase().includes(q) ||
         (v.email && v.email.toLowerCase().includes(q)) ||
-        (v.clientId && v.clientId.toLowerCase().includes(q)) ||
         v.id.toLowerCase().includes(q)
     );
   }, [vendors, searchQuery]);
@@ -395,7 +336,7 @@ export const VendorManagementScreen: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
-            Kelola pendaftaran merchant, kredensial M2M API, status operasional, dan isolasi data per vendor.
+            Kelola pendaftaran merchant, status operasional, dan isolasi data per vendor.
           </p>
         </div>
 
@@ -567,7 +508,6 @@ export const VendorManagementScreen: React.FC = () => {
             const isCentral = vendor.id === 'vnd_sipspot_central' || vendor.id === 'vnd_admin';
             const isAdminVendor = vendor.id === 'vnd_admin';
             const isSuspended = vendor.status === 'SUSPENDED';
-            const isSecretVisible = !!visibleSecrets[vendor.id];
 
             return (
               <div
@@ -664,77 +604,6 @@ export const VendorManagementScreen: React.FC = () => {
                     <div className="flex items-center gap-2 col-span-1 sm:col-span-2 min-w-0">
                       <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                       <span className="truncate">{vendor.address || 'Alamat gerai belum diisi'}</span>
-                    </div>
-                  </div>
-
-                  {/* Klien M2M API Credentials Box */}
-                  <div className="p-3.5 rounded-2xl bg-stone-900 dark:bg-stone-950 text-stone-200 font-mono text-[11px] mb-3.5 border border-stone-800 shadow-inner">
-                    <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-stone-800 text-[10px] text-stone-400 uppercase tracking-wider font-sans font-bold">
-                      <span className="flex items-center gap-1 text-purple-400">
-                        <Key className="w-3 h-3" />
-                        <span>Kredensial M2M API</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setVendorToRegenerate(vendor)}
-                        className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline hover:no-underline"
-                      >
-                        Reset Secret
-                      </button>
-                    </div>
-
-                    {/* Client ID */}
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-stone-400 text-[10px] shrink-0 font-sans">CLIENT ID:</span>
-                      <span className="truncate text-stone-100 font-bold">{vendor.clientId}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(vendor.clientId, `Client ID (${vendor.code})`)}
-                        className="p-1 rounded-md text-stone-400 hover:text-white hover:bg-stone-800 transition-colors shrink-0"
-                        title="Salin Client ID"
-                      >
-                        {copiedKey === `Client ID (${vendor.code})` ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Client Secret */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-stone-400 text-[10px] shrink-0 font-sans">SECRET:</span>
-                      <span className="truncate text-stone-300">
-                        {isSecretVisible
-                          ? vendor.clientSecret || '(Tidak tersedia)'
-                          : vendor.clientSecret
-                          ? '••••••••••••••••••••••••'
-                          : '(Kosong)'}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => toggleSecretVisibility(vendor.id)}
-                          className="p-1 rounded-md text-stone-400 hover:text-white hover:bg-stone-800 transition-colors"
-                          title={isSecretVisible ? 'Sembunyikan Secret' : 'Tampilkan Secret'}
-                        >
-                          {isSecretVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </button>
-                        {vendor.clientSecret && (
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(vendor.clientSecret!, `Secret (${vendor.code})`)}
-                            className="p-1 rounded-md text-stone-400 hover:text-white hover:bg-stone-800 transition-colors"
-                            title="Salin Client Secret"
-                          >
-                            {copiedKey === `Secret (${vendor.code})` ? (
-                              <Check className="w-3 h-3 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -868,7 +737,7 @@ export const VendorManagementScreen: React.FC = () => {
                   }`}
                 />
                 <span className="text-[10px] text-stone-400 mt-1 block">
-                  Digunakan untuk identifikasi unik dan awalan Client ID M2M API.
+                  Digunakan untuk identifikasi unik kode cabang vendor.
                 </span>
                 {formErrors.code && (
                   <span className="text-[11px] text-rose-500 font-medium mt-1 block">
@@ -969,45 +838,6 @@ export const VendorManagementScreen: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* REGENERATE SECRET CONFIRMATION MODAL */}
-      {vendorToRegenerate && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#251e1c] rounded-3xl max-w-md w-full p-6 border border-amber-200 dark:border-amber-800 shadow-2xl animate-in fade-in zoom-in-95">
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center mb-4">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-heading mb-1.5">
-              Reset Client Secret Vendor?
-            </h3>
-            <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed mb-4">
-              Anda akan menghasilkan <strong>Client Secret baru</strong> untuk{' '}
-              <span className="font-bold text-stone-900 dark:text-stone-100">{vendorToRegenerate.name}</span>.
-              Kredensial rahasia lama akan langsung dibatalkan. Aplikasi eksternal atau terminal POS yang masih
-              menggunakan kunci lama tidak akan dapat mengakses data lagi.
-            </p>
-            <div className="flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setVendorToRegenerate(null)}
-                disabled={isRegenerating}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmRegenerate}
-                disabled={isRegenerating}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 shadow-xs"
-              >
-                {isRegenerating && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>Ya, Terbitkan Secret Baru</span>
-              </button>
-            </div>
           </div>
         </div>
       )}

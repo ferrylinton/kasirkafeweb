@@ -34,7 +34,6 @@ export interface ModalVendor {
   id: string;
   name: string;
   code: string;
-  clientId?: string;
   status?: string;
 }
 
@@ -48,10 +47,10 @@ interface SelectUserModalProps {
 }
 
 const FALLBACK_VENDORS: ModalVendor[] = [
-  { id: 'vnd_admin', name: 'Admin', code: 'ADMIN', clientId: 'client_admin_master_00', status: 'ACTIVE' },
-  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT', clientId: 'client_sipspot_central_01', status: 'ACTIVE' },
-  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', clientId: 'client_kopikulo_kemang_02', status: 'ACTIVE' },
-  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', clientId: 'client_tehpoci_nusantara_03', status: 'ACTIVE' }
+  { id: 'vnd_admin', name: 'Admin', code: 'ADMIN', status: 'ACTIVE' },
+  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT', status: 'ACTIVE' },
+  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', status: 'ACTIVE' },
+  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', status: 'ACTIVE' }
 ];
 
 const FALLBACK_USERS: SelectableUser[] = [

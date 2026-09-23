@@ -401,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </span>
                 </button>
 
-                {/* Vendor & Klien ID (Khusus Manajer) */}
+                {/* Informasi Vendor (Khusus Manajer) */}
                 <button
                   type="button"
                   id="nav-vendor-client-btn"
@@ -413,10 +413,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Building2 className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Vendor & Klien ID</span>
+                    <span className="truncate">Informasi Vendor</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300">
-                    M2M API
+                    Cabang
                   </span>
                 </button>
               </div>

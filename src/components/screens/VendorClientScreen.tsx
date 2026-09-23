@@ -1,22 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   Building2,
-  Key,
-  Copy,
-  Check,
-  Eye,
-  EyeOff,
   RefreshCw,
   Plus,
   ShieldCheck,
-  Lock,
-  Code2,
-  AlertCircle,
   CheckCircle2,
-  Server,
-  ArrowRight,
-  Database,
-  Users
+  Layers,
+  Store,
+  Phone,
+  Mail,
+  MapPin,
+  Users,
+  Coins
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Vendor } from '../../types';
@@ -29,16 +24,6 @@ export const VendorClientScreen: React.FC = () => {
   const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null);
   const [allVendors, setAllVendors] = useState<Vendor[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [showSecret, setShowSecret] = useState<boolean>(false);
-  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  // M2M API Token Simulator State
-  const [simClientId, setSimClientId] = useState<string>('');
-  const [simClientSecret, setSimClientSecret] = useState<string>('');
-  const [isGeneratingToken, setIsGeneratingToken] = useState<boolean>(false);
-  const [generatedToken, setGeneratedToken] = useState<any>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
 
   // New Vendor Modal State
   const [showNewVendorModal, setShowNewVendorModal] = useState<boolean>(false);
@@ -61,8 +46,6 @@ export const VendorClientScreen: React.FC = () => {
       const currentData = await currentRes.json();
       if (currentData.success && currentData.vendor) {
         setCurrentVendor(currentData.vendor);
-        setSimClientId(currentData.vendor.clientId || '');
-        setSimClientSecret(currentData.vendor.clientSecret || '');
       }
 
       // Fetch all vendors (for list & switcher demo)
@@ -83,74 +66,6 @@ export const VendorClientScreen: React.FC = () => {
   useEffect(() => {
     fetchVendorData();
   }, [token]);
-
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(label);
-    showToast(`${label} disalin ke clipboard!`, 'success');
-    setTimeout(() => setCopiedKey(null), 2500);
-  };
-
-  const handleRegenerateSecret = async () => {
-    if (!currentVendor) return;
-    if (!window.confirm('PERINGATAN: Menghasilkan Client Secret baru akan membatalkan kredensial lama. Aplikasi yang menggunakan secret lama tidak akan bisa mengakses data lagi. Lanjutkan?')) {
-      return;
-    }
-
-    setIsRegenerating(true);
-    try {
-      const res = await fetch(`/api/vendors/${currentVendor.id}/regenerate-secret`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token || ''}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await res.json();
-      if (data.success && data.clientSecret) {
-        setCurrentVendor(prev => prev ? { ...prev, clientSecret: data.clientSecret } : null);
-        setSimClientSecret(data.clientSecret);
-        setShowSecret(true);
-        showToast('Client Secret baru berhasil dibuat!', 'success');
-      } else {
-        showToast(data.error || 'Gagal membuat secret baru', 'error');
-      }
-    } catch (e) {
-      showToast('Terjadi kesalahan saat membuat secret baru', 'error');
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
-  const handleSimulateTokenRequest = async () => {
-    setIsGeneratingToken(true);
-    setTokenError(null);
-    setGeneratedToken(null);
-
-    try {
-      const res = await fetch('/api/vendors/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'client_credentials',
-          client_id: simClientId,
-          client_secret: simClientSecret
-        })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.access_token) {
-        setGeneratedToken(data);
-        showToast('Token M2M berhasil diterbitkan!', 'success');
-      } else {
-        setTokenError(data.error_description || data.error || 'Autentikasi Client Credentials gagal.');
-      }
-    } catch (e: any) {
-      setTokenError('Gagal terhubung ke endpoint token autentikasi.');
-    } finally {
-      setIsGeneratingToken(false);
-    }
-  };
 
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,10 +111,10 @@ export const VendorClientScreen: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                Multi-Tenant & Kredensial Vendor (Klien)
+                Multi-Tenant & Profil Vendor
               </h1>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                Isolasi data ketat per klien menggunakan Client ID & Client Secret
+                Isolasi data ketat dan pengelolaan gerai vendor mandiri
               </p>
             </div>
           </div>
@@ -209,7 +124,7 @@ export const VendorClientScreen: React.FC = () => {
           <button
             type="button"
             onClick={fetchVendorData}
-            className="px-3 py-2 rounded-xl text-xs font-bold border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors flex items-center gap-1.5"
+            className="px-3 py-2 rounded-xl text-xs font-bold border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Muat Ulang"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -219,7 +134,7 @@ export const VendorClientScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowNewVendorModal(true)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white hover:bg-accent/90 transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white hover:bg-accent/90 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Vendor Baru</span>
@@ -240,7 +155,7 @@ export const VendorClientScreen: React.FC = () => {
 
       {/* Grid Content: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Vendor Profile & Credentials */}
+        {/* Left Column: Vendor Profile & Isolation Architecture */}
         <div className="lg:col-span-7 space-y-6">
           {/* Current Vendor Card */}
           <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200/70 dark:border-stone-800/80 p-6 shadow-xs space-y-5">
@@ -272,183 +187,95 @@ export const VendorClientScreen: React.FC = () => {
             {/* Vendor Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
-                <span className="text-stone-400 dark:text-stone-500 font-medium">Email Vendor:</span>
-                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
+                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Email Vendor:</span>
+                </div>
+                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 truncate">
                   {currentVendor?.email || 'pusat@sipspot.com'}
                 </p>
               </div>
+
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
-                <span className="text-stone-400 dark:text-stone-500 font-medium">No. Kontak:</span>
+                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>No. Kontak:</span>
+                </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
                   {currentVendor?.phone || '+628123456789'}
                 </p>
               </div>
+
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 sm:col-span-2">
-                <span className="text-stone-400 dark:text-stone-500 font-medium">Alamat Operasional:</span>
+                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Alamat Operasional:</span>
+                </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
                   {currentVendor?.address || 'Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan'}
                 </p>
               </div>
+
+              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
+                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>Mata Uang Transaksi:</span>
+                </div>
+                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
+                  {currentVendor?.currency || 'IDR (Rupiah)'}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
+                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Kode Gerai:</span>
+                </div>
+                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 uppercase font-mono">
+                  {currentVendor?.code || 'SIPSPOT'}
+                </p>
+              </div>
             </div>
 
-            {/* Client ID & Client Secret Section */}
-            <div className="space-y-4 pt-2">
+            {/* Multi-Tenant Features Card */}
+            <div className="pt-2 border-t border-stone-200/60 dark:border-stone-800/60 space-y-3">
               <h3 className="text-xs font-black uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-accent" />
-                <span>Kredensial Autentikasi API (M2M)</span>
+                <Layers className="w-3.5 h-3.5 text-accent" />
+                <span>Cakupan Isolasi Data Multi-Tenant</span>
               </h3>
 
-              {/* Client ID */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                  Client ID (Klien ID)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={currentVendor?.clientId || ''}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl text-xs font-mono bg-stone-100 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(currentVendor?.clientId || '', 'Client ID')}
-                    className="px-3.5 py-2.5 rounded-xl text-xs font-bold border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors flex items-center gap-1.5 text-stone-700 dark:text-stone-300"
-                  >
-                    {copiedKey === 'Client ID' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'Client ID' ? 'Disalin' : 'Salin'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Client Secret */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                    Client Secret (Rahasia Klien)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateSecret}
-                    disabled={isRegenerating}
-                    className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'animate-spin' : ''}`} />
-                    <span>Regenerate Secret</span>
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={showSecret ? 'text' : 'password'}
-                      readOnly
-                      value={currentVendor?.clientSecret || ''}
-                      className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono bg-stone-100 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 focus:outline-none pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
-                      title={showSecret ? 'Sembunyikan' : 'Tampilkan'}
-                    >
-                      {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Katalog Menu</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(currentVendor?.clientSecret || '', 'Client Secret')}
-                    className="px-3.5 py-2.5 rounded-xl text-xs font-bold border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors flex items-center gap-1.5 text-stone-700 dark:text-stone-300"
-                  >
-                    {copiedKey === 'Client Secret' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'Client Secret' ? 'Disalin' : 'Salin'}</span>
-                  </button>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    Produk dan kategori terisolasi per cabang
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Stok & Bahan</span>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    Pengurangan stok hanya memengaruhi gudang toko aktif
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Kasir & Shift</span>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    Laporan transaksi dan kas kasir terpisah 100%
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* M2M Token Simulator / API Tester */}
-          <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200/70 dark:border-stone-800/80 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Code2 className="w-5 h-5 text-accent" />
-                <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 font-heading">
-                  Simulator OAuth2 Client Credentials (M2M)
-                </h3>
-              </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-mono">
-                POST /api/vendors/token
-              </span>
-            </div>
-
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              Gunakan Client ID & Client Secret untuk memperoleh Bearer Access Token bagi sistem eksternal (ERP, Aplikasi Mobile, Integrasi Kasir Mandiri).
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-bold text-stone-600 dark:text-stone-400">Client ID</label>
-                <input
-                  type="text"
-                  value={simClientId}
-                  onChange={e => setSimClientId(e.target.value)}
-                  placeholder="client_..."
-                  className="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-stone-600 dark:text-stone-400">Client Secret</label>
-                <input
-                  type="password"
-                  value={simClientSecret}
-                  onChange={e => setSimClientSecret(e.target.value)}
-                  placeholder="sec_..."
-                  className="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleSimulateTokenRequest}
-              disabled={isGeneratingToken || !simClientId || !simClientSecret}
-              className="w-full py-2.5 rounded-xl text-xs font-bold bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 shadow-xs"
-            >
-              {isGeneratingToken ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
-              <span>{isGeneratingToken ? 'Meminta Token...' : 'Kirim Permintaan Token (OAuth2)'}</span>
-            </button>
-
-            {/* Token Result */}
-            {tokenError && (
-              <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 flex items-start gap-2.5 text-red-700 dark:text-red-300 text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{tokenError}</span>
-              </div>
-            )}
-
-            {generatedToken && (
-              <div className="p-4 rounded-xl bg-stone-900 text-stone-100 text-xs font-mono space-y-2.5 border border-stone-800">
-                <div className="flex items-center justify-between text-emerald-400 font-bold">
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>200 OK - Access Token Diterbitkan</span>
-                  </div>
-                  <span className="text-[10px] text-stone-400">Exp: {generatedToken.expires_in} detik (24 jam)</span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-stone-400 text-[10px]">Access Token (Bearer):</div>
-                  <div className="break-all p-2 rounded bg-stone-950 text-[11px] text-amber-300 select-all">
-                    {generatedToken.access_token}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-stone-400 pt-1 border-t border-stone-800">
-                  <span>Vendor: <strong>{generatedToken.vendor_name}</strong></span>
-                  <span>Scope: <strong>{generatedToken.scope}</strong></span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -490,28 +317,12 @@ export const VendorClientScreen: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5 truncate">
-                          Kode: <strong className="text-stone-700 dark:text-stone-300">{vnd.code}</strong> • ID: {vnd.id}
+                          Kode: <strong className="text-stone-700 dark:text-stone-300">{vnd.code || '-'}</strong> • ID: {vnd.id}
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
                         {vnd.status}
                       </span>
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t border-stone-200/50 dark:border-stone-800/50 flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
-                      <span className="font-mono text-[10px] truncate max-w-[160px]">{vnd.clientId}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSimClientId(vnd.clientId);
-                          setSimClientSecret(vnd.clientSecret || '');
-                          showToast(`Kredensial '${vnd.name}' dimuat ke simulator!`, 'info');
-                        }}
-                        className="text-[10px] font-bold text-accent hover:underline flex items-center gap-0.5"
-                      >
-                        <span>Uji API</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
                     </div>
                   </div>
                 );
@@ -558,7 +369,7 @@ export const VendorClientScreen: React.FC = () => {
             <button
               type="button"
               onClick={logout}
-              className="w-full mt-2 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-2xs"
+              className="w-full mt-2 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-2xs cursor-pointer"
             >
               Ganti Akun Vendor (Logout)
             </button>
@@ -574,13 +385,13 @@ export const VendorClientScreen: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-accent" />
                 <h3 className="font-black text-stone-900 dark:text-stone-100 text-base font-heading">
-                  Daftarkan Vendor (Klien) Baru
+                  Daftarkan Vendor Baru
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewVendorModal(false)}
-                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm font-bold"
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -588,7 +399,7 @@ export const VendorClientScreen: React.FC = () => {
 
             <form onSubmit={handleCreateVendor} className="space-y-3.5 text-xs">
               <div>
-                <label className="font-bold text-stone-700 dark:text-stone-300">Nama Vendor / Klien *</label>
+                <label className="font-bold text-stone-700 dark:text-stone-300">Nama Vendor *</label>
                 <input
                   type="text"
                   required
@@ -635,7 +446,7 @@ export const VendorClientScreen: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-stone-700 dark:text-stone-300">Alamat</label>
+                <label className="font-bold text-stone-700 dark:text-stone-300">Alamat Gerai</label>
                 <textarea
                   rows={2}
                   value={newVendorForm.address}
@@ -646,21 +457,21 @@ export const VendorClientScreen: React.FC = () => {
               </div>
 
               <div className="p-3 rounded-xl bg-stone-100 dark:bg-stone-900 text-stone-500 dark:text-stone-400 text-[11px] leading-relaxed">
-                ℹ️ Sistem akan secara otomatis mengenerate <strong>Client ID</strong> dan <strong>Client Secret</strong> unik yang terenkripsi untuk vendor ini.
+                ℹ️ Toko baru akan didaftarkan dengan ruang data dan inventaris mandiri.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
                   onClick={() => setShowNewVendorModal(false)}
-                  className="px-4 py-2 rounded-xl font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+                  className="px-4 py-2 rounded-xl font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isCreatingVendor}
-                  className="px-5 py-2 rounded-xl font-bold bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-all shadow-xs"
+                  className="px-5 py-2 rounded-xl font-bold bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-all shadow-xs cursor-pointer"
                 >
                   {isCreatingVendor ? 'Menyimpan...' : 'Daftarkan Vendor'}
                 </button>
