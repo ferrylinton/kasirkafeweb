@@ -32,6 +32,7 @@ import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
 import { VendorRegisterScreen } from './VendorRegisterScreen';
+import { VendorReactivationScreen } from './VendorReactivationScreen';
 import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
 import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
@@ -81,6 +82,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
 
   const [internalShowRegister, setInternalShowRegister] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState<boolean>(false);
+  const [showReactivationScreen, setShowReactivationScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('view') === 'reactivate-vendor';
+    }
+    return false;
+  });
+  const [vendorDeactivatedNotice, setVendorDeactivatedNotice] = useState<{
+    message: string;
+    vendorName?: string;
+    email?: string;
+  } | null>(null);
   const [confirmedVendorNotice, setConfirmedVendorNotice] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -404,6 +417,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       } else {
         showToast(`Selamat datang, ${selectedUser.name}!`, 'success');
       }
+      setVendorDeactivatedNotice(null);
+    } else if (result.vendorDeactivated || result.error === 'VENDOR_DEACTIVATED' || result.message?.toLowerCase().includes('tidak aktif')) {
+      setVendorDeactivatedNotice({
+        message: result.message || 'Akun vendor sudah tidak aktif.',
+        vendorName: (result as any).vendorName || selectedUser.vendorId,
+        email: cleanEmail
+      });
+      showToast(result.message || 'Akun vendor sudah tidak aktif.', 'error');
     } else if (result.isAlreadyLoggedIn) {
       setAlreadyLoggedInData({
         userName: result.user?.name || selectedUser.name,
@@ -535,6 +556,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       icon: <Store className="w-4 h-4 text-accent" />
     };
   });
+
+  if (showReactivationScreen) {
+    return (
+      <VendorReactivationScreen
+        initialEmail={vendorDeactivatedNotice?.email || email || selectedUser?.email || ''}
+        onBackToLogin={() => setShowReactivationScreen(false)}
+      />
+    );
+  }
 
   if (internalShowRegister) {
     return (
@@ -850,6 +880,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           </button>
         </div>
 
+        {/* Deactivated Vendor Alert (When vendor status is DEACTIVATE) */}
+        {vendorDeactivatedNotice && (
+          <div
+            id="login-vendor-deactivated-alert"
+            className="w-full mb-4 p-4 rounded-3xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 shadow-sm flex flex-col gap-3 animate-in fade-in duration-300"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-2xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold font-heading text-rose-900 dark:text-rose-100">
+                  Akun Vendor Sudah Tidak Aktif
+                </h4>
+                <p className="text-[11px] sm:text-xs text-rose-800/90 dark:text-rose-300/90 mt-0.5 leading-relaxed font-semibold">
+                  {vendorDeactivatedNotice.message}
+                </p>
+                <p className="text-[10px] sm:text-[11px] text-rose-700/80 dark:text-rose-400/80 mt-1">
+                  Seluruh akun pengguna di dalam vendor ini tidak dapat login ke sistem kasir. Pengguna dengan role <strong>MANAGER</strong> dapat mengajukan permohonan pengaktifan kembali ke Administrator.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="btn-goto-reactivate-screen"
+              onClick={() => setShowReactivationScreen(true)}
+              className="w-full py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Store className="w-4 h-4" />
+              <span>Buka Halaman Aktivasi Kembali Akun Vendor</span>
+            </button>
+          </div>
+        )}
+
         {/* 15-Minute Lockout Banner (Active when 3 failed attempts) */}
         {isLocked && (
           <div
@@ -1094,7 +1159,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           </div>
 
           {/* Action button to open Vendor Registration */}
-          <div className="w-full pt-3 border-t border-stone-200/80 dark:border-stone-800 text-center">
+          <div className="w-full pt-3 border-t border-stone-200/80 dark:border-stone-800 text-center space-y-2">
             <button
               id="btn-open-vendor-register"
               type="button"
@@ -1103,6 +1168,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             >
               <Store className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform" />
               <span>Daftar Mitra Vendor Baru (Role MANAGER)</span>
+            </button>
+
+            <button
+              id="btn-open-vendor-reactivate-footer"
+              type="button"
+              onClick={() => setShowReactivationScreen(true)}
+              className="py-1 px-3 text-[11px] text-stone-500 hover:text-amber-600 dark:text-stone-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-xl transition-colors inline-flex items-center gap-1.5 font-medium cursor-pointer"
+            >
+              <Store className="w-3.5 h-3.5 text-stone-400" />
+              <span>Akun vendor nonaktif? <strong>Halaman Aktivasi Kembali Akun Vendor</strong></span>
             </button>
           </div>
         </form>

@@ -11,9 +11,26 @@ export interface Vendor {
   email?: string;
   phone?: string;
   address?: string;
-  status: 'ACTIVE' | 'SUSPENDED';
+  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
   currency?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VendorStatusRequest {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  type: 'DEACTIVATE' | 'REACTIVATE';
+  reason: string;
+  requestedByEmail: string;
+  requestedByName: string;
+  requestedByRole: 'MANAGER';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  adminNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
   updatedAt?: string;
 }
 

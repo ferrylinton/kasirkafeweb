@@ -131,6 +131,27 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
   return uniqueSessionIds.size;
 }
 
+// Helper to revoke all active sessions for all users of a specific vendor
+export async function revokeAllSessionsForVendor(vendorId: string, reason: string): Promise<number> {
+  const db = getDB();
+  let usersList: any[] = [];
+  if (db) {
+    try {
+      usersList = await db.collection('users').find({ vendorId }).toArray();
+    } catch (e) {}
+  }
+  if (!usersList || usersList.length === 0) {
+    usersList = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === vendorId);
+  }
+
+  let totalRevoked = 0;
+  for (const u of usersList) {
+    const count = await revokeAllActiveSessionsForUser(u.email, 'SYSTEM_ADMIN', reason);
+    totalRevoked += count;
+  }
+  return totalRevoked;
+}
+
 // Helper to verify manager credentials by email & password
 export async function verifyManagerCredentials(email: string, password: string) {
   const normalizedEmail = email.toLowerCase().trim();
@@ -528,6 +549,39 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     // Authentication Succeeded -> Clear Lockout!
     await clearUserLockout(user.email, ipAddress);
+
+    // Check if Vendor is DEACTIVATE (unless user is ADMIN)
+    if (user.role !== 'ADMIN') {
+      const userVendorId = (user as any).vendorId || 'vnd_kasirkafe_central';
+      const allVendorsList = await getAllVendors();
+      const userVendor = allVendorsList.find(v => v.id === userVendorId);
+
+      if (userVendor && (userVendor.status === 'DEACTIVATE' || (userVendor as any).status === 'DEACTIVATED')) {
+        logLogin({
+          status: 'FAILED',
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          userId: user._id ? user._id.toString() : (user.id || 'mock_id'),
+          ipAddress,
+          userAgent: req.headers['user-agent'] as string,
+          req,
+          loginMethod: 'PASSWORD',
+          reason: 'Vendor status DEACTIVATE'
+        }).catch(() => {});
+
+        return res.status(403).json({
+          success: false,
+          error: 'VENDOR_DEACTIVATED',
+          vendorDeactivated: true,
+          vendorId: userVendor.id,
+          vendorName: userVendor.name,
+          userRole: user.role,
+          isManager: user.role === 'MANAGER',
+          message: 'Akun vendor sudah tidak aktif.'
+        });
+      }
+    }
 
     const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
     const loginMethod = 'PASSWORD';

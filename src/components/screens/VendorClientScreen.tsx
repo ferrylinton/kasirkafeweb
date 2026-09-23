@@ -10,22 +10,34 @@ import {
   Phone,
   Mail,
   MapPin,
-  Users,
-  Coins
+  Coins,
+  Package,
+  ShoppingCart,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Vendor } from '../../types';
 import { useToast } from '../common/Toast';
 
+interface EnrichedVendor extends Vendor {
+  stats?: {
+    productCount: number;
+    orderCount: number;
+    userCount: number;
+  };
+}
+
 export const VendorClientScreen: React.FC = () => {
-  const { user, token, logout } = useAuth();
+  const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null);
-  const [allVendors, setAllVendors] = useState<Vendor[]>([]);
+  const isAdmin = user?.role === 'ADMIN';
+
+  const [currentVendor, setCurrentVendor] = useState<EnrichedVendor | null>(null);
+  const [allVendors, setAllVendors] = useState<EnrichedVendor[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // New Vendor Modal State
+  // New Vendor Modal State (Strictly Admin only)
   const [showNewVendorModal, setShowNewVendorModal] = useState<boolean>(false);
   const [newVendorForm, setNewVendorForm] = useState({
     name: '',
@@ -48,13 +60,15 @@ export const VendorClientScreen: React.FC = () => {
         setCurrentVendor(currentData.vendor);
       }
 
-      // Fetch all vendors (for list & switcher demo)
-      const listRes = await fetch('/api/vendors', {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      const listData = await listRes.json();
-      if (listData.success && listData.vendors) {
-        setAllVendors(listData.vendors);
+      // Fetch all vendors ONLY if Admin
+      if (isAdmin) {
+        const listRes = await fetch('/api/vendors', {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        });
+        const listData = await listRes.json();
+        if (listData.success && listData.vendors) {
+          setAllVendors(listData.vendors);
+        }
       }
     } catch (err: any) {
       showToast('Gagal memuat data vendor', 'error');
@@ -65,10 +79,14 @@ export const VendorClientScreen: React.FC = () => {
 
   useEffect(() => {
     fetchVendorData();
-  }, [token]);
+  }, [token, isAdmin]);
 
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      showToast('Hanya role ADMIN yang berhak menambah vendor.', 'error');
+      return;
+    }
     if (!newVendorForm.name.trim() || !newVendorForm.code.trim()) {
       showToast('Nama dan kode vendor wajib diisi', 'error');
       return;
@@ -110,11 +128,22 @@ export const VendorClientScreen: React.FC = () => {
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                Multi-Tenant & Profil Vendor
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-black text-stone-900 dark:text-stone-100 font-heading">
+                  Informasi Profil Vendor
+                </h1>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                  isAdmin 
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300' 
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                }`}>
+                  Role: {user?.role || 'MANAGER'}
+                </span>
+              </div>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                Isolasi data ketat dan pengelolaan gerai vendor mandiri
+                {isAdmin 
+                  ? 'Pengelolaan merchant, data multi-tenant, dan isolasi sistem vendor.'
+                  : 'Data operasional gerai aktif Anda. Role MANAGER hanya memiliki wewenang melihat data vendor ini.'}
               </p>
             </div>
           </div>
@@ -131,14 +160,18 @@ export const VendorClientScreen: React.FC = () => {
             <span>Segarkan</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowNewVendorModal(true)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white hover:bg-accent/90 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Vendor Baru</span>
-          </button>
+          {/* Hanya ADMIN yang berhak menambah vendor */}
+          {isAdmin && (
+            <button
+              type="button"
+              id="btn-admin-add-vendor"
+              onClick={() => setShowNewVendorModal(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white hover:bg-accent/90 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Vendor Baru</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -146,18 +179,19 @@ export const VendorClientScreen: React.FC = () => {
       <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 flex items-start gap-3 text-emerald-900 dark:text-emerald-100 text-xs">
         <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <span className="font-bold">Prinsip Keamanan & Isolasi Data Terjamin:</span>
+          <span className="font-bold">Prinsip Keamanan & Isolasi Data Multi-Tenant Terjamin:</span>
           <p className="text-emerald-800 dark:text-emerald-200 leading-relaxed">
-            Sistem memastikan data katalog produk, stok inventaris, riwayat transaksi, antrean kasir, serta log database terpisah secara mandiri untuk setiap vendor. Data vendor Anda tidak dapat diakses atau diubah oleh vendor lain.
+            {isAdmin 
+              ? 'Sistem memastikan data katalog produk, stok inventaris, riwayat transaksi, antrean kasir, serta log database terpisah secara mandiri untuk setiap vendor.'
+              : 'Anda login dengan wewenang MANAGER toko ini. Data katalog menu, inventaris stok, riwayat pesanan, serta pembukuan kasir terisolasi penuh khusus gerai Anda dan terlindungi dari vendor lain.'}
           </p>
         </div>
       </div>
 
-      {/* Grid Content: 2 Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Vendor Profile & Isolation Architecture */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Current Vendor Card */}
+      {/* Grid Content */}
+      <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-12' : 'lg:grid-cols-12'} gap-6`}>
+        {/* Vendor Profile & Details Card */}
+        <div className={isAdmin ? 'lg:col-span-7 space-y-6' : 'lg:col-span-12 space-y-6'}>
           <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200/70 dark:border-stone-800/80 p-6 shadow-xs space-y-5">
             <div className="flex items-center justify-between border-b border-stone-200/60 dark:border-stone-800/60 pb-4">
               <div className="flex items-center gap-3">
@@ -166,11 +200,11 @@ export const VendorClientScreen: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-base font-black text-stone-900 dark:text-stone-100">
-                    {currentVendor?.name || 'KasirKafe Coffee & Boba (Pusat)'}
+                    {currentVendor?.name || 'Gerai Toko Aktif'}
                   </h2>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-                      ID: {currentVendor?.id || 'vnd_kasirkafe_central'}
+                      ID: {currentVendor?.id || 'vnd_central'}
                     </span>
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                       {currentVendor?.status || 'ACTIVE'}
@@ -179,20 +213,61 @@ export const VendorClientScreen: React.FC = () => {
                 </div>
               </div>
 
-              <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-bold bg-orange-100 dark:bg-orange-950/50 text-accent">
+              <span className="inline-flex px-3 py-1 rounded-full text-xs font-bold bg-orange-100 dark:bg-orange-950/50 text-accent">
                 Vendor Anda
               </span>
             </div>
+
+            {/* Vendor Live Statistics */}
+            {currentVendor?.stats && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-stone-400 uppercase tracking-wider">Katalog Produk</span>
+                    <span className="text-xl font-extrabold text-stone-900 dark:text-stone-100 font-heading">
+                      {currentVendor.stats.productCount ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <ShoppingCart className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-stone-400 uppercase tracking-wider">Total Pesanan</span>
+                    <span className="text-xl font-extrabold text-stone-900 dark:text-stone-100 font-heading">
+                      {currentVendor.stats.orderCount ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-stone-400 uppercase tracking-wider">Staf Terdaftar</span>
+                    <span className="text-xl font-extrabold text-stone-900 dark:text-stone-100 font-heading">
+                      {currentVendor.stats.userCount ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Vendor Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
                 <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
                   <Mail className="w-3.5 h-3.5" />
-                  <span>Email Vendor:</span>
+                  <span>Email Resmi Vendor:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 truncate">
-                  {currentVendor?.email || 'pusat@kasirkafe.com'}
+                  {currentVendor?.email || 'Belum diatur'}
                 </p>
               </div>
 
@@ -202,7 +277,7 @@ export const VendorClientScreen: React.FC = () => {
                   <span>No. Kontak:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
-                  {currentVendor?.phone || '+628123456789'}
+                  {currentVendor?.phone || 'Belum diatur'}
                 </p>
               </div>
 
@@ -212,7 +287,7 @@ export const VendorClientScreen: React.FC = () => {
                   <span>Alamat Operasional:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
-                  {currentVendor?.address || 'Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan'}
+                  {currentVendor?.address || 'Belum diatur'}
                 </p>
               </div>
 
@@ -232,7 +307,7 @@ export const VendorClientScreen: React.FC = () => {
                   <span>Kode Gerai:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 uppercase font-mono">
-                  {currentVendor?.code || 'SIPSPOT'}
+                  {currentVendor?.code || 'VND'}
                 </p>
               </div>
             </div>
@@ -241,37 +316,37 @@ export const VendorClientScreen: React.FC = () => {
             <div className="pt-2 border-t border-stone-200/60 dark:border-stone-800/60 space-y-3">
               <h3 className="text-xs font-black uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-accent" />
-                <span>Cakupan Isolasi Data Multi-Tenant</span>
+                <span>Cakupan Isolasi Data Toko Anda</span>
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                 <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Katalog Menu</span>
+                    <span>Katalog Menu Mandiri</span>
                   </div>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                    Produk dan kategori terisolasi per cabang
+                    Menu, harga, dan kategori terisolasi khusus cabang Anda
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Stok & Bahan</span>
+                    <span>Stok & Bahan Baku</span>
                   </div>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                    Pengurangan stok hanya memengaruhi gudang toko aktif
+                    Pengurangan stok bahan hanya memengaruhi toko Anda
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 space-y-1">
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Kasir & Shift</span>
+                    <span>Kasir & Transaksi</span>
                   </div>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                    Laporan transaksi dan kas kasir terpisah 100%
+                    Laporan penjualan kasir terpisah 100% dari toko lain
                   </p>
                 </div>
               </div>
@@ -279,106 +354,66 @@ export const VendorClientScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Multi-Vendor Switcher & Demo Accounts */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Registered Vendors List */}
-          <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200/70 dark:border-stone-800/80 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 font-heading">
-                Daftar Vendor Terdaftar ({allVendors.length})
-              </h3>
-              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-bold">
-                Toko Mandiri
-              </span>
-            </div>
+        {/* Right Column: Hanya Ditampilkan untuk ADMIN (Role MANAGER TIDAK BISA MELIHAT DAFTAR VENDOR) */}
+        {isAdmin && (
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200/70 dark:border-stone-800/80 p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 font-heading">
+                  Daftar Vendor Terdaftar ({allVendors.length})
+                </h3>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider">
+                  Khusus Admin
+                </span>
+              </div>
 
-            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-              {allVendors.map((vnd) => {
-                const isCurrent = currentVendor?.id === vnd.id;
-                return (
-                  <div
-                    key={vnd.id}
-                    className={`p-3.5 rounded-xl border transition-all ${
-                      isCurrent
-                        ? 'bg-orange-50/70 dark:bg-orange-950/30 border-accent/40 ring-1 ring-accent/20'
-                        : 'bg-stone-50 dark:bg-stone-900/50 border-stone-200/60 dark:border-stone-800/60 hover:border-stone-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-black text-xs text-stone-900 dark:text-stone-100 truncate">
-                            {vnd.name}
-                          </span>
-                          {isCurrent && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-accent text-white shrink-0">
-                              Aktif
+              <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                {allVendors.map((vnd) => {
+                  const isCurrent = currentVendor?.id === vnd.id;
+                  return (
+                    <div
+                      key={vnd.id}
+                      className={`p-3.5 rounded-xl border transition-all ${
+                        isCurrent
+                          ? 'bg-orange-50/70 dark:bg-orange-950/30 border-accent/40 ring-1 ring-accent/20'
+                          : 'bg-stone-50 dark:bg-stone-900/50 border-stone-200/60 dark:border-stone-800/60 hover:border-stone-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-xs text-stone-900 dark:text-stone-100 truncate">
+                              {vnd.name}
                             </span>
-                          )}
+                            {isCurrent && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-accent text-white uppercase">
+                                Aktif
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {vnd.code || vnd.id}
+                          </span>
                         </div>
-                        <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5 truncate">
-                          Kode: <strong className="text-stone-700 dark:text-stone-300">{vnd.code || '-'}</strong> • ID: {vnd.id}
-                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold ${
+                          vnd.status === 'ACTIVE'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                            : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                        }`}>
+                          {vnd.status}
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
-                        {vnd.status}
-                      </span>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          {/* Quick Demo Switcher Card */}
-          <div className="bg-amber-50/80 dark:bg-amber-950/30 rounded-2xl border border-amber-200/80 dark:border-amber-800/60 p-5 space-y-3 text-xs">
-            <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
-              <Users className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Coba Login Sebagai Vendor Lain:</span>
-            </div>
-            <p className="text-amber-800 dark:text-amber-300 text-[11px] leading-relaxed">
-              Untuk membuktikan isolasi data, silakan logout lalu masuk dengan akun vendor lain. Anda akan melihat bahwa daftar menu, harga, pesanan, dan log aktivitasnya 100% terpisah.
-            </p>
-
-            <div className="space-y-2 pt-1">
-              <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-stone-900 dark:text-stone-100">1. KasirKafe Pusat</div>
-                  <div className="text-[10px] text-stone-500">manager@beverage.com (Password: Password123!)</div>
-                </div>
-                <span className="text-[10px] font-bold text-stone-400">Arabika & Boba</span>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-stone-900 dark:text-stone-100">2. Kopi Kulo (Kemang)</div>
-                  <div className="text-[10px] text-stone-500">kulo.manager@beverage.com (Password: Password123!)</div>
-                </div>
-                <span className="text-[10px] font-bold text-amber-600">Avocatto & Toast</span>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-stone-900 dark:text-stone-100">3. Teh Poci (Bekasi)</div>
-                  <div className="text-[10px] text-stone-500">poci.manager@beverage.com (Password: Password123!)</div>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-600">Teh Poci & Dimsum</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={logout}
-              className="w-full mt-2 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-2xs cursor-pointer"
-            >
-              Ganti Akun Vendor (Logout)
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* New Vendor Modal */}
-      {showNewVendorModal && (
+      {/* New Vendor Modal (Khusus ADMIN saja) */}
+      {isAdmin && showNewVendorModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
           <div className="bg-white dark:bg-[#251e1b] rounded-2xl border border-stone-200 dark:border-stone-800 w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">

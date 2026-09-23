@@ -176,6 +176,36 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     });
   }
 
+  // Check if non-admin user belongs to a deactivated vendor
+  if (decoded.role !== 'ADMIN' && decoded.vendorId) {
+    const isReactivatePath = req.path === '/request-reactivate' || req.originalUrl?.includes('/request-reactivate');
+    if (!isReactivatePath) {
+      let vendor: any = null;
+      const db = getDB();
+      if (db) {
+        try {
+          vendor = await db.collection('vendors').findOne({ id: decoded.vendorId });
+        } catch (e) {}
+      }
+      if (!vendor) {
+        vendor = fallbackStore.vendors.find(v => v.id === decoded.vendorId);
+      }
+      if (vendor && (vendor.status === 'DEACTIVATE' || (vendor as any).status === 'DEACTIVATED')) {
+        if (decoded.sessionId) {
+          revokedSessionIds.add(decoded.sessionId);
+          await removeSessionFromRedis(decoded.sessionId);
+        }
+        return res.status(401).json({
+          success: false,
+          error: 'VENDOR_DEACTIVATED',
+          vendorDeactivated: true,
+          vendorName: vendor.name,
+          message: 'Akun vendor sudah tidak aktif.'
+        });
+      }
+    }
+  }
+
   req.user = decoded;
   next();
 }

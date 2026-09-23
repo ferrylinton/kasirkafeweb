@@ -23,6 +23,8 @@ export interface LoginResult {
   };
   canManagerForceLogout?: boolean;
   isSelfManager?: boolean;
+  vendorDeactivated?: boolean;
+  vendorName?: string;
   user?: {
     id: string;
     name: string;
@@ -398,6 +400,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeSession: data.activeSession,
         canManagerForceLogout: data.canManagerForceLogout,
         isSelfManager: data.isSelfManager,
+        vendorDeactivated: data.vendorDeactivated,
+        vendorName: data.vendorName,
         user: data.user
       };
     } catch (err: any) {

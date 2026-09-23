@@ -8,12 +8,13 @@ import {
   getAllVendors
 } from '../vendorMiddleware';
 import { recordActivityLog } from '../activityLogger';
+import { revokeAllSessionsForVendor } from './authRoutes';
 import { IParam } from '@/src/types';
 
 export const adminVendorRouter = Router();
 
-// Strictly guard ALL admin vendor routes: Auth + ADMIN Role
-adminVendorRouter.use(authMiddleware, requireAdmin);
+// Authenticate all routes
+adminVendorRouter.use(authMiddleware);
 
 /**
  * Helper to compute stats for a single vendor
@@ -52,8 +53,20 @@ async function computeVendorStats(vendorId: string) {
  */
 adminVendorRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const userRole = (req as any).user?.role;
+    const currentVendorId = (req as any).vendorId || (req as any).user?.vendorId;
+
+    if (userRole !== 'ADMIN' && userRole !== 'MANAGER') {
+      return res.status(403).json({ success: false, message: 'Akses ditolak: Hanya ADMIN dan MANAGER yang dapat mengakses data vendor.' });
+    }
+
     const { search, status } = req.query;
-    const vendors = await getAllVendors();
+    let vendors = await getAllVendors();
+
+    // Strict role MANAGER rule: MANAGER can ONLY view their own vendor data
+    if (userRole === 'MANAGER') {
+      vendors = vendors.filter(v => v.id === currentVendorId);
+    }
 
     let filtered = vendors;
 
@@ -83,7 +96,7 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
       })
     );
 
-    // Global summary
+    // Summary calculation (scoped to current view)
     const totalVendors = vendors.length;
     const activeVendors = vendors.filter(v => v.status === 'ACTIVE').length;
     const suspendedVendors = vendors.filter(v => v.status === 'SUSPENDED').length;
@@ -107,7 +120,7 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
  * POST /api/admin/vendors
  * Create a new vendor (Admin only)
  */
-adminVendorRouter.post('/', async (req: Request, res: Response) => {
+adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, currency, status } = req.body;
 
@@ -179,6 +192,13 @@ adminVendorRouter.post('/', async (req: Request, res: Response) => {
 adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
+    const userRole = (req as any).user?.role;
+    const currentVendorId = (req as any).vendorId || (req as any).user?.vendorId;
+
+    if (userRole !== 'ADMIN' && (userRole !== 'MANAGER' || id !== currentVendorId)) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak: Anda hanya dapat mengedit vendor Anda sendiri.' });
+    }
+
     const { name, currency, status } = req.body;
 
     const vendor = await findVendorById(id);
@@ -194,7 +214,9 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
       updates.name = name.trim();
     }
     if (typeof currency === 'string') updates.currency = currency.trim();
-    if (status === 'ACTIVE' || status === 'SUSPENDED') {
+    
+    // Only ADMIN can change vendor operational status (ACTIVE/SUSPENDED)
+    if (userRole === 'ADMIN' && (status === 'ACTIVE' || status === 'SUSPENDED')) {
       if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin') && status === 'SUSPENDED') {
         return res.status(400).json({
           success: false,
@@ -224,7 +246,7 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
       entity: 'VENDOR',
       entityId: id,
       entityName: updatedVendor.name,
-      summary: `Admin memperbarui data profil vendor '${updatedVendor.name}'`,
+      summary: `${userRole} memperbarui data profil vendor '${updatedVendor.name}'`,
       details: updates,
       req,
       vendorId: id
@@ -243,9 +265,9 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/admin/vendors/:id/status
- * Toggle or set vendor status (ACTIVE / SUSPENDED)
+ * Toggle or set vendor status (ACTIVE / SUSPENDED) - Strictly ADMIN Only
  */
-adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
+adminVendorRouter.patch('/:id/status', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
     const { status } = req.body;
@@ -262,8 +284,8 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
     }
 
-    const newStatus: 'ACTIVE' | 'SUSPENDED' =
-      status === 'ACTIVE' || status === 'SUSPENDED'
+    const newStatus: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE' =
+      status === 'ACTIVE' || status === 'SUSPENDED' || status === 'DEACTIVATE'
         ? status
         : vendor.status === 'ACTIVE'
         ? 'SUSPENDED'
@@ -280,6 +302,11 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
         found.status = newStatus;
         found.updatedAt = new Date();
       }
+    }
+
+    // If deactivated, revoke all active sessions for this vendor
+    if (newStatus === 'DEACTIVATE') {
+      await revokeAllSessionsForVendor(id, 'Vendor dinonaktifkan oleh Admin');
     }
 
     await recordActivityLog({
@@ -306,9 +333,9 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/admin/vendors/:id
- * Delete a vendor (Protected against central vendor)
+ * Delete a vendor (Strictly ADMIN Only)
  */
-adminVendorRouter.delete('/:id', async (req: Request, res: Response) => {
+adminVendorRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
 

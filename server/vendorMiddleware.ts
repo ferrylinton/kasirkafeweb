@@ -9,7 +9,7 @@ export interface VendorRecord {
   email?: string;
   phone?: string;
   address?: string;
-  status: 'ACTIVE' | 'SUSPENDED';
+  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
   logo?: string;
   currency?: string;
   createdAt: Date | string;

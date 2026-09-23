@@ -95,7 +95,8 @@ const MainLayout: React.FC = () => {
     'templates',
     'login-history',
     'activity-logs',
-    'vendor-client'
+    'vendor-client',
+    'vendor-management'
   ];
 
   // 3. Administrasi Sistem (Lintas Vendor): Hanya boleh diakses role ADMIN
@@ -317,7 +318,7 @@ const MainLayout: React.FC = () => {
           {isManager && activeView === 'templates' && <EmailTemplateScreen />}
           {isManager && activeView === 'login-history' && <LoginHistoryScreen />}
           {isManager && activeView === 'activity-logs' && <ActivityLogScreen />}
-          {isManager && activeView === 'vendor-client' && <VendorClientScreen />}
+          {(isManager || isAdmin) && activeView === 'vendor-client' && <VendorClientScreen />}
 
           {/* Administrasi Sistem Lintas Vendor */}
           {(isAdmin || isManager) && activeView === 'admin-dashboard' && (
@@ -347,7 +348,7 @@ const MainLayout: React.FC = () => {
           {isAdmin && activeView === 'admin-activity-logs' && (
             <ActivityLogScreen allVendorsMode={true} />
           )}
-          {isAdmin && activeView === 'vendor-management' && (
+          {(isAdmin || isManager) && activeView === 'vendor-management' && (
             <VendorManagementScreen />
           )}
           {isAdmin && activeView === 'log-viewer' && (

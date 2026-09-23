@@ -8,7 +8,8 @@ import {
   findVendorById,
   VendorRecord
 } from '../vendorMiddleware';
-import { signToken, authMiddleware, requireManager, hashPassword } from '../auth';
+import { signToken, authMiddleware, requireManager, requireAdmin, hashPassword, comparePassword, verifyToken } from '../auth';
+import { revokeAllSessionsForVendor } from './authRoutes';
 import { recordActivityLog } from '../activityLogger';
 import { sendVendorConfirmationEmail } from '../mail';
 import { writeDailyLog } from '../dailyRollingLogger';
@@ -30,12 +31,18 @@ const vendorUpdateSchema = z.object({
 
 /**
  * GET /api/vendors
- * List all vendors / clients (accessible by managers and admins)
+ * List vendors: Admins see all vendors, Managers see ONLY their own vendor
  */
-vendorRouter.get('/', async (req: Request, res: Response) => {
+vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const vendors = await getAllVendors();
-    const currentVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const userRole = (req as any).user?.role;
+    const currentVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    let vendors = await getAllVendors();
+
+    // Strict role MANAGER rule: MANAGER can ONLY view their own vendor data
+    if (userRole !== 'ADMIN') {
+      vendors = vendors.filter(v => v.id === currentVendorId);
+    }
 
     // Enhance with live counts for each vendor
     const db = getDB();
@@ -127,9 +134,9 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
 /**
  * POST /api/vendors
  * Register a new Vendor
- * RBAC: Manajemen Toko hanya boleh diakses role MANAGER (dan ADMIN)
+ * RBAC: Hanya boleh diakses oleh ADMIN (Role MANAGER tidak dapat menambah vendor)
  */
-vendorRouter.post('/', authMiddleware, requireManager, async (req: Request, res: Response) => {
+vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
   try {
     const parsed = vendorCreateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -983,6 +990,463 @@ vendorRouter.post('/resend-confirmation', async (req: Request, res: Response) =>
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/vendors/request-deactivate
+ * Role: MANAGER - Request to deactivate their vendor account with reason (5-200 chars)
+ */
+vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const vendorId = user.vendorId || req.vendorId;
+
+    if (!vendorId) {
+      return res.status(400).json({ success: false, message: 'Vendor tidak ditemukan untuk akun ini.' });
+    }
+
+    if (vendorId === 'vnd_admin' || vendorId === 'vnd_kasirkafe_central') {
+      return res.status(400).json({ success: false, message: 'Vendor Utama Sistem tidak dapat dinonaktifkan.' });
+    }
+
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (reason.length < 5 || reason.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'Alasan penonaktifan harus minimal 5 karakter dan maksimal 200 karakter.'
+      });
+    }
+
+    const vendor = await findVendorById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: 'Data vendor tidak ditemukan.' });
+    }
+
+    if (vendor.status === 'DEACTIVATE') {
+      return res.status(400).json({ success: false, message: 'Vendor sudah dalam status nonaktif.' });
+    }
+
+    const db = getDB();
+    let existingPending: any = null;
+    if (db) {
+      try {
+        existingPending = await db.collection('vendor_status_requests').findOne({
+          vendorId,
+          status: 'PENDING'
+        });
+      } catch (e) {}
+    }
+    if (!existingPending) {
+      existingPending = fallbackStore.vendor_status_requests?.find(
+        (r: any) => r.vendorId === vendorId && r.status === 'PENDING'
+      );
+    }
+
+    if (existingPending) {
+      return res.status(400).json({
+        success: false,
+        message: `Terdapat permintaan ${existingPending.type === 'DEACTIVATE' ? 'penonaktifan' : 'aktivasi'} yang sedang menunggu persetujuan Admin.`
+      });
+    }
+
+    const newRequest = {
+      id: `vreq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      type: 'DEACTIVATE' as const,
+      reason,
+      requestedByEmail: user.email,
+      requestedByName: user.name,
+      requestedByRole: 'MANAGER' as const,
+      status: 'PENDING' as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (db) {
+      try {
+        await db.collection('vendor_status_requests').insertOne(newRequest);
+      } catch (e) {}
+    }
+    if (!fallbackStore.vendor_status_requests) {
+      fallbackStore.vendor_status_requests = [];
+    }
+    fallbackStore.vendor_status_requests.unshift(newRequest);
+
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'VENDOR',
+      entityId: vendor.id,
+      entityName: vendor.name,
+      summary: `Manager (${user.email}) mengajukan penonaktifan vendor '${vendor.name}' (Alasan: "${reason}")`,
+      details: { requestId: newRequest.id, reason, type: 'DEACTIVATE' },
+      req,
+      vendorId: vendor.id
+    });
+
+    return res.json({
+      success: true,
+      message: 'Permintaan penonaktifan vendor berhasil dikirim ke Admin.',
+      request: newRequest
+    });
+  } catch (err: any) {
+    console.error('[VendorRequestDeactivate] Error:', err);
+    return res.status(500).json({ success: false, message: 'Gagal mengajukan penonaktifan vendor.' });
+  }
+});
+
+/**
+ * POST /api/vendors/request-reactivate
+ * Public / Semi-Public: Manager requests reactivation of their deactivated vendor account (5-200 chars)
+ */
+vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => {
+  try {
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (reason.length < 5 || reason.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'Alasan aktivasi harus minimal 5 karakter dan maksimal 200 karakter.'
+      });
+    }
+
+    let managerUser: any = null;
+
+    // Check token if provided
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyToken(token);
+      if (decoded && (decoded.role === 'MANAGER' || decoded.role === 'ADMIN')) {
+        const db = getDB();
+        if (db) {
+          try {
+            managerUser = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
+          } catch (e) {}
+        }
+        if (!managerUser) {
+          managerUser = fallbackStore.users.find(u => u.email.toLowerCase() === decoded.email.toLowerCase());
+        }
+      }
+    }
+
+    // If not authenticated via token, check email & password credentials
+    if (!managerUser) {
+      const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+      const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email dan password akun Manager diperlukan untuk mengajukan permohonan aktivasi.'
+        });
+      }
+
+      const db = getDB();
+      if (db) {
+        try {
+          managerUser = await db.collection('users').findOne({ email });
+        } catch (e) {}
+      }
+      if (!managerUser) {
+        managerUser = fallbackStore.users.find(u => u.email.toLowerCase() === email);
+      }
+
+      if (!managerUser) {
+        return res.status(401).json({
+          success: false,
+          message: 'Akun Manager dengan email tersebut tidak ditemukan.'
+        });
+      }
+
+      const isPassValid = await comparePassword(password, managerUser.password);
+      if (!isPassValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Password akun Manager salah.'
+        });
+      }
+
+      if (managerUser.role !== 'MANAGER' && managerUser.role !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          message: 'Hanya pengguna dengan role MANAGER yang dapat mengajukan aktivasi akun vendor.'
+        });
+      }
+    }
+
+    const vendorId = managerUser.vendorId;
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vendor tidak ditemukan pada akun Manager ini.'
+      });
+    }
+
+    const vendor = await findVendorById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
+    }
+
+    if (vendor.status === 'ACTIVE') {
+      return res.status(400).json({
+        success: false,
+        message: `Akun vendor '${vendor.name}' sudah dalam status AKTIF.`
+      });
+    }
+
+    const db = getDB();
+    let existingPending: any = null;
+    if (db) {
+      try {
+        existingPending = await db.collection('vendor_status_requests').findOne({
+          vendorId,
+          status: 'PENDING'
+        });
+      } catch (e) {}
+    }
+    if (!existingPending) {
+      existingPending = fallbackStore.vendor_status_requests?.find(
+        (r: any) => r.vendorId === vendorId && r.status === 'PENDING'
+      );
+    }
+
+    if (existingPending) {
+      return res.status(400).json({
+        success: false,
+        message: `Permintaan ${existingPending.type === 'REACTIVATE' ? 'aktivasi' : 'penonaktifan'} vendor sedang menunggu persetujuan Admin.`
+      });
+    }
+
+    const newRequest = {
+      id: `vreq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      type: 'REACTIVATE' as const,
+      reason,
+      requestedByEmail: managerUser.email,
+      requestedByName: managerUser.name,
+      requestedByRole: 'MANAGER' as const,
+      status: 'PENDING' as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (db) {
+      try {
+        await db.collection('vendor_status_requests').insertOne(newRequest);
+      } catch (e) {}
+    }
+    if (!fallbackStore.vendor_status_requests) {
+      fallbackStore.vendor_status_requests = [];
+    }
+    fallbackStore.vendor_status_requests.unshift(newRequest);
+
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'VENDOR',
+      entityId: vendor.id,
+      entityName: vendor.name,
+      summary: `Manager (${managerUser.email}) mengajukan aktivasi kembali vendor '${vendor.name}' (Alasan: "${reason}")`,
+      details: { requestId: newRequest.id, reason, type: 'REACTIVATE' },
+      req,
+      vendorId: vendor.id
+    });
+
+    return res.json({
+      success: true,
+      message: `Permintaan aktivasi kembali untuk vendor '${vendor.name}' berhasil dikirimkan ke Admin.`,
+      request: newRequest
+    });
+  } catch (err: any) {
+    console.error('[VendorRequestReactivate] Error:', err);
+    return res.status(500).json({ success: false, message: 'Gagal mengajukan aktivasi kembali vendor.' });
+  }
+});
+
+/**
+ * GET /api/vendors/status-requests
+ * Role: ADMIN or MANAGER
+ */
+vendorRouter.get('/status-requests', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    const userVendorId = (req as any).user?.vendorId;
+    const db = getDB();
+    let requests: any[] = [];
+
+    if (db) {
+      try {
+        const query = userRole === 'ADMIN' ? {} : { vendorId: userVendorId };
+        requests = await db.collection('vendor_status_requests').find(query).sort({ createdAt: -1 }).toArray();
+      } catch (e) {}
+    }
+
+    if (!requests || requests.length === 0) {
+      requests = (fallbackStore.vendor_status_requests || []).filter((r: any) => {
+        if (userRole === 'ADMIN') return true;
+        return r.vendorId === userVendorId;
+      });
+    }
+
+    return res.json({
+      success: true,
+      requests
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/vendors/status-requests/:id/review
+ * Role: ADMIN only - Approve or Reject deactivation / reactivation request
+ */
+vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { action, adminNotes } = req.body;
+
+    if (action !== 'APPROVE' && action !== 'REJECT') {
+      return res.status(400).json({ success: false, message: 'Action harus bernilai APPROVE atau REJECT.' });
+    }
+
+    const db = getDB();
+    let requestItem: any = null;
+    if (db) {
+      try {
+        requestItem = await db.collection('vendor_status_requests').findOne({ id });
+      } catch (e) {}
+    }
+    if (!requestItem) {
+      requestItem = fallbackStore.vendor_status_requests?.find((r: any) => r.id === id);
+    }
+
+    if (!requestItem) {
+      return res.status(404).json({ success: false, message: 'Permintaan status vendor tidak ditemukan.' });
+    }
+
+    if (requestItem.status !== 'PENDING') {
+      return res.status(400).json({
+        success: false,
+        message: `Permintaan ini sudah ${requestItem.status === 'APPROVED' ? 'disetujui' : 'ditolak'} sebelumnya.`
+      });
+    }
+
+    const adminUser = req.user!;
+    const reviewedAt = new Date().toISOString();
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+
+    const updates = {
+      status: newStatus,
+      reviewedBy: adminUser.email,
+      adminNotes: adminNotes || '',
+      reviewedAt,
+      updatedAt: reviewedAt
+    };
+
+    if (db) {
+      try {
+        await db.collection('vendor_status_requests').updateOne({ id }, { $set: updates });
+      } catch (e) {}
+    }
+    if (fallbackStore.vendor_status_requests) {
+      const idx = fallbackStore.vendor_status_requests.findIndex((r: any) => r.id === id);
+      if (idx !== -1) {
+        fallbackStore.vendor_status_requests[idx] = { ...fallbackStore.vendor_status_requests[idx], ...updates };
+      }
+    }
+
+    // If APPROVED, update vendor status!
+    if (action === 'APPROVE') {
+      const targetVendorId = requestItem.vendorId;
+
+      if (requestItem.type === 'DEACTIVATE') {
+        const vendorStatusUpdate = { status: 'DEACTIVATE', updatedAt: new Date() };
+        if (db) {
+          try {
+            await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
+          } catch (e) {}
+        }
+        if (fallbackStore.vendors) {
+          const vIdx = fallbackStore.vendors.findIndex(v => v.id === targetVendorId);
+          if (vIdx !== -1) {
+            fallbackStore.vendors[vIdx] = { ...fallbackStore.vendors[vIdx], ...vendorStatusUpdate };
+          }
+        }
+
+        // Kick all users in that vendor immediately
+        const revokedCount = await revokeAllSessionsForVendor(targetVendorId, 'Akun vendor dinonaktifkan oleh Admin');
+
+        await recordActivityLog({
+          action: 'UPDATE',
+          entity: 'VENDOR',
+          entityId: targetVendorId,
+          entityName: requestItem.vendorName,
+          summary: `Admin (${adminUser.email}) menyetujui penonaktifan vendor '${requestItem.vendorName}'. Status vendor menjadi DEACTIVATE dan ${revokedCount} sesi user diputus.`,
+          details: { requestId: id, revokedSessions: revokedCount },
+          req,
+          vendorId: targetVendorId
+        });
+
+        return res.json({
+          success: true,
+          message: `Permintaan disetujui. Akun vendor '${requestItem.vendorName}' telah dinonaktifkan (DEACTIVATE) dan seluruh sesi pengguna di dalamnya telah dikeluarkan.`,
+          request: { ...requestItem, ...updates }
+        });
+      } else if (requestItem.type === 'REACTIVATE') {
+        const vendorStatusUpdate = { status: 'ACTIVE', updatedAt: new Date() };
+        if (db) {
+          try {
+            await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
+          } catch (e) {}
+        }
+        if (fallbackStore.vendors) {
+          const vIdx = fallbackStore.vendors.findIndex(v => v.id === targetVendorId);
+          if (vIdx !== -1) {
+            fallbackStore.vendors[vIdx] = { ...fallbackStore.vendors[vIdx], ...vendorStatusUpdate };
+          }
+        }
+
+        await recordActivityLog({
+          action: 'UPDATE',
+          entity: 'VENDOR',
+          entityId: targetVendorId,
+          entityName: requestItem.vendorName,
+          summary: `Admin (${adminUser.email}) menyetujui aktivasi kembali vendor '${requestItem.vendorName}'. Status vendor kini ACTIVE.`,
+          details: { requestId: id },
+          req,
+          vendorId: targetVendorId
+        });
+
+        return res.json({
+          success: true,
+          message: `Permintaan disetujui. Akun vendor '${requestItem.vendorName}' kini telah aktif kembali dan pengguna dapat login seperti biasa.`,
+          request: { ...requestItem, ...updates }
+        });
+      }
+    }
+
+    // If REJECTED
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'VENDOR',
+      entityId: requestItem.vendorId,
+      entityName: requestItem.vendorName,
+      summary: `Admin (${adminUser.email}) menolak permintaan ${requestItem.type === 'DEACTIVATE' ? 'penonaktifan' : 'aktivasi'} vendor '${requestItem.vendorName}'`,
+      details: { requestId: id, adminNotes },
+      req,
+      vendorId: requestItem.vendorId
+    });
+
+    return res.json({
+      success: true,
+      message: `Permintaan ${requestItem.type === 'DEACTIVATE' ? 'penonaktifan' : 'aktivasi'} vendor telah ditolak.`,
+      request: { ...requestItem, ...updates }
+    });
+  } catch (err: any) {
+    console.error('[VendorRequestReview] Error:', err);
+    return res.status(500).json({ success: false, message: 'Gagal meninjau permintaan status vendor.' });
   }
 });
 
