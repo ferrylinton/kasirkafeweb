@@ -245,7 +245,7 @@ export const CancelOrderModal: React.FC<CancelOrderModalProps> = ({
                   <button
                     key={qr}
                     type="button"
-                    onClick={() => setReason(qr.slice(0, 50))}
+                    onClick={() => setReason((qr || '').slice(0, 50))}
                     className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400 text-stone-600 dark:text-stone-400 text-[11px] font-semibold border border-stone-200/60 dark:border-stone-700/60 transition-colors cursor-pointer"
                   >
                     {qr}

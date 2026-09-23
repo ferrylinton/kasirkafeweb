@@ -13,6 +13,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_admin',
       name: 'Admin',
+      code: 'ADMIN',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
@@ -21,6 +22,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_kasirkafe_central',
       name: 'KasirKafe Coffee & Boba (Pusat)',
+      code: 'PUSAT',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
@@ -29,6 +31,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_kopi_kulo_kemang',
       name: 'Kopi Kulo & Toast (Kemang)',
+      code: 'KULO',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-02-15'),
@@ -37,6 +40,7 @@ export async function seedDatabase() {
     {
       id: 'vnd_tehpoci_nusantara',
       name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
+      code: 'POCI',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-03-01'),
@@ -924,18 +928,21 @@ export async function seedDatabase() {
   const db = getDB();
   if (db) {
     try {
-      // 0. Vendors - ensure all initial vendors including vnd_admin are present
+      // 0. Vendors - ensure all initial vendors including vnd_admin are present and have codes
       for (const v of initialVendors) {
         await db.collection('vendors').updateOne(
           { id: v.id },
-          { $setOnInsert: v },
+          { 
+            $setOnInsert: { ...v },
+            $set: { code: v.code }
+          },
           { upsert: true }
         );
       }
-      // Strip any legacy clientId, clientSecret, code, email, phone, address fields from vendors collection
+      // Strip any legacy unused fields from vendors collection
       await db.collection('vendors').updateMany(
         {},
-        { $unset: { clientId: "", clientSecret: "", code: "", email: "", phone: "", address: "" } }
+        { $unset: { clientId: "", clientSecret: "" } }
       );
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 

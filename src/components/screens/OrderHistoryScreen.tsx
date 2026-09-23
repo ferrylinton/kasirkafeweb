@@ -153,10 +153,13 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
     fetchOrders();
   };
 
-  const totalRevenue = orders
-    .filter(o => o.status !== 'CANCELLED')
-    .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const totalHoldValue = savedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const safeOrders = orders || [];
+  const safeSavedOrders = savedOrders || [];
+
+  const totalRevenue = safeOrders
+    .filter(o => o?.status !== 'CANCELLED')
+    .reduce((sum, o) => sum + (o?.totalAmount || 0), 0);
+  const totalHoldValue = safeSavedOrders.reduce((sum, o) => sum + (o?.totalAmount || 0), 0);
 
   const handleLoadDraftToCart = (draft: SavedOrder) => {
     loadDraftIntoCart(draft);
@@ -254,7 +257,7 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
           <Receipt className="w-4 h-4 text-accent" />
           <span>{language === 'en' ? 'Paid Orders' : 'Selesai Dibayar'}</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 font-extrabold">
-            {orders.length}
+            {safeOrders.length}
           </span>
         </button>
 
@@ -269,11 +272,11 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
         >
           <PauseCircle className="w-4 h-4" />
           <span>{language === 'en' ? 'Saved Orders (Hold)' : 'Pesanan Tersimpan (Hold)'}</span>
-          {savedOrders.length > 0 && (
+          {safeSavedOrders.length > 0 && (
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
               historyTab === 'hold' ? 'bg-amber-700 text-white' : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
             }`}>
-              {savedOrders.length}
+              {safeSavedOrders.length}
             </span>
           )}
         </button>
@@ -532,7 +535,7 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
                 {language === 'en' ? 'Total Hold Orders' : 'Total Pesanan Tersimpan'}
               </span>
               <span className="text-xl font-extrabold text-amber-900 dark:text-amber-100 font-heading">
-                {savedOrders.length}
+                {safeSavedOrders.length}
               </span>
             </div>
 
@@ -557,13 +560,13 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
           </div>
 
           {/* Hold Orders List */}
-          {isLoadingSavedOrders && savedOrders.length === 0 ? (
+          {isLoadingSavedOrders && safeSavedOrders.length === 0 ? (
             <div className="space-y-3">
               {[1, 2].map(i => (
                 <div key={i} className="h-28 rounded-3xl bg-stone-200/60 dark:bg-stone-800/60 animate-pulse" />
               ))}
             </div>
-          ) : savedOrders.length === 0 ? (
+          ) : safeSavedOrders.length === 0 ? (
             <div className="py-16 text-center text-stone-400 bg-white dark:bg-[#251e1c] rounded-3xl border border-dashed border-stone-200 dark:border-stone-800">
               <PauseCircle className="w-10 h-10 mx-auto opacity-30 mb-2" />
               <p className="text-sm font-semibold">
@@ -577,7 +580,7 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {savedOrders.map(order => {
+              {safeSavedOrders.map(order => {
                 return (
                   <div
                     key={order.id}

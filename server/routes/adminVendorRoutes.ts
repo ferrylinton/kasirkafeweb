@@ -74,8 +74,10 @@ adminVendorRouter.get('/', async (req: Request, res: Response) => {
     const enriched = await Promise.all(
       filtered.map(async v => {
         const stats = await computeVendorStats(v.id);
+        const code = v.code || (v.id.startsWith('vnd_') ? v.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : v.id.slice(0, 6).toUpperCase()) || 'VND';
         return {
           ...v,
+          code,
           stats
         };
       })

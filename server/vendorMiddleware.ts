@@ -32,14 +32,21 @@ declare global {
 export async function findVendorById(id: string): Promise<VendorRecord | null> {
   if (!id) return null;
   const db = getDB();
+  let vendor: VendorRecord | null = null;
   if (db) {
     try {
       const doc = await db.collection('vendors').findOne({ id });
-      if (doc) return doc as unknown as VendorRecord;
+      if (doc) vendor = doc as unknown as VendorRecord;
     } catch (e) {}
   }
-  const found = fallbackStore.vendors?.find((v: VendorRecord) => v.id === id);
-  return found || null;
+  if (!vendor) {
+    const found = fallbackStore.vendors?.find((v: VendorRecord) => v.id === id);
+    vendor = found || null;
+  }
+  if (vendor && !vendor.code) {
+    vendor.code = vendor.id ? vendor.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : 'VND';
+  }
+  return vendor;
 }
 
 /**
@@ -56,7 +63,10 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
   if (!vendors || vendors.length === 0) {
     vendors = (fallbackStore.vendors || []) as VendorRecord[];
   }
-  return vendors;
+  return (vendors || []).map(v => ({
+    ...v,
+    code: v.code || (v.id ? v.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : 'VND')
+  }));
 }
 
 /**

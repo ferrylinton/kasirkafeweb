@@ -37,7 +37,7 @@ export interface VendorStats {
 export interface AdminVendorItem {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   status: 'ACTIVE' | 'SUSPENDED';
   email?: string;
   phone?: string;
@@ -140,7 +140,7 @@ export const VendorManagementScreen: React.FC = () => {
     setEditingVendorId(vendor.id);
     setFormData({
       name: vendor.name,
-      code: vendor.code,
+      code: vendor.code || (vendor.id ? vendor.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : ''),
       email: vendor.email || '',
       phone: vendor.phone || '',
       address: vendor.address || '',
@@ -275,14 +275,14 @@ export const VendorManagementScreen: React.FC = () => {
 
   // Client-side search filter
   const filteredVendors = useMemo(() => {
-    if (!searchQuery.trim()) return vendors;
+    if (!searchQuery.trim()) return vendors || [];
     const q = searchQuery.toLowerCase().trim();
-    return vendors.filter(
+    return (vendors || []).filter(
       v =>
-        v.name.toLowerCase().includes(q) ||
-        v.code.toLowerCase().includes(q) ||
+        (v.name || '').toLowerCase().includes(q) ||
+        (v.code || '').toLowerCase().includes(q) ||
         (v.email && v.email.toLowerCase().includes(q)) ||
-        v.id.toLowerCase().includes(q)
+        (v.id || '').toLowerCase().includes(q)
     );
   }, [vendors, searchQuery]);
 
@@ -529,7 +529,7 @@ export const VendorManagementScreen: React.FC = () => {
                             : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
                         }`}
                       >
-                        {vendor.code.slice(0, 3)}
+                        {(vendor.code || vendor.id || 'VND').slice(0, 3).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -560,10 +560,14 @@ export const VendorManagementScreen: React.FC = () => {
                           <span className="font-mono font-semibold text-stone-700 dark:text-stone-300">
                             ID: {vendor.id}
                           </span>
-                          <span>•</span>
-                          <span className="font-semibold text-purple-600 dark:text-purple-400">
-                            [{vendor.code}]
-                          </span>
+                          {vendor.code && (
+                            <>
+                              <span>•</span>
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                [{vendor.code}]
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

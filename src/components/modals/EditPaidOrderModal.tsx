@@ -224,9 +224,9 @@ export const EditPaidOrderModal: React.FC<EditPaidOrderModalProps> = ({
     }
   };
 
-  const filteredCatalog = availableProducts.filter(p =>
-    p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-    p.category.toLowerCase().includes(catalogSearch.toLowerCase())
+  const filteredCatalog = (availableProducts || []).filter(p =>
+    (p?.name || '').toLowerCase().includes((catalogSearch || '').toLowerCase()) ||
+    (p?.category || '').toLowerCase().includes((catalogSearch || '').toLowerCase())
   );
 
   return (
@@ -358,7 +358,7 @@ export const EditPaidOrderModal: React.FC<EditPaidOrderModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {filteredCatalog.slice(0, 10).map(product => (
+                  {(filteredCatalog || []).slice(0, 10).map(product => (
                     <div
                       key={product.id}
                       className="p-2.5 rounded-xl bg-white dark:bg-stone-800/80 border border-stone-200/80 dark:border-stone-700/80 flex items-center justify-between gap-2 hover:border-accent transition-colors"

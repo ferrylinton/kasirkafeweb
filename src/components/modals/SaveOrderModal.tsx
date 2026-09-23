@@ -208,8 +208,8 @@ export const SaveOrderModal: React.FC<SaveOrderModalProps> = ({
                   {totalItemsCount} item di keranjang
                 </p>
                 <p className="text-[11px] text-stone-400">
-                  {items.map(i => `${i.name} (x${i.quantity})`).slice(0, 2).join(', ')}
-                  {items.length > 2 ? ` + ${items.length - 2} lainnya` : ''}
+                  {(items || []).map(i => `${i?.name || ''} (x${i?.quantity || 1})`).slice(0, 2).join(', ')}
+                  {(items || []).length > 2 ? ` + ${(items || []).length - 2} lainnya` : ''}
                 </p>
               </div>
             </div>
