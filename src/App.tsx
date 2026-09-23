@@ -38,7 +38,8 @@ const MainLayout: React.FC = () => {
   const [resetPinToken, setResetPinToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('action') === 'reset-pin') {
+      const action = urlParams.get('action');
+      if (action === 'reset-password' || action === 'reset-pin') {
         return urlParams.get('token') || '';
       }
     }

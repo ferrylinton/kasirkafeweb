@@ -45,7 +45,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
       setIsVerifying(true);
       setVerifyError(null);
       try {
-        const res = await fetch(`/api/auth/reset-pin/verify?token=${encodeURIComponent(currentToken)}`);
+        const res = await fetch(`/api/auth/reset-password/verify?token=${encodeURIComponent(currentToken)}`);
         const data = await res.json();
         if (data.success) {
           setTokenInfo({
@@ -83,7 +83,7 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/reset-pin/confirm', {
+      const res = await fetch('/api/auth/reset-password/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -287,3 +287,5 @@ export const ResetPinScreen: React.FC<ResetPinScreenProps> = ({
     </div>
   );
 };
+
+export const ResetPasswordScreen = ResetPinScreen;

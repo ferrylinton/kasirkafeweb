@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Mail, Sparkles, X, RefreshCw, Send, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
+import { KeyRound, Lock, Mail, Sparkles, X, RefreshCw, Send, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
 import { useToast } from '../common/Toast';
 
 interface AdminSendPinModalProps {
@@ -30,28 +30,45 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
     return Math.floor(100000 + Math.random() * 900000).toString();
   };
 
-  const [pin, setPin] = useState<string>(generateRandomPin());
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
+    let res = '';
+    for (let i = 0; i < 8; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
+  const [credentialType, setCredentialType] = useState<'pin' | 'password'>('pin');
+  const [credentialValue, setCredentialValue] = useState<string>(generateRandomPin());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleRandomize = () => {
-    setPin(generateRandomPin());
+  const handleRandomizePin = () => {
+    setCredentialType('pin');
+    setCredentialValue(generateRandomPin());
+  };
+
+  const handleRandomizePassword = () => {
+    setCredentialType('password');
+    setCredentialValue(generateRandomPassword());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!pin || !/^\d{6}$/.test(pin.trim())) {
-      setError('PIN harus berupa 6 digit angka.');
+    const val = credentialValue.trim();
+    if (!val || val.length < 6) {
+      setError('Kredensial baru minimal harus 6 karakter atau 6 digit angka.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/admin/send-new-pin', {
+      const res = await fetch('/api/auth/admin/send-new-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,18 +76,19 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
         },
         body: JSON.stringify({
           email: targetUser.email,
-          customPin: pin.trim(),
+          customPassword: val,
+          customPin: val,
           requestId: targetUser.requestId
         })
       });
 
       const data = await res.json();
       if (data.success) {
-        showToast(`PIN baru (${pin}) berhasil dikirim ke email ${targetUser.email}!`, 'success');
+        showToast(`Kredensial baru (${val}) berhasil dikirim ke email ${targetUser.email}!`, 'success');
         if (onSuccess) onSuccess();
         onClose();
       } else {
-        setError(data.message || 'Gagal mengirim PIN baru ke email pengguna.');
+        setError(data.message || 'Gagal mengirimkan kredensial baru ke email pengguna.');
       }
     } catch (e: any) {
       setError('Koneksi server gagal. Periksa jaringan Anda.');
@@ -96,22 +114,22 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
-                  Kirim PIN Baru ke Email
+                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading">
+                  Kirim Kredensial Baru ke Email
                 </h3>
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
                   ADMIN
                 </span>
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Terbitkan PIN 6 digit kasir dan kirim notifikasi email
+                Terbitkan PIN / password baru dan kirim notifikasi ke email pengguna
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -122,7 +140,7 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
           {/* User Details Target Box */}
           <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200/70 dark:border-stone-800 space-y-2 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-stone-500 dark:text-stone-400">Penerima PIN:</span>
+              <span className="text-stone-500 dark:text-stone-400">Penerima:</span>
               <span className="font-bold text-stone-900 dark:text-stone-100">{targetUser.name}</span>
             </div>
             <div className="flex items-center justify-between">
@@ -153,34 +171,46 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             )}
           </div>
 
-          {/* 6 Digit PIN Generator & Input */}
+          {/* Credential Format Toggle & Generator */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                PIN Baru (6 Digit) <span className="text-red-500">*</span>
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-purple-600" />
+                <span>Kredensial Baru yang Dikirim:</span>
               </label>
-              <button
-                type="button"
-                onClick={handleRandomize}
-                className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Acak PIN Otomatis</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleRandomizePin}
+                  className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>PIN 6-Digit</span>
+                </button>
+                <span className="text-stone-300 dark:text-stone-700">•</span>
+                <button
+                  type="button"
+                  onClick={handleRandomizePassword}
+                  className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Password Acak</span>
+                </button>
+              </div>
             </div>
 
             <div className="relative">
               <input
                 type="text"
-                maxLength={6}
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                value={credentialValue}
+                onChange={e => setCredentialValue(e.target.value)}
                 required
+                minLength={6}
                 className="w-full py-3.5 px-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border-2 border-purple-200 dark:border-purple-800/80 text-xl font-mono text-center font-black tracking-widest text-purple-950 dark:text-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
-              Sistem akan otomatis membuka kunci akun pengguna (jika sedang terkunci) dan memperbarui PIN di database.
+              Sistem akan otomatis membuka kunci akun pengguna (jika sedang terkunci) dan memperbarui kata sandi akun di database.
             </p>
           </div>
 
@@ -197,24 +227,24 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              className="flex-1 py-3 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || pin.length !== 6}
-              className="flex-1 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={isSubmitting || credentialValue.trim().length < 6}
+              className="flex-1 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Mengirimkan...</span>
+                  <span>Mengirimkan ke Email...</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  <span>Kirim PIN ke Email</span>
+                  <span>Kirim ke Email Pengguna</span>
                 </>
               )}
             </button>

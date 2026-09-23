@@ -7,6 +7,10 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 export interface Vendor {
   id: string;
   name: string;
+  code?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   clientId: string;
   clientSecret?: string;
   status: 'ACTIVE' | 'SUSPENDED';
@@ -22,6 +26,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  pin?: string;
   createdAt?: string;
 }
 

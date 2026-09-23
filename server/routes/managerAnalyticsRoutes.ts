@@ -370,6 +370,7 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount ?? o.total ?? 0), 0);
     const vendorName = vendor?.name || 'Vendor Toko';
+    const vendorCode = (vendor as any)?.code || vendorId;
 
     // JSON Format Export
     if (format === 'json') {
@@ -545,6 +546,7 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
     const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '10', 10), 1), 50);
 
     const vendorName = vendor?.name || 'Vendor Toko';
+    const vendorCode = (vendor as any)?.code || vendorId;
 
     // Reference now: 2026-09-20 (or current runtime date)
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
@@ -763,6 +765,7 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     const format = ((req.query.format as string) || 'csv').toLowerCase();
 
     const vendorName = vendor?.name || 'Vendor Toko';
+    const vendorCode = (vendor as any)?.code || vendorId;
 
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
     const cutoffDate = getCutoffDate();

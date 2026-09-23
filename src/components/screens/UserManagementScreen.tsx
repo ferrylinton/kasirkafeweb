@@ -280,7 +280,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         </div>
       )}
 
-      {/* PIN Reset Requests Section for Role ADMIN */}
+      {/* Password / PIN Reset Requests Section for Role ADMIN */}
       {currentUser?.role === 'ADMIN' && (
         <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#251e1c] border border-purple-200/80 dark:border-purple-900/40 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
@@ -291,7 +291,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-heading">
-                    Permintaan Reset PIN Masuk
+                    Permintaan Reset Password / PIN Masuk
                   </h3>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                     pinResetRequests.filter(r => r.status === 'PENDING').length > 0
@@ -302,7 +302,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                  Daftar permohonan reset PIN kasir yang diajukan ke Role ADMIN
+                  Daftar permohonan reset password atau PIN yang diajukan pengguna ke Role ADMIN
                 </p>
               </div>
             </div>
@@ -319,11 +319,11 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
           </div>
 
           {loadingRequests ? (
-            <div className="py-4 text-center text-xs text-stone-400">Memuat permintaan reset PIN...</div>
+            <div className="py-4 text-center text-xs text-stone-400">Memuat antrean permintaan...</div>
           ) : pinResetRequests.filter(r => r.status === 'PENDING').length === 0 ? (
             <div className="py-3 px-4 rounded-2xl bg-stone-50 dark:bg-stone-900/50 border border-stone-200/50 dark:border-stone-800/60 text-xs text-stone-500 dark:text-stone-400 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Tidak ada antrean permohonan reset PIN yang pending.</span>
+              <span>Tidak ada antrean permohonan reset kata sandi yang pending.</span>
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -374,7 +374,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                       className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      <span>Kirim PIN Baru ke Email</span>
+                      <span>Kirim Password / PIN ke Email</span>
                     </button>
                   </div>
                 ))}
@@ -457,7 +457,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                         setShowAdminSendPinModal(true);
                       }}
                       className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-400 transition-colors"
-                      title="Kirim PIN Baru ke Email Pengguna"
+                      title="Kirim Password / PIN Baru ke Email Pengguna"
                     >
                       <KeyRound className="w-4 h-4" />
                     </button>
