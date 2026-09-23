@@ -299,7 +299,7 @@ const MainLayout: React.FC = () => {
             />
           )}
 
-          {isCashierOrManager && activeView === 'histori' && <OrderHistoryScreen />}
+          {isCashierOrManager && activeView === 'histori' && <OrderHistoryScreen onNavigateTab={handleNavigateTab} />}
 
           {/* Sistem & Akun (Semua Pengguna Terautentikasi) */}
           {activeView === 'profile' && <ProfileScreen />}
@@ -327,7 +327,7 @@ const MainLayout: React.FC = () => {
             <TopProductsScreen managerMode={false} />
           )}
           {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
-            <OrderHistoryScreen allVendorsMode={true} />
+            <OrderHistoryScreen allVendorsMode={true} onNavigateTab={handleNavigateTab} />
           )}
           {isAdmin && (activeView === 'admin-inventory' || activeView === 'admin-inventaris') && (
             <InventoryScreen allVendorsMode={true} />

@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   CartItem, 
   Product, 
   CartItemModifier, 
   AppliedDiscount, 
   EligibleDiscount, 
-  OrderDiscountItem 
+  OrderDiscountItem,
+  SavedOrder
 } from '../types';
 
 interface CartContextType {
@@ -40,6 +41,18 @@ interface CartContextType {
   updateQuantity: (cartItemId: string, delta: number) => void;
   removeItem: (cartItemId: string) => void;
   clearCart: () => void;
+  // Saved Orders / Hold Bills
+  savedOrders: SavedOrder[];
+  isLoadingSavedOrders: boolean;
+  activeDraftId: string | null;
+  activeDraftNumber: string | null;
+  activeDraftNote: string | null;
+  loadSavedOrders: () => Promise<void>;
+  saveCurrentOrderAsDraft: (note?: string) => Promise<{ success: boolean; draft?: SavedOrder; error?: string }>;
+  updateSavedOrderDraft: (draftId: string, note?: string) => Promise<{ success: boolean; draft?: SavedOrder; error?: string }>;
+  loadDraftIntoCart: (draft: SavedOrder) => void;
+  deleteSavedOrderDraft: (draftId: string) => Promise<{ success: boolean; error?: string }>;
+  clearActiveDraft: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -137,6 +150,169 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [customerName, setCustomerName] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
+
+  // Saved Orders / Hold Bills State
+  const [savedOrders, setSavedOrders] = useState<SavedOrder[]>(() => {
+    try {
+      const cached = localStorage.getItem('kasirkafe_saved_orders');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoadingSavedOrders, setIsLoadingSavedOrders] = useState(false);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [activeDraftNumber, setActiveDraftNumber] = useState<string | null>(null);
+  const [activeDraftNote, setActiveDraftNote] = useState<string | null>(null);
+
+  const getAuthToken = () => {
+    return localStorage.getItem('kasirkafe_token') || '';
+  };
+
+  const loadSavedOrders = useCallback(async () => {
+    setIsLoadingSavedOrders(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/orders/drafts', {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : ''
+        }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.drafts)) {
+        setSavedOrders(data.drafts);
+        localStorage.setItem('kasirkafe_saved_orders', JSON.stringify(data.drafts));
+      }
+    } catch (e) {
+      console.warn('Failed to fetch drafts, using local cached version');
+    } finally {
+      setIsLoadingSavedOrders(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSavedOrders();
+  }, [loadSavedOrders]);
+
+  const clearActiveDraft = useCallback(() => {
+    setActiveDraftId(null);
+    setActiveDraftNumber(null);
+    setActiveDraftNote(null);
+  }, []);
+
+  const saveCurrentOrderAsDraft = async (note?: string): Promise<{ success: boolean; draft?: SavedOrder; error?: string }> => {
+    if (items.length === 0) {
+      return { success: false, error: 'Keranjang kosong. Tambahkan item sebelum menyimpan.' };
+    }
+
+    try {
+      const payload = {
+        tableNameOrNote: note || customerName || 'Pesanan Disimpan',
+        customerName: customerName || undefined,
+        customerEmail: customerEmail || undefined,
+        customerPhone: customerPhone || undefined,
+        items,
+        selectedDiscountCode: selectedDiscountCode || undefined,
+        discountItem: discountItem || undefined
+      };
+
+      const token = getAuthToken();
+      const res = await fetch('/api/orders/drafts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success && data.draft) {
+        setSavedOrders(prev => [data.draft, ...prev.filter(d => d.id !== data.draft.id)]);
+        localStorage.setItem('kasirkafe_saved_orders', JSON.stringify([data.draft, ...savedOrders.filter(d => d.id !== data.draft.id)]));
+        clearCart();
+        return { success: true, draft: data.draft };
+      }
+      return { success: false, error: data.error || data.message || 'Gagal menyimpan pesanan' };
+    } catch (err: any) {
+      return { success: false, error: 'Koneksi server gagal' };
+    }
+  };
+
+  const updateSavedOrderDraft = async (draftId: string, note?: string): Promise<{ success: boolean; draft?: SavedOrder; error?: string }> => {
+    if (items.length === 0) {
+      return { success: false, error: 'Keranjang kosong.' };
+    }
+
+    try {
+      const payload = {
+        tableNameOrNote: note || activeDraftNote || customerName || 'Pesanan Disimpan',
+        customerName: customerName || undefined,
+        customerEmail: customerEmail || undefined,
+        customerPhone: customerPhone || undefined,
+        items,
+        selectedDiscountCode: selectedDiscountCode || undefined,
+        discountItem: discountItem || undefined
+      };
+
+      const token = getAuthToken();
+      const res = await fetch(`/api/orders/drafts/${draftId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success && data.draft) {
+        setSavedOrders(prev => prev.map(d => d.id === draftId ? data.draft : d));
+        setActiveDraftNote(payload.tableNameOrNote);
+        return { success: true, draft: data.draft };
+      }
+      return { success: false, error: data.error || data.message || 'Gagal memperbarui pesanan tersimpan' };
+    } catch (err: any) {
+      return { success: false, error: 'Koneksi server gagal' };
+    }
+  };
+
+  const loadDraftIntoCart = (draft: SavedOrder) => {
+    setItems(draft.items || []);
+    setCustomerName(draft.customer?.name || '');
+    setCustomerEmail(draft.customer?.email || '');
+    setCustomerPhone(draft.customer?.phone || '');
+    setSelectedDiscountCodeState(draft.selectedDiscountCode || null);
+    setDiscountItem(draft.discountItem || null);
+    setActiveDraftId(draft.id);
+    setActiveDraftNumber(draft.draftNumber);
+    setActiveDraftNote(draft.tableNameOrNote || '');
+  };
+
+  const deleteSavedOrderDraft = async (draftId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`/api/orders/drafts/${draftId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: token ? `Bearer ${token}` : ''
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedOrders(prev => {
+          const updated = prev.filter(d => d.id !== draftId);
+          localStorage.setItem('kasirkafe_saved_orders', JSON.stringify(updated));
+          return updated;
+        });
+        if (activeDraftId === draftId) {
+          clearActiveDraft();
+        }
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Gagal menghapus pesanan tersimpan' };
+    } catch (err: any) {
+      return { success: false, error: 'Koneksi server gagal' };
+    }
+  };
 
   // Discount Selection States
   const [eligibleDiscounts, setEligibleDiscounts] = useState<EligibleDiscount[]>([]);
@@ -488,6 +664,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCustomerName('');
     setCustomerEmail('');
     setCustomerPhone('');
+    clearActiveDraft();
   };
 
   return (
@@ -520,7 +697,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addItem,
         updateQuantity,
         removeItem,
-        clearCart
+        clearCart,
+        savedOrders,
+        isLoadingSavedOrders,
+        activeDraftId,
+        activeDraftNumber,
+        activeDraftNote,
+        loadSavedOrders,
+        saveCurrentOrderAsDraft,
+        updateSavedOrderDraft,
+        loadDraftIntoCart,
+        deleteSavedOrderDraft,
+        clearActiveDraft
       }}
     >
       {children}

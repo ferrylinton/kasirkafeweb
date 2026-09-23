@@ -27,7 +27,12 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
     pb1Tax,
     totalDiscount,
     totalAmount,
-    clearCart
+    clearCart,
+    activeDraftId,
+    activeDraftNumber,
+    activeDraftNote,
+    clearActiveDraft,
+    loadSavedOrders
   } = useCart();
 
   const { t, language } = useLanguage();
@@ -77,7 +82,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
         cashReceived: paymentMethod === 'CASH' ? cashReceived : totalAmount,
         customerName: customerName || undefined,
         customerEmail: customerEmail || undefined,
-        customerPhone: customerPhone || undefined
+        customerPhone: customerPhone || undefined,
+        draftId: activeDraftId || undefined
       };
 
       const res = await fetch('/api/orders', {
@@ -96,6 +102,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
         showToast(t('paymentSuccessToast'), 'success');
         if (customerEmail && data.emailSent) {
           showToast(`Struk otomatis terkirim via SMTP ke ${customerEmail}`, 'info');
+        }
+        if (activeDraftId) {
+          clearActiveDraft();
+          loadSavedOrders();
         }
         setCompletedOrder(data.order);
       } else {

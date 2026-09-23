@@ -182,6 +182,48 @@ export interface Order {
   status: 'COMPLETED' | 'PENDING' | 'CANCELLED';
   emailStatus: 'none' | 'pending' | 'success' | 'failed';
   createdAt: string;
+  updatedAt?: string;
+  isAdjusted?: boolean;
+  originalTotalAmount?: number;
+  paymentAdjustment?: {
+    type: 'ADDITIONAL_PAYMENT' | 'REFUND' | 'NO_CHANGE';
+    differenceAmount: number; // absolute difference
+    netDifference: number; // positive = customer pays more, negative = refund to customer
+    settledMethod?: 'CASH' | 'QRIS' | 'EDC' | 'TRANSFER';
+    reason?: string;
+    adjustedAt: string;
+    adjustedBy?: string;
+  };
+  cancellation?: {
+    reason: string;
+    refundAmount: number;
+    refundMethod: 'CASH' | 'QRIS' | 'EDC' | 'TRANSFER';
+    cancelledAt: string;
+    cancelledBy: string;
+  };
+}
+
+export interface SavedOrder {
+  id: string;
+  vendorId?: string;
+  draftNumber: string;
+  tableNameOrNote?: string;
+  items: CartItem[];
+  discountItem?: OrderDiscountItem | null;
+  selectedDiscountCode?: string | null;
+  subtotal: number;
+  discountAmount: number;
+  pb1Tax: number;
+  totalAmount: number;
+  totalItemsCount: number;
+  customer?: OrderCustomer;
+  cashier?: {
+    id: string;
+    name: string;
+  };
+  status: 'HOLD';
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface DiscountRule {

@@ -844,6 +844,82 @@ export async function seedDatabase() {
     fallbackStore.orders = historicalOrders.map(o => ({ ...o }));
   }
 
+  const initialSavedOrders = [
+    {
+      id: 'hold_001',
+      vendorId: 'vnd_kasirkafe_central',
+      draftNumber: 'HOLD-014',
+      tableNameOrNote: 'Pesanan Doni Pratama',
+      items: [
+        {
+          cartItemId: 'item-hold-1',
+          productId: 'prod_1',
+          name: 'Caramel Macchiato',
+          category: 'kopi',
+          price: 29000,
+          quantity: 2,
+          modifier: {
+            size: 'Large',
+            sizeExtra: 5000,
+            ice: 'Less Ice',
+            sugar: '100% Normal',
+            milk: 'Oat Milk',
+            milkExtra: 0,
+            toppings: [],
+            toppingsExtra: 0,
+            notes: 'Minta ekstra caramel drizzle'
+          },
+          itemTotal: 68000,
+          image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBpnFKC-H8k2sIAtGjjoSN2DS0T72TbyE9qtMuouOhOVn4amQitM2rWQGwj9X-40uEr2_2wLzgI82o2efWjBfmREvC-HsB5c3ObP_cngIHeGLBQ2X3wxkNDUQJ97Yl1lOG6MFMiHogt9l19rqyri0J19DmJTn5B1B2gdz8a3811zG15uverHerHc9KEvy7j1nUNFfPegRU4dI3V4gBa75uvEderned9-rn5YGHhdLOa-9d7LLqEtebbow'
+        },
+        {
+          cartItemId: 'item-hold-2',
+          productId: 'prod_6',
+          name: 'Jasmine Green Tea',
+          category: 'teh',
+          price: 22000,
+          quantity: 1,
+          modifier: {
+            size: 'Regular',
+            sizeExtra: 0,
+            ice: 'Normal Ice',
+            sugar: '50% Less',
+            milk: 'Fresh Milk',
+            milkExtra: 0,
+            toppings: [],
+            toppingsExtra: 0,
+            notes: ''
+          },
+          itemTotal: 22000,
+          image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEDdNAgqpFDYomBUwebjH1cUlD6u-s6RdfV_B3Zb2sErpLrfWBAlI-B4p9ghPK0MgP7u-BExqyPi0O6Fy5nc1a9JyE3lDkxO1GyavPWK6Rmk67W9jItT13snorCP72I1AEUd4jAYXNMKn2Lz44DGZ6HM9_iOY7NSczXkEJzmmMyq-3b2vxTM-puw_0iCpUshE4u_GwKW-TTggh5T670zI2UA3bRKmSkfrEPZWMX1SqFzQj0F5diM9zYQ'
+        }
+      ],
+      discountItem: null,
+      selectedDiscountCode: null,
+      subtotal: 90000,
+      discountAmount: 0,
+      pb1Tax: 9000,
+      totalAmount: 99000,
+      totalItemsCount: 3,
+      customer: {
+        name: 'Kak Doni',
+        email: 'doni.pratama@gmail.com',
+        phone: '081298765432'
+      },
+      cashier: {
+        id: 'usr_cashier_central',
+        name: 'Sarah Barista'
+      },
+      status: 'HOLD',
+      createdAt: new Date(Date.now() - 25 * 60 * 1000),
+      updatedAt: new Date(Date.now() - 25 * 60 * 1000)
+    }
+  ];
+
+  if (!fallbackStore.saved_orders || fallbackStore.saved_orders.length === 0) {
+    fallbackStore.saved_orders = initialSavedOrders.map(s => ({ ...s }));
+  }
+
   // Seed MongoDB if connected
   const db = getDB();
   if (db) {
@@ -948,7 +1024,15 @@ export async function seedDatabase() {
         console.log('[Seeder] Historical multi-vendor orders seeded in MongoDB successfully.');
       }
 
-      // 9. Universal Vendor Partition Migration across all collections
+      // 9. Saved / Hold Orders
+      const savedCount = await db.collection('saved_orders').countDocuments();
+      if (savedCount === 0) {
+        await db.collection('saved_orders').insertMany(initialSavedOrders.map(s => ({ ...s })));
+        console.log('[Seeder] Saved/hold orders seeded in MongoDB successfully.');
+      }
+
+      // 10. Universal Vendor Partition Migration across all collections
+      await db.collection('saved_orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });

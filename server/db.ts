@@ -32,12 +32,14 @@ export const fallbackStore: {
   vendor_confirmations: any[];
   password_reset_tokens: any[];
   password_reset_requests: any[];
+  saved_orders: any[];
 } = {
   vendors: [],
   users: [],
   categories: [],
   products: [],
   orders: [],
+  saved_orders: [],
   email_templates: [],
   email_logs: [],
   discount_rules: [],

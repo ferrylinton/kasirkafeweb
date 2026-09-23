@@ -16,7 +16,9 @@ import {
   AlertCircle, 
   Edit3, 
   Sparkles,
-  Info
+  Info,
+  Bookmark,
+  RefreshCw
 } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -25,6 +27,8 @@ import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { ProductImage } from '../common/ProductImage';
 import { DiscountItemSelectorModal } from '../cart/DiscountItemSelectorModal';
+import { SaveOrderModal } from '../modals/SaveOrderModal';
+import { SavedOrdersModal } from '../modals/SavedOrdersModal';
 import { Product } from '../../types';
 
 interface CartScreenProps {
@@ -57,7 +61,13 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
     totalAmount,
     updateQuantity,
     removeItem,
-    clearCart
+    clearCart,
+    savedOrders,
+    activeDraftId,
+    activeDraftNumber,
+    activeDraftNote,
+    clearActiveDraft,
+    updateSavedOrderDraft
   } = useCart();
 
   const { t, language } = useLanguage();
@@ -67,9 +77,26 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [showNonEligible, setShowNonEligible] = useState(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isSavedOrdersModalOpen, setIsSavedOrdersModalOpen] = useState(false);
 
   const handleHoldBill = () => {
-    showToast('Pesanan berhasil disimpan ke Hold Bill #0142', 'info');
+    setIsSaveModalOpen(true);
+  };
+
+  const handleQuickUpdateDraft = async () => {
+    if (!activeDraftId) return;
+    const res = await updateSavedOrderDraft(activeDraftId);
+    if (res.success) {
+      showToast(
+        language === 'en'
+          ? `Draft #${activeDraftNumber} updated successfully!`
+          : `Pesanan #${activeDraftNumber} berhasil diperbarui!`,
+        'success'
+      );
+    } else {
+      showToast(res.error || 'Gagal memperbarui pesanan tersimpan', 'error');
+    }
   };
 
   // Find currently active discount rule object
@@ -128,17 +155,79 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
           </h2>
         </div>
 
-        {items.length > 0 && (
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Saved Orders / Hold Bills Button */}
           <button
             type="button"
-            onClick={() => setShowClearConfirm(true)}
-            className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+            onClick={() => setIsSavedOrdersModalOpen(true)}
+            className="px-3 py-1.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{language === 'en' ? 'Clear Cart' : 'Kosongkan Keranjang'}</span>
+            <PauseCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>{language === 'en' ? 'Hold Bills' : 'Pesanan Tersimpan'}</span>
+            {savedOrders.length > 0 && (
+              <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-black flex items-center justify-center">
+                {savedOrders.length}
+              </span>
+            )}
           </button>
-        )}
+
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="px-2.5 py-1.5 rounded-2xl text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{language === 'en' ? 'Clear' : 'Kosongkan'}</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Active Draft Being Edited Banner */}
+      {activeDraftId && (
+        <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+              <Bookmark className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-black px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                  {activeDraftNumber}
+                </span>
+                <span className="text-sm font-extrabold text-stone-900 dark:text-stone-100">
+                  {activeDraftNote || customerName || 'Pesanan Disimpan'}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                {language === 'en'
+                  ? 'Currently modifying this saved order. You can save changes or proceed to payment.'
+                  : 'Sedang mengubah pesanan tersimpan ini. Anda dapat memperbarui perubahan atau langsung bayar.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={handleQuickUpdateDraft}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>{language === 'en' ? 'Save Changes' : 'Simpan Perubahan'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={clearActiveDraft}
+              className="px-2.5 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 text-xs font-semibold transition-colors cursor-pointer"
+              title="Lepas kaitan draft ini untuk buat pesanan baru"
+            >
+              <span>{language === 'en' ? 'Detach' : 'Lepas'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Regular Ordered Items List */}
       {items.length === 0 ? (
@@ -690,6 +779,18 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
           setShowClearConfirm(false);
         }}
         onCancel={() => setShowClearConfirm(false)}
+      />
+
+      {/* Save Order (Hold Bill) Modal */}
+      <SaveOrderModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+      />
+
+      {/* View Saved Orders (Hold Bills) Modal */}
+      <SavedOrdersModal
+        isOpen={isSavedOrdersModalOpen}
+        onClose={() => setIsSavedOrdersModalOpen(false)}
       />
     </div>
   );

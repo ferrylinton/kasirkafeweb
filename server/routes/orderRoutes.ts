@@ -49,6 +49,57 @@ const createOrderSchema = z.object({
   customerBirthDate: z.string().optional().nullable(),
   isBirthdayClaimed: z.boolean().optional(),
   selectedDiscountCode: z.string().optional().nullable(),
+  discountItem: discountItemSchema.optional().nullable(),
+  draftId: z.string().optional().nullable()
+});
+
+const draftItemSchema = z.object({
+  cartItemId: z.string().optional(),
+  productId: z.string(),
+  name: z.string(),
+  category: z.string(),
+  price: z.number().min(0),
+  quantity: z.number().int().min(1),
+  modifier: z.object({
+    size: z.enum(['Regular', 'Large', 'Jumbo']).optional(),
+    sizeExtra: z.number().optional(),
+    ice: z.enum(['Normal Ice', 'Less Ice', 'No Ice']).optional(),
+    sugar: z.enum(['100% Normal', '50% Less', '0% No Sugar']).optional(),
+    milk: z.enum(['Fresh Milk', 'Oat Milk', 'Almond Milk']).optional(),
+    milkExtra: z.number().optional(),
+    toppings: z.array(z.string()).optional(),
+    toppingsExtra: z.number().optional(),
+    notes: z.string().optional()
+  }).optional(),
+  itemTotal: z.number().min(0),
+  image: z.string().optional()
+});
+
+const adjustOrderSchema = z.object({
+  items: z.array(orderItemSchema).min(1, 'Pesanan harus berisi minimal 1 item'),
+  discountItem: discountItemSchema.optional().nullable(),
+  selectedDiscountCode: z.string().optional().nullable(),
+  settledMethod: z.enum(['CASH', 'QRIS', 'EDC', 'TRANSFER']).optional(),
+  reason: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  customerEmail: z.string().email().or(z.literal('')).optional().nullable(),
+  customerPhone: z.string().optional().nullable()
+});
+
+const cancelPaidOrderSchema = z.object({
+  reason: z.string()
+    .min(5, 'Alasan pembatalan minimal 5 karakter')
+    .max(50, 'Alasan pembatalan maksimal 50 karakter'),
+  refundMethod: z.enum(['CASH', 'QRIS', 'EDC', 'TRANSFER']).optional()
+});
+
+const saveDraftSchema = z.object({
+  tableNameOrNote: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  customerEmail: z.string().email().or(z.literal('')).optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  items: z.array(draftItemSchema).min(1, 'Pesanan tersimpan harus berisi minimal 1 item'),
+  selectedDiscountCode: z.string().optional().nullable(),
   discountItem: discountItemSchema.optional().nullable()
 });
 
@@ -190,7 +241,8 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       customerBirthDate,
       isBirthdayClaimed,
       selectedDiscountCode,
-      discountItem
+      discountItem,
+      draftId
     } = parsed.data;
 
     // 1. Calculate items subtotal
@@ -386,6 +438,19 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       fallbackStore.orders.unshift({ ...orderDoc, _id: orderId });
     }
 
+    // If order was loaded from a saved draft, remove the draft now that it has been paid & completed
+    if (draftId) {
+      if (db) {
+        try {
+          const q = ObjectId.isValid(draftId) ? { _id: new ObjectId(draftId) } : { id: draftId };
+          await db.collection('saved_orders').deleteOne(q);
+        } catch (e) {}
+      }
+      fallbackStore.saved_orders = (fallbackStore.saved_orders || []).filter(
+        d => (d._id && d._id.toString() !== draftId) && d.id !== draftId
+      );
+    }
+
     // Invalidate product cache so updated stock is immediately reflected in catalog
     serverProductCache.invalidateProducts(activeVendorId);
 
@@ -528,6 +593,711 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/orders/drafts
+ * List all saved/held orders for the active vendor
+ * RBAC: CASHIER, MANAGER, ADMIN
+ */
+orderRouter.get('/drafts', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER' && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak.'
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    let drafts: any[] = [];
+
+    if (db) {
+      try {
+        const query: any = activeVendorId === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
+        drafts = await db.collection('saved_orders').find(query).sort({ updatedAt: -1, createdAt: -1 }).toArray();
+      } catch (e) {}
+    }
+
+    if (drafts.length === 0) {
+      fallbackStore.saved_orders = fallbackStore.saved_orders || [];
+      drafts = fallbackStore.saved_orders.filter(
+        d => (d.vendorId || 'vnd_kasirkafe_central') === activeVendorId
+      );
+    }
+
+    return res.json({
+      success: true,
+      drafts: drafts.map(d => ({
+        id: d._id ? d._id.toString() : d.id,
+        vendorId: d.vendorId || 'vnd_kasirkafe_central',
+        draftNumber: d.draftNumber,
+        tableNameOrNote: d.tableNameOrNote || '',
+        items: d.items,
+        discountItem: d.discountItem || null,
+        selectedDiscountCode: d.selectedDiscountCode || null,
+        subtotal: d.subtotal,
+        discountAmount: d.discountAmount || 0,
+        pb1Tax: d.pb1Tax,
+        totalAmount: d.totalAmount,
+        totalItemsCount: d.totalItemsCount || (d.items ? d.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0) : 0),
+        customer: d.customer,
+        cashier: d.cashier,
+        status: d.status || 'HOLD',
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt || d.createdAt
+      }))
+    });
+  } catch (err: any) {
+    console.error('[Orders] Get drafts error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * POST /api/orders/drafts
+ * Save current order as draft / hold bill
+ * RBAC: CASHIER, MANAGER
+ */
+orderRouter.post('/drafts', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak.'
+      });
+    }
+
+    const parsed = saveDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: parsed.error.format()
+      });
+    }
+
+    const {
+      tableNameOrNote,
+      customerName,
+      customerEmail,
+      customerPhone,
+      items,
+      selectedDiscountCode,
+      discountItem
+    } = parsed.data;
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const subtotal = items.reduce((acc, it) => acc + it.itemTotal, 0);
+    const discountAmount = discountItem ? discountItem.discountAmount : 0;
+    const discountItemPrice = discountItem ? discountItem.discountedPrice : 0;
+    const taxableSubtotal = Math.max(0, subtotal + discountItemPrice);
+    const pb1Tax = Math.round(taxableSubtotal * 0.1);
+    const totalAmount = taxableSubtotal + pb1Tax;
+    const totalItemsCount = items.reduce((acc, it) => acc + it.quantity, 0) + (discountItem ? 1 : 0);
+
+    const cashierName = req.user?.name || 'Kasir';
+    const now = new Date();
+
+    // Generate Hold sequence number (e.g. HOLD-012)
+    const holdCode = `HOLD-${Math.floor(100 + Math.random() * 900)}`;
+
+    const draftDoc: any = {
+      vendorId: activeVendorId,
+      draftNumber: holdCode,
+      tableNameOrNote: tableNameOrNote || customerName || 'Pesanan Disimpan',
+      items,
+      discountItem: discountItem || null,
+      selectedDiscountCode: selectedDiscountCode || null,
+      subtotal,
+      discountAmount,
+      pb1Tax,
+      totalAmount,
+      totalItemsCount,
+      customer: {
+        name: customerName || '',
+        email: customerEmail || '',
+        phone: customerPhone || ''
+      },
+      cashier: {
+        id: req.user?.userId || '',
+        name: cashierName
+      },
+      status: 'HOLD',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const db = getDB();
+    let draftId = new ObjectId().toString();
+
+    if (db) {
+      try {
+        const insertRes = await db.collection('saved_orders').insertOne(draftDoc);
+        draftId = insertRes.insertedId.toString();
+      } catch (e) {
+        fallbackStore.saved_orders = fallbackStore.saved_orders || [];
+        fallbackStore.saved_orders.unshift({ ...draftDoc, _id: draftId, id: draftId });
+      }
+    } else {
+      fallbackStore.saved_orders = fallbackStore.saved_orders || [];
+      fallbackStore.saved_orders.unshift({ ...draftDoc, _id: draftId, id: draftId });
+    }
+
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'ORDER',
+      entityId: draftId,
+      entityName: `Pesanan Tersimpan ${holdCode}`,
+      summary: `Menyimpan pesanan sementara ${holdCode} (${tableNameOrNote || customerName || 'Tanpa Catatan'}): Rp ${totalAmount.toLocaleString('id-ID')}`,
+      details: { draftId, holdCode, totalAmount, itemCount: items.length },
+      req,
+      user: { id: req.user?.userId, name: cashierName, role: req.user?.role || 'CASHIER' }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Pesanan berhasil disimpan (#${holdCode})`,
+      draft: {
+        id: draftId,
+        ...draftDoc
+      }
+    });
+  } catch (err: any) {
+    console.error('[Orders] Save draft error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * PUT /api/orders/drafts/:id
+ * Update an existing draft/hold order
+ * RBAC: CASHIER, MANAGER
+ */
+orderRouter.put('/drafts/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak.'
+      });
+    }
+
+    const { id } = req.params as unknown as IParam;
+    const parsed = saveDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: parsed.error.format()
+      });
+    }
+
+    const {
+      tableNameOrNote,
+      customerName,
+      customerEmail,
+      customerPhone,
+      items,
+      selectedDiscountCode,
+      discountItem
+    } = parsed.data;
+
+    const subtotal = items.reduce((acc, it) => acc + it.itemTotal, 0);
+    const discountAmount = discountItem ? discountItem.discountAmount : 0;
+    const discountItemPrice = discountItem ? discountItem.discountedPrice : 0;
+    const taxableSubtotal = Math.max(0, subtotal + discountItemPrice);
+    const pb1Tax = Math.round(taxableSubtotal * 0.1);
+    const totalAmount = taxableSubtotal + pb1Tax;
+    const totalItemsCount = items.reduce((acc, it) => acc + it.quantity, 0) + (discountItem ? 1 : 0);
+    const now = new Date();
+
+    const updateFields: any = {
+      tableNameOrNote: tableNameOrNote || customerName || 'Pesanan Disimpan',
+      items,
+      discountItem: discountItem || null,
+      selectedDiscountCode: selectedDiscountCode || null,
+      subtotal,
+      discountAmount,
+      pb1Tax,
+      totalAmount,
+      totalItemsCount,
+      customer: {
+        name: customerName || '',
+        email: customerEmail || '',
+        phone: customerPhone || ''
+      },
+      updatedAt: now
+    };
+
+    const db = getDB();
+    let updatedDraft: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        const result = await db.collection('saved_orders').findOneAndUpdate(
+          query,
+          { $set: updateFields },
+          { returnDocument: 'after' }
+        );
+        updatedDraft = result?.value || result;
+      } catch (e) {}
+    }
+
+    fallbackStore.saved_orders = fallbackStore.saved_orders || [];
+    const idx = fallbackStore.saved_orders.findIndex(
+      d => (d._id && d._id.toString() === id) || d.id === id
+    );
+    if (idx !== -1) {
+      fallbackStore.saved_orders[idx] = {
+        ...fallbackStore.saved_orders[idx],
+        ...updateFields,
+        customer: {
+          name: customerName || '',
+          email: customerEmail || '',
+          phone: customerPhone || ''
+        },
+        updatedAt: now
+      };
+      if (!updatedDraft) {
+        updatedDraft = fallbackStore.saved_orders[idx];
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Pesanan tersimpan berhasil diperbarui!',
+      draft: updatedDraft ? {
+        id: updatedDraft._id ? updatedDraft._id.toString() : updatedDraft.id,
+        ...updatedDraft
+      } : null
+    });
+  } catch (err: any) {
+    console.error('[Orders] Update draft error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * DELETE /api/orders/drafts/:id
+ * Delete/cancel a saved draft
+ * RBAC: CASHIER, MANAGER, ADMIN
+ */
+orderRouter.delete('/drafts/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER' && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak.'
+      });
+    }
+
+    const { id } = req.params as unknown as IParam;
+    const db = getDB();
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        await db.collection('saved_orders').deleteOne(query);
+      } catch (e) {}
+    }
+
+    fallbackStore.saved_orders = (fallbackStore.saved_orders || []).filter(
+      d => (d._id && d._id.toString() !== id) && d.id !== id
+    );
+
+    return res.json({
+      success: true,
+      message: 'Pesanan tersimpan berhasil dihapus.'
+    });
+  } catch (err: any) {
+    console.error('[Orders] Delete draft error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * PUT /api/orders/:id/adjust
+ * Modify an already paid/completed order, recompute payment differences (shortage / refund)
+ * RBAC: CASHIER, MANAGER, ADMIN
+ */
+orderRouter.put('/:id/adjust', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER' && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak. Mengubah pesanan yang sudah dibayar membutuhkan role CASHIER atau MANAGER.'
+      });
+    }
+
+    const { id } = req.params as unknown as IParam;
+    const parsed = adjustOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: parsed.error.format()
+      });
+    }
+
+    const {
+      items,
+      discountItem,
+      selectedDiscountCode,
+      settledMethod,
+      reason,
+      customerName,
+      customerEmail,
+      customerPhone
+    } = parsed.data;
+
+    const db = getDB();
+    let existingOrder: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        existingOrder = await db.collection('orders').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!existingOrder) {
+      existingOrder = fallbackStore.orders.find(o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id);
+    }
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pesanan tidak ditemukan.'
+      });
+    }
+
+    // Active Vendor ID resolution
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || existingOrder.vendorId || 'vnd_kasirkafe_central';
+
+    // 1. Calculate new totals
+    const newSubtotal = items.reduce((acc, item) => acc + item.itemTotal, 0);
+
+    let newDiscountAmount = 0;
+    let newAppliedDiscounts: any[] = [];
+    let newFreeItemsSummary: string[] = [];
+
+    if (discountItem) {
+      newDiscountAmount = discountItem.discountAmount;
+      newAppliedDiscounts = [{
+        ruleCode: discountItem.ruleCode,
+        ruleName: discountItem.ruleName,
+        description: `Item Diskon: ${discountItem.name} (Hemat Rp ${discountItem.discountAmount.toLocaleString('id-ID')})`,
+        discountAmount: discountItem.discountAmount,
+        rewardItemName: discountItem.name
+      }];
+      newFreeItemsSummary = [`${discountItem.name} (${discountItem.ruleName}): Rp ${discountItem.discountedPrice.toLocaleString('id-ID')}`];
+    } else if (selectedDiscountCode) {
+      const rules = await getActiveDiscountRules(activeVendorId);
+      const matchedRule = rules.find(r => r.code === selectedDiscountCode);
+      if (matchedRule) {
+        if (matchedRule.rewardType === 'PERCENTAGE') {
+          const pct = Math.min(100, Math.max(1, matchedRule.rewardValue || 10));
+          newDiscountAmount = Math.round((newSubtotal * pct) / 100);
+        } else if (matchedRule.rewardType === 'FIXED_AMOUNT') {
+          newDiscountAmount = Math.min(newSubtotal, matchedRule.rewardValue || 10000);
+        }
+        newAppliedDiscounts = [{
+          ruleCode: matchedRule.code,
+          ruleName: matchedRule.name,
+          description: matchedRule.description,
+          discountAmount: newDiscountAmount,
+          rewardItemName: undefined
+        }];
+      }
+    }
+
+    const discountItemPrice = discountItem ? discountItem.discountedPrice : 0;
+    const newTaxableSubtotal = Math.max(0, newSubtotal + discountItemPrice - (discountItem ? 0 : newDiscountAmount));
+    const newPb1Tax = Math.round(newTaxableSubtotal * 0.1);
+    const newTotalAmount = newTaxableSubtotal + newPb1Tax;
+
+    // Previous Total comparison
+    const previousTotal = existingOrder.totalAmount || 0;
+    const netDifference = newTotalAmount - previousTotal; // > 0: customer owes more; < 0: refund to customer
+    const differenceAmount = Math.abs(netDifference);
+
+    let adjustmentType: 'ADDITIONAL_PAYMENT' | 'REFUND' | 'NO_CHANGE' = 'NO_CHANGE';
+    if (netDifference > 0) {
+      adjustmentType = 'ADDITIONAL_PAYMENT';
+    } else if (netDifference < 0) {
+      adjustmentType = 'REFUND';
+    }
+
+    const now = new Date();
+    const cashierName = (req as any).user?.name || 'Kasir';
+
+    const paymentAdjustment = {
+      type: adjustmentType,
+      differenceAmount,
+      netDifference,
+      settledMethod: settledMethod || existingOrder.paymentMethod,
+      reason: reason || 'Koreksi item pesanan oleh kasir',
+      adjustedAt: now.toISOString(),
+      adjustedBy: cashierName
+    };
+
+    const updateFields: any = {
+      items,
+      discountItem: discountItem || null,
+      selectedDiscountCode: selectedDiscountCode || null,
+      subtotal: newSubtotal,
+      discountAmount: newDiscountAmount,
+      appliedDiscounts: newAppliedDiscounts,
+      freeItemsSummary: newFreeItemsSummary,
+      pb1Tax: newPb1Tax,
+      totalAmount: newTotalAmount,
+      isAdjusted: true,
+      originalTotalAmount: existingOrder.originalTotalAmount || previousTotal,
+      paymentAdjustment,
+      updatedAt: now
+    };
+
+    if (customerName !== undefined) {
+      updateFields['customer.name'] = customerName || existingOrder.customer?.name || '';
+    }
+    if (customerEmail !== undefined) {
+      updateFields['customer.email'] = customerEmail || existingOrder.customer?.email || '';
+    }
+    if (customerPhone !== undefined) {
+      updateFields['customer.phone'] = customerPhone || existingOrder.customer?.phone || '';
+    }
+
+    let updatedOrder: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        const result = await db.collection('orders').findOneAndUpdate(
+          query,
+          { $set: updateFields },
+          { returnDocument: 'after' }
+        );
+        updatedOrder = result?.value || result;
+      } catch (e) {
+        console.warn('[Orders] Could not update order in MongoDB, updating memory store:', e);
+      }
+    }
+
+    // Update fallback store
+    fallbackStore.orders = fallbackStore.orders || [];
+    const orderIdx = fallbackStore.orders.findIndex(
+      o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id
+    );
+
+    if (orderIdx !== -1) {
+      fallbackStore.orders[orderIdx] = {
+        ...fallbackStore.orders[orderIdx],
+        ...updateFields,
+        customer: {
+          ...fallbackStore.orders[orderIdx].customer,
+          ...(customerName !== undefined ? { name: customerName } : {}),
+          ...(customerEmail !== undefined ? { email: customerEmail } : {}),
+          ...(customerPhone !== undefined ? { phone: customerPhone } : {})
+        },
+        updatedAt: now
+      };
+      if (!updatedOrder) {
+        updatedOrder = fallbackStore.orders[orderIdx];
+      }
+    }
+
+    // Record activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'ORDER',
+      entityId: id,
+      entityName: `Pesanan #${existingOrder.orderNumber}`,
+      summary: `Mengubah pesanan #${existingOrder.orderNumber}: Total ${previousTotal.toLocaleString('id-ID')} -> ${newTotalAmount.toLocaleString('id-ID')} (${adjustmentType === 'ADDITIONAL_PAYMENT' ? `Kurang bayar Rp ${differenceAmount.toLocaleString('id-ID')}` : adjustmentType === 'REFUND' ? `Kembalikan selisih Rp ${differenceAmount.toLocaleString('id-ID')}` : 'Tidak ada selisih'})`,
+      details: {
+        orderId: id,
+        orderNumber: existingOrder.orderNumber,
+        previousTotal,
+        newTotalAmount,
+        netDifference,
+        adjustmentType,
+        settledMethod
+      },
+      req,
+      vendorId: activeVendorId
+    });
+
+    return res.json({
+      success: true,
+      message: adjustmentType === 'ADDITIONAL_PAYMENT'
+        ? `Pesanan berhasil diperbarui! Pelanggan perlu membayar kekurangan Rp ${differenceAmount.toLocaleString('id-ID')}.`
+        : adjustmentType === 'REFUND'
+          ? `Pesanan berhasil diperbarui! Kembalikan kelebihan bayar Rp ${differenceAmount.toLocaleString('id-ID')} kepada pelanggan.`
+          : 'Pesanan berhasil diperbarui tanpa perubahan total pembayaran.',
+      order: updatedOrder ? {
+        id: updatedOrder._id ? updatedOrder._id.toString() : updatedOrder.id,
+        ...updatedOrder
+      } : null,
+      paymentAdjustment
+    });
+  } catch (err: any) {
+    console.error('[Orders] Adjust order error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * POST /api/orders/:id/cancel
+ * Cancel an already paid/completed order, process refund, and store reason (5-50 chars)
+ * RBAC: CASHIER, MANAGER, ADMIN
+ */
+orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== 'CASHIER' && userRole !== 'MANAGER' && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Akses ditolak. Membatalkan pesanan membutuhkan role CASHIER atau MANAGER.'
+      });
+    }
+
+    const { id } = req.params as unknown as IParam;
+    const parsed = cancelPaidOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return res.status(400).json({
+        success: false,
+        error: issue ? issue.message : 'Alasan pembatalan tidak valid (harus 5 - 50 karakter)'
+      });
+    }
+
+    const { reason, refundMethod } = parsed.data;
+
+    const db = getDB();
+    let existingOrder: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        existingOrder = await db.collection('orders').findOne(query);
+      } catch (e) {}
+    }
+
+    if (!existingOrder) {
+      existingOrder = fallbackStore.orders.find(o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id);
+    }
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pesanan tidak ditemukan.'
+      });
+    }
+
+    if (existingOrder.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        error: 'Pesanan ini sudah dibatalkan sebelumnya.'
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || existingOrder.vendorId || 'vnd_kasirkafe_central';
+    const now = new Date();
+    const cashierName = (req as any).user?.name || 'Kasir';
+    const refundAmount = existingOrder.totalAmount || 0;
+    const resolvedRefundMethod = refundMethod || existingOrder.paymentMethod || 'CASH';
+
+    const cancellationData = {
+      reason: reason.trim(),
+      refundAmount,
+      refundMethod: resolvedRefundMethod,
+      cancelledAt: now.toISOString(),
+      cancelledBy: cashierName
+    };
+
+    const updateFields: any = {
+      status: 'CANCELLED',
+      cancellation: cancellationData,
+      updatedAt: now
+    };
+
+    let updatedOrder: any = null;
+
+    if (db) {
+      try {
+        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+        const result = await db.collection('orders').findOneAndUpdate(
+          query,
+          { $set: updateFields },
+          { returnDocument: 'after' }
+        );
+        updatedOrder = result?.value || result;
+      } catch (e) {
+        console.warn('[Orders] Could not update order cancellation in MongoDB:', e);
+      }
+    }
+
+    fallbackStore.orders = fallbackStore.orders || [];
+    const orderIdx = fallbackStore.orders.findIndex(
+      o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id
+    );
+
+    if (orderIdx !== -1) {
+      fallbackStore.orders[orderIdx] = {
+        ...fallbackStore.orders[orderIdx],
+        ...updateFields
+      };
+      if (!updatedOrder) {
+        updatedOrder = fallbackStore.orders[orderIdx];
+      }
+    }
+
+    // Record activity log
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'ORDER',
+      entityId: id,
+      entityName: `Pembatalan Pesanan #${existingOrder.orderNumber}`,
+      summary: `Membatalkan pesanan #${existingOrder.orderNumber}. Pengembalian dana: Rp ${refundAmount.toLocaleString('id-ID')} via ${resolvedRefundMethod}. Alasan: "${reason.trim()}"`,
+      details: {
+        orderId: id,
+        orderNumber: existingOrder.orderNumber,
+        refundAmount,
+        refundMethod: resolvedRefundMethod,
+        reason: reason.trim()
+      },
+      req,
+      vendorId: activeVendorId
+    });
+
+    return res.json({
+      success: true,
+      message: `Pesanan #${existingOrder.orderNumber} berhasil dibatalkan. Pengembalian dana Rp ${refundAmount.toLocaleString('id-ID')} diproses via ${resolvedRefundMethod}.`,
+      order: updatedOrder ? {
+        id: updatedOrder._id ? updatedOrder._id.toString() : updatedOrder.id,
+        ...updatedOrder
+      } : null,
+      cancellation: cancellationData
+    });
+  } catch (err: any) {
+    console.error('[Orders] Cancel order error:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
  * GET /api/orders
  * List sales history with email delivery logs
  */
@@ -593,7 +1363,12 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
         cashier: o.cashier,
         status: o.status,
         emailStatus: o.emailStatus || 'none',
-        createdAt: o.createdAt
+        createdAt: o.createdAt,
+        updatedAt: o.updatedAt,
+        isAdjusted: o.isAdjusted || false,
+        originalTotalAmount: o.originalTotalAmount,
+        paymentAdjustment: o.paymentAdjustment || null,
+        cancellation: o.cancellation || null
       }))
     });
   } catch (err: any) {
