@@ -2,9 +2,9 @@ export const resources = {
   id: {
     translation: {
       // General & Layout
-      appName: 'SipSpot POS - Kasir Minuman & Snack',
-      storeName: 'SipSpot Senopati',
-      terminal: 'Terminal 01 • SipSpot Senopati',
+      appName: 'KasirKafe POS - Kasir Minuman & Snack',
+      storeName: 'KasirKafe Senopati',
+      terminal: 'Terminal 01 • KasirKafe Senopati',
       online: 'Online',
       offline: 'Offline',
       search: 'Cari',
@@ -335,7 +335,7 @@ export const resources = {
       receiptCustomer: 'Pelanggan',
       receiptPaymentMethod: 'Metode Bayar',
       receiptChange: 'Kembalian',
-      receiptThankYou: 'Terima kasih atas kunjungan Anda di SipSpot!',
+      receiptThankYou: 'Terima kasih atas kunjungan Anda di KasirKafe!',
       printReceipt: 'Cetak Struk',
       newTransaction: 'Transaksi Baru',
       sendToEmailPrompt: 'Kirim salinan ke email pelanggan',
@@ -460,9 +460,9 @@ export const resources = {
   en: {
     translation: {
       // General & Layout
-      appName: 'SipSpot POS - Beverage & Snack Cashier',
-      storeName: 'SipSpot Senopati',
-      terminal: 'Terminal 01 • SipSpot Senopati',
+      appName: 'KasirKafe POS - Beverage & Snack Cashier',
+      storeName: 'KasirKafe Senopati',
+      terminal: 'Terminal 01 • KasirKafe Senopati',
       online: 'Online',
       offline: 'Offline',
       search: 'Search',
@@ -793,7 +793,7 @@ export const resources = {
       receiptCustomer: 'Customer',
       receiptPaymentMethod: 'Payment Method',
       receiptChange: 'Change Due',
-      receiptThankYou: 'Thank you for visiting SipSpot!',
+      receiptThankYou: 'Thank you for visiting KasirKafe!',
       printReceipt: 'Print Receipt',
       newTransaction: 'New Transaction',
       sendToEmailPrompt: 'Send a copy to customer email',

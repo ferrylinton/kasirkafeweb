@@ -85,7 +85,7 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
   let performer: PerformedByUser = {
     id: 'system',
     name: 'Sistem POS',
-    email: 'system@sipspot.local',
+    email: 'system@kasirkafe.local',
     role: 'SYSTEM'
   };
 
@@ -110,7 +110,7 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
   const now = new Date();
   const generatedId = new ObjectId().toString();
 
-  const resolvedVendorId = (req as any)?.vendorId || (req?.user as any)?.vendorId || (params as any)?.vendorId || 'vnd_sipspot_central';
+  const resolvedVendorId = (req as any)?.vendorId || (req?.user as any)?.vendorId || (params as any)?.vendorId || 'vnd_kasirkafe_central';
 
   const logDoc: ActivityLogEntry = {
     id: generatedId,
@@ -261,7 +261,7 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
   // Fallback to in-memory store if db returns empty or is disconnected
   if (allLogs.length === 0 && fallbackStore.activity_logs.length > 0) {
     allLogs = fallbackStore.activity_logs.filter(log => {
-      if (vendorId && vendorId !== 'ALL' && (log.vendorId || 'vnd_sipspot_central') !== vendorId) {
+      if (vendorId && vendorId !== 'ALL' && (log.vendorId || 'vnd_kasirkafe_central') !== vendorId) {
         return false;
       }
       if (action && action !== 'ALL' && log.action !== action.toUpperCase()) {

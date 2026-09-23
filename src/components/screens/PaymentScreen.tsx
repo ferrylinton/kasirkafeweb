@@ -285,7 +285,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
               <QrCode className="w-28 h-28 text-stone-900" />
             </div>
             <p className="text-xs font-bold text-stone-800 dark:text-stone-200">
-              QRIS Statis Toko SipSpot Senopati
+              QRIS Statis Toko KasirKafe Senopati
             </p>
             <p className="text-[11px] text-stone-400">
               Pelanggan dapat scan menggunakan aplikasi e-wallet apa saja.
@@ -418,7 +418,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
               </div>
               <div className="flex justify-between">
                 <span>{language === 'en' ? 'Cashier:' : 'Kasir:'}</span>
-                <span>{completedOrder.cashier?.name || (language === 'en' ? 'SipSpot Cashier' : 'Kasir SipSpot')}</span>
+                <span>{completedOrder.cashier?.name || (language === 'en' ? 'KasirKafe Cashier' : 'Kasir KasirKafe')}</span>
               </div>
               <div className="flex justify-between">
                 <span>{language === 'en' ? 'Queue No.:' : 'No. Antrean:'}</span>

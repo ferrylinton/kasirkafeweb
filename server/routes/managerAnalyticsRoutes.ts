@@ -54,7 +54,7 @@ function getWeekNumber(d: Date): { year: number; week: number; start: Date; end:
  */
 async function resolveManagerVendor(req: Request) {
   const user = req.user!;
-  let targetVendorId = user.vendorId || req.vendorId || 'vnd_sipspot_central';
+  let targetVendorId = user.vendorId || req.vendorId || 'vnd_kasirkafe_central';
 
   // If user is ADMIN testing or managing, they may optionally pass a specific vendor
   if (user.role === 'ADMIN' && req.query.vendorId && req.query.vendorId !== 'all') {

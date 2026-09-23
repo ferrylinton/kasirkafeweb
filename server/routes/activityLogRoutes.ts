@@ -18,7 +18,7 @@ activityLogRouter.get('/', async (req: Request, res: Response) => {
 
     const isAdmin = req.user?.role === 'ADMIN' ;
     const isAllVendors = (allVendors === 'true' || vendorQuery === 'all' || vendorQuery === 'ALL' || (!vendorQuery && isAdmin)) && isAdmin;
-    const targetVendor = isAllVendors ? 'ALL' : ((vendorQuery as string) || req.vendorId || 'vnd_sipspot_central');
+    const targetVendor = isAllVendors ? 'ALL' : ((vendorQuery as string) || req.vendorId || 'vnd_kasirkafe_central');
 
     let computedStartDate = startDate as string;
     let computedEndDate = endDate as string;

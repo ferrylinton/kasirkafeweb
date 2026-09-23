@@ -87,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'settings':
         return t('navSettings');
       default:
-        return 'SipSpot POS';
+        return 'KasirKafe POS';
     }
   };
 

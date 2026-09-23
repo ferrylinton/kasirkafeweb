@@ -30,7 +30,7 @@ export const HousekeepingNotificationBanner: React.FC<HousekeepingNotificationBa
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [isDismissed, setIsDismissed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const dismissed = sessionStorage.getItem('sipspot_hk_notice_dismissed');
+      const dismissed = sessionStorage.getItem('kasirkafe_hk_notice_dismissed');
       return dismissed === 'true';
     }
     return false;
@@ -68,7 +68,7 @@ export const HousekeepingNotificationBanner: React.FC<HousekeepingNotificationBa
   const handleDismiss = () => {
     setIsDismissed(true);
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('sipspot_hk_notice_dismissed', 'true');
+      sessionStorage.setItem('kasirkafe_hk_notice_dismissed', 'true');
     }
   };
 

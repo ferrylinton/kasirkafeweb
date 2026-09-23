@@ -121,7 +121,7 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({
             Atur Ulang Kata Sandi
           </h1>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Sistem Keamanan Akun SipSpot POS Multi-Vendor
+            Sistem Keamanan Akun KasirKafe POS Multi-Vendor
           </p>
         </div>
 

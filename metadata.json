@@ -1,5 +1,5 @@
 {
-  "name": "SipSpot POS - Kasir Minuman & Snack",
+  "name": "KasirKafe POS - Kasir Minuman & Snack",
   "description": "Aplikasi POS Toko Minuman & Snack multi-vendor dengan pendaftaran vendor baru (konfirmasi email & aktivasi otomatis peran MANAGER), reset kata sandi via tautan email, antrean urut harian otomatis reset tiap hari, dashboard analitik transaksi, Top 10 Produk Terlaris, manajemen stok, proteksi login kata sandi & lockout Redis, penegakan sesi tunggal, riwayat login, dan log aktivitas database.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

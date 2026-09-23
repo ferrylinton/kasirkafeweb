@@ -583,7 +583,7 @@ export const SettingsScreen: React.FC = () => {
           <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60">
             <span className="text-[11px] text-stone-400 block">{t('systemAppVersion')}</span>
             <span className="font-bold text-stone-800 dark:text-stone-200 mt-0.5 block">
-              SipSpot POS Enterprise v2.4
+              KasirKafe POS Enterprise v2.4
             </span>
           </div>
           <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60">

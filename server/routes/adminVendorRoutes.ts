@@ -193,7 +193,7 @@ adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
     }
     if (typeof currency === 'string') updates.currency = currency.trim();
     if (status === 'ACTIVE' || status === 'SUSPENDED') {
-      if ((id === 'vnd_sipspot_central' || id === 'vnd_admin') && status === 'SUSPENDED') {
+      if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin') && status === 'SUSPENDED') {
         return res.status(400).json({
           success: false,
           message: 'Vendor Utama / Admin Sistem tidak dapat disuspend.'
@@ -248,7 +248,7 @@ adminVendorRouter.patch('/:id/status', async (req: Request, res: Response) => {
     const { id } = req.params as unknown as IParam;
     const { status } = req.body;
 
-    if ((id === 'vnd_sipspot_central' || id === 'vnd_admin') && (status === 'SUSPENDED' || !status)) {
+    if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin') && (status === 'SUSPENDED' || !status)) {
       return res.status(400).json({
         success: false,
         message: 'Vendor Utama / Admin Sistem tidak dapat dinonaktifkan.'
@@ -310,7 +310,7 @@ adminVendorRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
 
-    if (id === 'vnd_sipspot_central' || id === 'vnd_admin') {
+    if (id === 'vnd_kasirkafe_central' || id === 'vnd_admin') {
       return res.status(400).json({
         success: false,
         message: 'Vendor Utama / Admin Sistem tidak dapat dihapus.'

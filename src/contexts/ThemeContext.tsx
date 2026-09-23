@@ -25,12 +25,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('sipspot_theme_dark');
+    const saved = localStorage.getItem('kasirkafe_theme_dark');
     return saved === 'true';
   });
 
   const [accent, setAccentState] = useState<ThemeAccent>(() => {
-    const saved = localStorage.getItem('sipspot_accent_id');
+    const saved = localStorage.getItem('kasirkafe_accent_id');
     const found = THEME_ACCENTS.find(a => a.id === saved);
     return found || THEME_ACCENTS[0]; // Default to Orange (#fd7e14)
   });
@@ -41,11 +41,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isDarkMode) {
       root.classList.add('dark');
       body.classList.add('dark');
-      localStorage.setItem('sipspot_theme_dark', 'true');
+      localStorage.setItem('kasirkafe_theme_dark', 'true');
     } else {
       root.classList.remove('dark');
       body.classList.remove('dark');
-      localStorage.setItem('sipspot_theme_dark', 'false');
+      localStorage.setItem('kasirkafe_theme_dark', 'false');
     }
   }, [isDarkMode]);
 
@@ -53,7 +53,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const root = document.documentElement;
     root.style.setProperty('--accent-color', accent.hex);
     root.style.setProperty('--accent-rgb', accent.rgb);
-    localStorage.setItem('sipspot_accent_id', accent.id);
+    localStorage.setItem('kasirkafe_accent_id', accent.id);
   }, [accent]);
 
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);

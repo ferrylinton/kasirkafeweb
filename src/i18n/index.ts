@@ -3,7 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import { resources } from './resources';
 
 // Retrieve stored language or default to Indonesia ('id')
-const savedLang = typeof window !== 'undefined' ? localStorage.getItem('sipspot_lang') : null;
+const savedLang = typeof window !== 'undefined' ? localStorage.getItem('kasirkafe_lang') : null;
 const initialLanguage = savedLang === 'en' || savedLang === 'id' ? savedLang : 'id';
 
 i18n
@@ -31,7 +31,7 @@ i18n.on('languageChanged', (lng) => {
     document.documentElement.lang = lng;
   }
   if (typeof window !== 'undefined') {
-    localStorage.setItem('sipspot_lang', lng);
+    localStorage.setItem('kasirkafe_lang', lng);
   }
 });
 

@@ -162,7 +162,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
 
       const res = await fetch('/api/manager/analytics/transactions', {
         headers: {
-          Authorization: `Bearer ${token || localStorage.getItem('sipspot_token') || ''}`
+          Authorization: `Bearer ${token || localStorage.getItem('kasirkafe_token') || ''}`
         }
       });
 
@@ -225,7 +225,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
       const url = `/api/manager/analytics/transactions/export?format=${format}&period=${targetPeriod}`;
       const res = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${token || localStorage.getItem('sipspot_token') || ''}`
+          Authorization: `Bearer ${token || localStorage.getItem('kasirkafe_token') || ''}`
         }
       });
 
@@ -331,7 +331,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
       const res = await fetch('/api/manager/analytics/retention-run', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token || localStorage.getItem('sipspot_token') || ''}`,
+          Authorization: `Bearer ${token || localStorage.getItem('kasirkafe_token') || ''}`,
           'Content-Type': 'application/json'
         }
       });

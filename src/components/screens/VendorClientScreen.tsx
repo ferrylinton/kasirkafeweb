@@ -166,11 +166,11 @@ export const VendorClientScreen: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-base font-black text-stone-900 dark:text-stone-100">
-                    {currentVendor?.name || 'SipSpot Coffee & Boba (Pusat)'}
+                    {currentVendor?.name || 'KasirKafe Coffee & Boba (Pusat)'}
                   </h2>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-                      ID: {currentVendor?.id || 'vnd_sipspot_central'}
+                      ID: {currentVendor?.id || 'vnd_kasirkafe_central'}
                     </span>
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                       {currentVendor?.status || 'ACTIVE'}
@@ -192,7 +192,7 @@ export const VendorClientScreen: React.FC = () => {
                   <span>Email Vendor:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 truncate">
-                  {currentVendor?.email || 'pusat@sipspot.com'}
+                  {currentVendor?.email || 'pusat@kasirkafe.com'}
                 </p>
               </div>
 
@@ -343,7 +343,7 @@ export const VendorClientScreen: React.FC = () => {
             <div className="space-y-2 pt-1">
               <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-stone-900 dark:text-stone-100">1. SipSpot Pusat</div>
+                  <div className="font-bold text-stone-900 dark:text-stone-100">1. KasirKafe Pusat</div>
                   <div className="text-[10px] text-stone-500">manager@beverage.com (Password: Password123!)</div>
                 </div>
                 <span className="text-[10px] font-bold text-stone-400">Arabika & Boba</span>

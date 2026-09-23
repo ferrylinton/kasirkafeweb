@@ -218,7 +218,7 @@ export const VendorManagementScreen: React.FC = () => {
 
   // Toggle Vendor Status
   const handleToggleStatus = async (vendor: AdminVendorItem) => {
-    if (vendor.id === 'vnd_sipspot_central' || vendor.id === 'vnd_admin') {
+    if (vendor.id === 'vnd_kasirkafe_central' || vendor.id === 'vnd_admin') {
       showToast('Vendor Sistem / Pusat tidak dapat dinonaktifkan.', 'warning');
       return;
     }
@@ -505,7 +505,7 @@ export const VendorManagementScreen: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filteredVendors.map(vendor => {
-            const isCentral = vendor.id === 'vnd_sipspot_central' || vendor.id === 'vnd_admin';
+            const isCentral = vendor.id === 'vnd_kasirkafe_central' || vendor.id === 'vnd_admin';
             const isAdminVendor = vendor.id === 'vnd_admin';
             const isSuspended = vendor.status === 'SUSPENDED';
 

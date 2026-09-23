@@ -18,8 +18,8 @@ console.error = filterFitWarning(console.error);
 
 // Sync selected vendor cookie for seamless API routing
 try {
-  const savedVendor = localStorage.getItem('sipspot_selected_vendor') || 'vnd_sipspot_central';
-  document.cookie = `sipspot_vendor_id=${encodeURIComponent(savedVendor)}; path=/; max-age=31536000; SameSite=Lax`;
+  const savedVendor = localStorage.getItem('kasirkafe_selected_vendor') || 'vnd_kasirkafe_central';
+  document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(savedVendor)}; path=/; max-age=31536000; SameSite=Lax`;
 } catch (e) {}
 
 // Safely intercept fetch to attach X-Vendor-Id header without breaking in browsers where window.fetch is getter-only
@@ -30,7 +30,7 @@ try {
       try {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request)?.url || '';
         if (url && (url.startsWith('/api') || url.includes('/api/'))) {
-          const selectedVendor = localStorage.getItem('sipspot_selected_vendor');
+          const selectedVendor = localStorage.getItem('kasirkafe_selected_vendor');
           if (selectedVendor) {
             const headers = new Headers(init?.headers || {});
             if (!headers.has('X-Vendor-Id')) {

@@ -55,7 +55,7 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
-      service: 'SipSpot POS API',
+      service: 'KasirKafe POS API',
       timestamp: new Date().toISOString()
     });
   });
@@ -142,11 +142,11 @@ async function startServer() {
 
   // Bind to 0.0.0.0:3000
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] SipSpot POS running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] KasirKafe POS running on http://0.0.0.0:${PORT}`);
     writeDailyLog({
       level: 'INFO',
       category: 'SYSTEM',
-      message: `SipSpot POS Server berhasil dijalankan pada port ${PORT} (PID: ${process.pid})`
+      message: `KasirKafe POS Server berhasil dijalankan pada port ${PORT} (PID: ${process.pid})`
     }).catch(() => {});
   });
 

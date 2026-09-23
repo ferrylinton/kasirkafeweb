@@ -36,7 +36,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       document.documentElement.lang = lang;
     }
     if (typeof window !== 'undefined') {
-      localStorage.setItem('sipspot_lang', lang);
+      localStorage.setItem('kasirkafe_lang', lang);
     }
   };
 

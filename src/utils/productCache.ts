@@ -46,7 +46,7 @@ export function getProductCacheKey(params: {
   const v = params.allVendors ? 'all' : (params.vendorId || 'current');
   const c = (params.category || 'all').toLowerCase().trim();
   const s = (params.search || '').toLowerCase().trim();
-  return `sipspot_cache_prods_${v}_${c}_${s}`;
+  return `kasirkafe_cache_prods_${v}_${c}_${s}`;
 }
 
 /**
@@ -54,7 +54,7 @@ export function getProductCacheKey(params: {
  */
 export function getCategoryCacheKey(vendorId?: string): string {
   const v = vendorId || 'current';
-  return `sipspot_cache_cats_${v}`;
+  return `kasirkafe_cache_cats_${v}`;
 }
 
 /**
@@ -189,7 +189,7 @@ export function clearClientCatalogCache(): void {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith('sipspot_cache_prods_') || k.startsWith('sipspot_cache_cats_'))) {
+      if (k && (k.startsWith('kasirkafe_cache_prods_') || k.startsWith('kasirkafe_cache_cats_'))) {
         keysToRemove.push(k);
       }
     }

@@ -48,7 +48,7 @@ interface SelectUserModalProps {
 
 const FALLBACK_VENDORS: ModalVendor[] = [
   { id: 'vnd_admin', name: 'Admin', code: 'ADMIN', status: 'ACTIVE' },
-  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT', status: 'ACTIVE' },
+  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee & Boba (Pusat)', code: 'SIPSPOT', status: 'ACTIVE' },
   { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', status: 'ACTIVE' },
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', status: 'ACTIVE' }
 ];
@@ -57,7 +57,7 @@ const FALLBACK_USERS: SelectableUser[] = [
   {
     id: 'admin_1',
     name: 'Radit Admin Sistem',
-    email: 'admin@sipspot.com',
+    email: 'admin@kasirkafe.com',
     role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_admin',
@@ -70,8 +70,8 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'manager@beverage.com',
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    vendorId: 'vnd_sipspot_central',
-    vendorName: 'SipSpot Coffee & Boba (Pusat)',
+    vendorId: 'vnd_kasirkafe_central',
+    vendorName: 'KasirKafe Coffee & Boba (Pusat)',
     vendorCode: 'SIPSPOT'
   },
   {
@@ -80,8 +80,8 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'cashier@beverage.com',
     role: 'CASHIER',
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
-    vendorId: 'vnd_sipspot_central',
-    vendorName: 'SipSpot Coffee & Boba (Pusat)',
+    vendorId: 'vnd_kasirkafe_central',
+    vendorName: 'KasirKafe Coffee & Boba (Pusat)',
     vendorCode: 'SIPSPOT'
   },
   {
@@ -193,7 +193,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
   const filteredUsers = users.filter(user => {
     // 1. Vendor Filter
     if (selectedVendor !== 'ALL') {
-      const uVendorId = user.vendorId || 'vnd_sipspot_central';
+      const uVendorId = user.vendorId || 'vnd_kasirkafe_central';
       if (uVendorId !== selectedVendor) {
         return false;
       }
@@ -223,7 +223,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
       icon: <Building2 className="w-4 h-4 text-stone-400" />
     },
     ...vendors.map(v => {
-      const staffCount = users.filter(u => (u.vendorId || 'vnd_sipspot_central') === v.id).length;
+      const staffCount = users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === v.id).length;
       return {
         value: v.id,
         label: v.name,

@@ -10,7 +10,7 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true' || SMTP_PORT === 465;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM = process.env.SMTP_FROM || (SMTP_USER ? `SipSpot POS <${SMTP_USER}>` : 'SipSpot POS <noreply@sipspot.local>');
+const SMTP_FROM = process.env.SMTP_FROM || (SMTP_USER ? `KasirKafe POS <${SMTP_USER}>` : 'KasirKafe POS <noreply@kasirkafe.local>');
 
 let transporter: Transporter | null = null;
 
@@ -58,7 +58,7 @@ export interface TemplateVariables {
  * Fetch email template from database with fallback
  */
 export async function getTemplateByCode(code: string, vendorId?: string): Promise<{ subject: string; bodyHtml: string } | null> {
-  const activeVendorId = vendorId || 'vnd_sipspot_central';
+  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
   const db = getDB();
   if (db) {
     try {
@@ -104,11 +104,11 @@ export async function sendReceiptEmail(params: {
   customSubject?: string;
 }): Promise<{ success: boolean; error?: string; logId?: string }> {
   const { vendorId, recipientEmail, orderId, orderNumber, variables, customSubject } = params;
-  const activeVendorId = vendorId || 'vnd_sipspot_central';
+  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
 
   // Retrieve template
   const template = await getTemplateByCode('RECEIPT_EMAIL', activeVendorId);
-  const subjectTemplate = customSubject || template?.subject || 'Struk Transaksi SipSpot POS - #{{orderNumber}}';
+  const subjectTemplate = customSubject || template?.subject || 'Struk Transaksi KasirKafe POS - #{{orderNumber}}';
   const bodyTemplate = template?.bodyHtml || getDefaultReceiptHtml();
 
   const finalSubject = interpolateTemplate(subjectTemplate, variables);
@@ -212,7 +212,7 @@ function getDefaultReceiptHtml(): string {
 <body>
   <div class="card">
     <div class="header">
-      <div class="title">SipSpot Beverage & Snack</div>
+      <div class="title">KasirKafe Beverage & Snack</div>
       <div class="subtitle">Artisan Coffee, Fresh Tea & Healthy Juice</div>
       <div class="meta">
         <strong>Order: #{{orderNumber}}</strong> | {{date}}<br>
@@ -252,7 +252,7 @@ function getDefaultReceiptHtml(): string {
     </table>
 
     <div class="footer">
-      Terima kasih telah berkunjung ke SipSpot!<br>
+      Terima kasih telah berkunjung ke KasirKafe!<br>
       Semoga harimu menyenangkan dan penuh kesegaran ☕✨
     </div>
   </div>
@@ -320,7 +320,7 @@ export async function sendLoginAlertEmail(params: {
 
   const methodLabel = 'Email & Password';
 
-  const subject = `[Keamanan SipSpot] Notifikasi Login Baru - Akun ${userName}`;
+  const subject = `[Keamanan KasirKafe] Notifikasi Login Baru - Akun ${userName}`;
 
   const html = `
 <!DOCTYPE html>
@@ -349,14 +349,14 @@ export async function sendLoginAlertEmail(params: {
 <body>
   <div class="card">
     <div class="header">
-      <div class="logo-badge">☕ SipSpot POS Security</div>
+      <div class="logo-badge">☕ KasirKafe POS Security</div>
       <h2 class="title">Notifikasi Login Baru</h2>
       <p class="subtitle">Kami mendeteksi aktivitas login baru pada akun kasir Anda</p>
     </div>
 
     <p style="font-size: 13px; line-height: 1.5; margin-bottom: 14px; color: #433431;">
       Halo <strong>${userName}</strong>,<br>
-      Akun staf Anda dengan peran <strong>${role}</strong> baru saja berhasil masuk ke sistem SipSpot POS. Berikut rincian aktivitasnya:
+      Akun staf Anda dengan peran <strong>${role}</strong> baru saja berhasil masuk ke sistem KasirKafe POS. Berikut rincian aktivitasnya:
     </p>
 
     <table class="info-table">
@@ -396,8 +396,8 @@ export async function sendLoginAlertEmail(params: {
     </div>
 
     <div class="footer">
-      Email ini dikirim secara otomatis untuk menjaga keamanan operasional kasir SipSpot.<br>
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack. Semua hak dilindungi.
+      Email ini dikirim secara otomatis untuk menjaga keamanan operasional kasir KasirKafe.<br>
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack. Semua hak dilindungi.
     </div>
   </div>
 </body>
@@ -476,7 +476,7 @@ export async function sendLoginHistoryReportEmail(params: {
     })
     .join('');
 
-  const subject = `[Keamanan SipSpot] Laporan Riwayat Login Akun ${userName}`;
+  const subject = `[Keamanan KasirKafe] Laporan Riwayat Login Akun ${userName}`;
 
   const html = `
 <!DOCTYPE html>
@@ -499,7 +499,7 @@ export async function sendLoginHistoryReportEmail(params: {
     <div class="header">
       <div style="font-size: 28px; margin-bottom: 6px;">🛡️</div>
       <h2 class="title">Laporan Riwayat Login Akun</h2>
-      <p class="subtitle">Rekapitulasi aktivitas akses akun SipSpot POS untuk ${userName}</p>
+      <p class="subtitle">Rekapitulasi aktivitas akses akun KasirKafe POS untuk ${userName}</p>
     </div>
 
     <p style="font-size: 13px; line-height: 1.5; color: #433431;">
@@ -525,7 +525,7 @@ export async function sendLoginHistoryReportEmail(params: {
     </div>
 
     <div class="footer">
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS Security System.<br>
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack POS Security System.<br>
       Dilindungi dengan otentikasi multi-perangkat dan deteksi intrusi.
     </div>
   </div>
@@ -575,7 +575,7 @@ export async function sendVendorConfirmationEmail(params: {
   const confirmationUrl = `${cleanAppUrl}/api/vendors/confirm?token=${encodeURIComponent(confirmationToken)}`;
   const directAppConfirmationUrl = `${cleanAppUrl}/?action=confirm-vendor&token=${encodeURIComponent(confirmationToken)}`;
 
-  const subject = `[SipSpot POS] Konfirmasi Pendaftaran Vendor - ${vendorName}`;
+  const subject = `[KasirKafe POS] Konfirmasi Pendaftaran Vendor - ${vendorName}`;
 
   const html = `
 <!DOCTYPE html>
@@ -604,9 +604,9 @@ export async function sendVendorConfirmationEmail(params: {
 <body>
   <div class="card">
     <div class="header">
-      <div class="badge">☕ SipSpot POS Multivendor</div>
+      <div class="badge">☕ KasirKafe POS Multivendor</div>
       <h2 class="title">Konfirmasi Pendaftaran Vendor</h2>
-      <p class="subtitle">Selamat datang di platform point of sale SipSpot</p>
+      <p class="subtitle">Selamat datang di platform point of sale KasirKafe</p>
     </div>
 
     <p style="font-size: 14px; line-height: 1.6; color: #3b2c29; margin-bottom: 16px;">
@@ -653,7 +653,7 @@ export async function sendVendorConfirmationEmail(params: {
     </p>
 
     <div class="footer">
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack POS System.<br>
       Jika Anda tidak merasa mendaftarkan vendor ini, Anda dapat mengabaikan pesan ini.
     </div>
   </div>
@@ -728,7 +728,7 @@ export async function sendPasswordResetEmail(params: {
   expiresInMinutes?: number;
 }): Promise<{ success: boolean; resetUrl: string; messageId?: string; error?: string }> {
   const { recipientEmail, userName, resetToken, resetUrl, expiresInMinutes = 60 } = params;
-  const subject = `[SipSpot POS] Permintaan Reset Kata Sandi Akun Anda`;
+  const subject = `[KasirKafe POS] Permintaan Reset Kata Sandi Akun Anda`;
 
   const html = `
 <!DOCTYPE html>
@@ -736,7 +736,7 @@ export async function sendPasswordResetEmail(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Kata Sandi - SipSpot POS</title>
+  <title>Reset Kata Sandi - KasirKafe POS</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
     .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
@@ -758,7 +758,7 @@ export async function sendPasswordResetEmail(params: {
       <div class="logo-badge">🔐</div>
       <h1>Permintaan Atur Ulang Kata Sandi</h1>
       <p>Halo, <strong>${userName}</strong>!</p>
-      <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun SipSpot POS Anda (<strong>${recipientEmail}</strong>).</p>
+      <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun KasirKafe POS Anda (<strong>${recipientEmail}</strong>).</p>
     </div>
 
     <div class="action-card">
@@ -782,8 +782,8 @@ export async function sendPasswordResetEmail(params: {
     </div>
 
     <div class="footer">
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
-      Sistem Keamanan Terpadu SipSpot POS.
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack POS System.<br>
+      Sistem Keamanan Terpadu KasirKafe POS.
     </div>
   </div>
 </body>
@@ -856,9 +856,9 @@ export async function sendAdminNewPasswordEmail(params: {
   adminName?: string;
   vendorName?: string;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const { recipientEmail, userName, newPassword, adminEmail, adminName = 'Administrator Sistem', vendorName = 'SipSpot POS' } = params;
+  const { recipientEmail, userName, newPassword, adminEmail, adminName = 'Administrator Sistem', vendorName = 'KasirKafe POS' } = params;
   const passwordToDisplay = newPassword || 'PasswordBaru123!';
-  const subject = `[SipSpot POS] Kata Sandi Baru Anda Telah Dibuat oleh Admin`;
+  const subject = `[KasirKafe POS] Kata Sandi Baru Anda Telah Dibuat oleh Admin`;
 
   const html = `
 <!DOCTYPE html>
@@ -866,7 +866,7 @@ export async function sendAdminNewPasswordEmail(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kata Sandi Baru Akun SipSpot POS</title>
+  <title>Kata Sandi Baru Akun KasirKafe POS</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #fff8f6; color: #231917; margin: 0; padding: 24px 12px; }
     .card { background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px 24px; border: 1px solid #f2dfdc; box-shadow: 0 8px 30px rgba(174, 49, 21, 0.06); }
@@ -897,7 +897,7 @@ export async function sendAdminNewPasswordEmail(params: {
       <div class="password-title">Kata Sandi Baru Anda:</div>
       <div class="password-code">${passwordToDisplay}</div>
       <p style="font-size: 12px; color: #7e22ce; margin: 8px 0 0 0;">
-        Gunakan kata sandi di atas untuk masuk ke sistem SipSpot POS.
+        Gunakan kata sandi di atas untuk masuk ke sistem KasirKafe POS.
       </p>
     </div>
 
@@ -929,8 +929,8 @@ export async function sendAdminNewPasswordEmail(params: {
     </div>
 
     <div class="footer">
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS System.<br>
-      Diterbitkan melalui Pusat Administrasi Sistem SipSpot POS.
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack POS System.<br>
+      Diterbitkan melalui Pusat Administrasi Sistem KasirKafe POS.
     </div>
   </div>
 </body>

@@ -48,7 +48,7 @@ export interface LoginScreenProps {
 
 const DEFAULT_VENDORS: VendorItem[] = [
   { id: 'vnd_admin', name: 'Admin', code: 'ADMIN' },
-  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee & Boba (Pusat)', code: 'SIPSPOT' },
+  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee & Boba (Pusat)', code: 'SIPSPOT' },
   { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO' },
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI' }
 ];
@@ -101,7 +101,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   // Selected User state (with localStorage persistence)
   const [selectedUser, setSelectedUser] = useState<SelectableUser>(() => {
     try {
-      const saved = localStorage.getItem('sipspot_selected_user');
+      const saved = localStorage.getItem('kasirkafe_selected_user');
       if (saved) {
         return JSON.parse(saved);
       }
@@ -120,16 +120,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const [allUsers, setAllUsers] = useState<SelectableUser[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState<string>(() => {
     try {
-      const savedVendor = localStorage.getItem('sipspot_selected_vendor');
+      const savedVendor = localStorage.getItem('kasirkafe_selected_vendor');
       if (savedVendor) return savedVendor;
     } catch (e) {}
-    return selectedUser.vendorId || 'vnd_sipspot_central';
+    return selectedUser.vendorId || 'vnd_kasirkafe_central';
   });
 
   const [isSelectModalOpen, setIsSelectModalOpen] = useState<boolean>(false);
   const [email, setEmail] = useState<string>(() => {
     try {
-      const savedEmail = localStorage.getItem('sipspot_saved_email');
+      const savedEmail = localStorage.getItem('kasirkafe_saved_email');
       if (savedEmail) return savedEmail;
     } catch (e) {}
     return selectedUser.email || 'manager@beverage.com';
@@ -138,7 +138,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('sipspot_remember_me') !== 'false';
+      return localStorage.getItem('kasirkafe_remember_me') !== 'false';
     } catch (e) {
       return true;
     }
@@ -177,7 +177,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
 
   const getLockoutStorageKey = useCallback((userEmail?: string) => {
-    return userEmail ? `sipspot_lockout_${userEmail.trim().toLowerCase()}` : 'sipspot_lockout_default';
+    return userEmail ? `kasirkafe_lockout_${userEmail.trim().toLowerCase()}` : 'kasirkafe_lockout_default';
   }, []);
 
   // Sync lockout state from server & localStorage when selectedUser or email changes
@@ -307,16 +307,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const handleVendorChange = useCallback((newVendorId: string) => {
     setSelectedVendorId(newVendorId);
     try {
-      localStorage.setItem('sipspot_selected_vendor', newVendorId);
-      document.cookie = `sipspot_vendor_id=${encodeURIComponent(newVendorId)}; path=/; max-age=31536000; SameSite=Lax`;
+      localStorage.setItem('kasirkafe_selected_vendor', newVendorId);
+      document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(newVendorId)}; path=/; max-age=31536000; SameSite=Lax`;
     } catch (e) {}
 
     // Find the users of this vendor (from allUsers or fallback list)
-    const matchingUsers = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === newVendorId);
+    const matchingUsers = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === newVendorId);
     if (matchingUsers.length > 0) {
       setSelectedUser(prev => {
         // If currently selected user is already in this vendor, keep them!
-        if (prev && (prev.vendorId || 'vnd_sipspot_central') === newVendorId) {
+        if (prev && (prev.vendorId || 'vnd_kasirkafe_central') === newVendorId) {
           return prev;
         }
         // Pick manager first if available, else first user
@@ -324,7 +324,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         setEmail(preferred.email);
         setPassword('');
         try {
-          localStorage.setItem('sipspot_selected_user', JSON.stringify(preferred));
+          localStorage.setItem('kasirkafe_selected_user', JSON.stringify(preferred));
         } catch (e) {}
         checkLockoutStatus(preferred.email);
         return preferred;
@@ -344,14 +344,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     if (user.vendorId) {
       setSelectedVendorId(user.vendorId);
       try {
-        localStorage.setItem('sipspot_selected_vendor', user.vendorId);
-        document.cookie = `sipspot_vendor_id=${encodeURIComponent(user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
+        localStorage.setItem('kasirkafe_selected_vendor', user.vendorId);
+        document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
       } catch (e) {}
     }
     setEmail(updatedUser.email);
     setPassword('');
     try {
-      localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
+      localStorage.setItem('kasirkafe_selected_user', JSON.stringify(updatedUser));
     } catch (e) {}
     checkLockoutStatus(updatedUser.email);
     const roleBadge = updatedUser.role.toUpperCase() === 'ADMIN' ? 'Admin' : updatedUser.role.toUpperCase() === 'MANAGER' ? 'Manager' : 'Kasir';
@@ -391,11 +391,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       try {
         localStorage.removeItem(storageKey);
         if (rememberMe) {
-          localStorage.setItem('sipspot_saved_email', cleanEmail);
-          localStorage.setItem('sipspot_remember_me', 'true');
+          localStorage.setItem('kasirkafe_saved_email', cleanEmail);
+          localStorage.setItem('kasirkafe_remember_me', 'true');
         } else {
-          localStorage.removeItem('sipspot_saved_email');
-          localStorage.setItem('sipspot_remember_me', 'false');
+          localStorage.removeItem('kasirkafe_saved_email');
+          localStorage.setItem('kasirkafe_remember_me', 'false');
         }
       } catch (e) {}
       if (result.previousSessionsTerminated) {
@@ -524,7 +524,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const currentVendorData = vendors.find(v => v.id === selectedVendorId);
 
   const vendorSelectOptions: RadixSelectOption[] = vendors.map(v => {
-    const staffCount = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === v.id).length;
+    const staffCount = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === v.id).length;
     return {
       value: v.id,
       label: v.name,
@@ -613,7 +613,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-base font-heading">SipSpot</span>
+              <span className="font-bold text-base font-heading">KasirKafe</span>
               <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
                 {t('online')}
               </span>
@@ -626,7 +626,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             >
               <Store className="w-3 h-3 text-accent shrink-0" />
               <span className="truncate max-w-[140px] sm:max-w-[180px] font-medium text-stone-700 dark:text-stone-300">
-                {currentVendorData?.name || 'SipSpot Coffee & Boba'}
+                {currentVendorData?.name || 'KasirKafe Coffee & Boba'}
               </span>
             </div>
           </div>

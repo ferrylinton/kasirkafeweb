@@ -215,7 +215,7 @@ export const AdminDashboardScreen: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `sipspot_transaksi_3bulan_${targetPeriod}_${selectedVendor}.${format}`;
+      a.download = `kasirkafe_transaksi_3bulan_${targetPeriod}_${selectedVendor}.${format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -281,7 +281,7 @@ export const AdminDashboardScreen: React.FC = () => {
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(activeDataset, null, 2));
       const a = document.createElement('a');
       a.href = dataStr;
-      a.download = `sipspot_rekap_tabel_${periodNames[period]}_${selectedVendor}.json`;
+      a.download = `kasirkafe_rekap_tabel_${periodNames[period]}_${selectedVendor}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -318,7 +318,7 @@ export const AdminDashboardScreen: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `sipspot_rekap_tabel_${periodNames[period]}_${selectedVendor}.csv`;
+    a.download = `kasirkafe_rekap_tabel_${periodNames[period]}_${selectedVendor}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -848,7 +848,7 @@ export const AdminDashboardScreen: React.FC = () => {
           </div>
           <div className="mt-3">
             <p className="text-lg font-bold font-heading text-stone-900 dark:text-white truncate">
-              {data?.summary.topVendor?.name || 'SipSpot Central'}
+              {data?.summary.topVendor?.name || 'KasirKafe Central'}
             </p>
             <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mt-1">
               <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">

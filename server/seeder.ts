@@ -19,8 +19,8 @@ export async function seedDatabase() {
       updatedAt: new Date()
     },
     {
-      id: 'vnd_sipspot_central',
-      name: 'SipSpot Coffee & Boba (Pusat)',
+      id: 'vnd_kasirkafe_central',
+      name: 'KasirKafe Coffee & Boba (Pusat)',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
@@ -46,7 +46,7 @@ export async function seedDatabase() {
 
   const initialUsers = [
     {
-      email: 'admin@sipspot.com',
+      email: 'admin@kasirkafe.com',
       password: managerPassword,
       name: 'Radit Admin Sistem',
       role: 'ADMIN',
@@ -60,7 +60,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Ferry Manager',
       role: 'MANAGER',
-      vendorId: 'vnd_sipspot_central',
+      vendorId: 'vnd_kasirkafe_central',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -70,7 +70,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Sarah Barista',
       role: 'CASHIER',
-      vendorId: 'vnd_sipspot_central',
+      vendorId: 'vnd_kasirkafe_central',
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -118,10 +118,10 @@ export async function seedDatabase() {
   ];
 
   const initialCategories = [
-    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Espresso, Latte, Cold Brew pilihan biji Arabika', vendorId: 'vnd_sipspot_central' },
-    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan', vendorId: 'vnd_sipspot_central' },
-    { code: 'jus', name: 'Jus', icon: '🍹', description: '100% Buah segar cold-pressed alami tanpa pemanis buatan', vendorId: 'vnd_sipspot_central' },
-    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry renyah, kue lezat, dan finger food pendamping', vendorId: 'vnd_sipspot_central' },
+    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Espresso, Latte, Cold Brew pilihan biji Arabika', vendorId: 'vnd_kasirkafe_central' },
+    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan', vendorId: 'vnd_kasirkafe_central' },
+    { code: 'jus', name: 'Jus', icon: '🍹', description: '100% Buah segar cold-pressed alami tanpa pemanis buatan', vendorId: 'vnd_kasirkafe_central' },
+    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry renyah, kue lezat, dan finger food pendamping', vendorId: 'vnd_kasirkafe_central' },
     { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Signature Kulo Es Kopi Susu & Avocatto', vendorId: 'vnd_kopi_kulo_kemang' },
     { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Cemilan roti bakar dan snack pendamping', vendorId: 'vnd_kopi_kulo_kemang' },
     { code: 'teh', name: 'Teh', icon: '🍵', description: 'Teh Poci Melati Asli Seduh Tradisional', vendorId: 'vnd_tehpoci_nusantara' },
@@ -259,7 +259,7 @@ export async function seedDatabase() {
       tag: 'Tradisional',
       image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_sipspot_central'
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
       name: 'Red Velvet Pastry',
@@ -271,7 +271,7 @@ export async function seedDatabase() {
       tag: 'Habis / Out of Stock',
       image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&auto=format&fit=crop&q=80',
       isAvailable: false,
-      vendorId: 'vnd_sipspot_central'
+      vendorId: 'vnd_kasirkafe_central'
     },
     // Vendor 2: Kopi Kulo (Kemang)
     {
@@ -388,14 +388,14 @@ export async function seedDatabase() {
   const initialTemplates = [
     {
       code: 'RECEIPT_EMAIL',
-      vendorId: 'vnd_sipspot_central',
-      name: 'Struk Transaksi Pembeli - SipSpot Central',
+      vendorId: 'vnd_kasirkafe_central',
+      name: 'Struk Transaksi Pembeli - KasirKafe Central',
       description: 'Template otomatis yang dikirim ke email pelanggan setelah pesanan dibayar',
-      subject: 'Struk Pembelian SipSpot POS - #{{orderNumber}}',
+      subject: 'Struk Pembelian KasirKafe POS - #{{orderNumber}}',
       bodyHtml: `
 <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 24px; font-family: sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.05); border: 1px solid #f0dfdb;">
   <div style="text-align: center; border-bottom: 2px dashed #f0dfdb; padding-bottom: 16px; margin-bottom: 16px;">
-    <h2 style="color: #ae3115; margin: 0;">SipSpot Central</h2>
+    <h2 style="color: #ae3115; margin: 0;">KasirKafe Central</h2>
     <p style="color: #59413c; font-size: 13px; margin: 4px 0 0 0;">Kopi, Teh, Jus & Cemilan Segar</p>
     <p style="color: #8d716a; font-size: 12px; margin-top: 8px;">Order #{{orderNumber}} • {{date}}</p>
   </div>
@@ -410,7 +410,7 @@ export async function seedDatabase() {
     <tr><td>Kembalian:</td><td style="text-align: right; color: #006c49;">{{change}}</td></tr>
   </table>
   <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #f0dfdb; font-size: 12px; color: #8d716a;">
-    Terima kasih telah berbelanja di SipSpot Central!<br>
+    Terima kasih telah berbelanja di KasirKafe Central!<br>
     Kasir: {{cashierName}}
   </div>
 </div>`,
@@ -487,7 +487,7 @@ export async function seedDatabase() {
   fallbackStore.categories = initialCategories.map((c, i) => ({ ...c, _id: `cat_${i + 1}` }));
   fallbackStore.products = initialProducts.map((p, i) => ({
     ...p,
-    vendorId: (p as any).vendorId || 'vnd_sipspot_central',
+    vendorId: (p as any).vendorId || 'vnd_kasirkafe_central',
     lowStockThreshold: typeof (p as any).lowStockThreshold === 'number' ? (p as any).lowStockThreshold : 15,
     _id: `prod_${i + 1}`
   }));
@@ -496,7 +496,7 @@ export async function seedDatabase() {
   fallbackStore.inventory_logs = [
     {
       id: 'log_1',
-      vendorId: 'vnd_sipspot_central',
+      vendorId: 'vnd_kasirkafe_central',
       productId: 'prod_1',
       productName: 'Espresso Latte',
       previousStock: 18,
@@ -509,7 +509,7 @@ export async function seedDatabase() {
     },
     {
       id: 'log_2',
-      vendorId: 'vnd_sipspot_central',
+      vendorId: 'vnd_kasirkafe_central',
       productId: 'prod_7',
       productName: 'Dragonfruit Berry',
       previousStock: 15,
@@ -782,7 +782,7 @@ export async function seedDatabase() {
       entity: 'USER',
       entityName: 'Ferry Manager (MANAGER)',
       summary: 'Inisialisasi sistem: Mendaftarkan akun Manajer Toko Utama (manager@beverage.com)',
-      performedBy: { id: 'system', name: 'Sistem POS', email: 'system@sipspot.local', role: 'SYSTEM' },
+      performedBy: { id: 'system', name: 'Sistem POS', email: 'system@kasirkafe.local', role: 'SYSTEM' },
       ipAddress: '127.0.0.1',
       createdAt: new Date(now - 1000 * 3600 * 72)
     },
@@ -826,14 +826,14 @@ export async function seedDatabase() {
 
   if (fallbackStore.login_history.length === 0) {
     fallbackStore.login_history = initialLoginHistory.map(h => ({
-      vendorId: (h as any).vendorId || 'vnd_sipspot_central',
+      vendorId: (h as any).vendorId || 'vnd_kasirkafe_central',
       ...h
     }));
   }
 
   if (!fallbackStore.activity_logs || fallbackStore.activity_logs.length === 0) {
     fallbackStore.activity_logs = initialActivityLogs.map(a => ({
-      vendorId: (a as any).vendorId || 'vnd_sipspot_central',
+      vendorId: (a as any).vendorId || 'vnd_kasirkafe_central',
       ...a
     }));
   }
@@ -873,7 +873,7 @@ export async function seedDatabase() {
       }
       // Explicitly sync Admin user to role ADMIN and vnd_admin vendor
       await db.collection('users').updateOne(
-        { email: 'admin@sipspot.com' },
+        { email: 'admin@kasirkafe.com' },
         {
           $set: {
             role: 'ADMIN',
@@ -885,7 +885,7 @@ export async function seedDatabase() {
       // Remove all PIN data from existing users in MongoDB
       await db.collection('users').updateMany({}, { $unset: { pin: "" } });
       // Ensure vendorId is set on legacy users
-      await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] Users verified and synced in MongoDB.');
 
       // 2. Categories
@@ -904,7 +904,7 @@ export async function seedDatabase() {
         );
       }
       await db.collection('products').updateMany({}, { $unset: { subCategory: "" } });
-      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] Products verified and synced in MongoDB.');
 
       // 4. Email Templates
@@ -925,7 +925,7 @@ export async function seedDatabase() {
       const historyCount = await db.collection('login_history').countDocuments();
       if (historyCount === 0) {
         await db.collection('login_history').insertMany(initialLoginHistory.map(h => ({
-          vendorId: (h as any).vendorId || 'vnd_sipspot_central',
+          vendorId: (h as any).vendorId || 'vnd_kasirkafe_central',
           ...h
         })));
         console.log('[Seeder] Login history seeded in MongoDB successfully.');
@@ -935,7 +935,7 @@ export async function seedDatabase() {
       const activityCount = await db.collection('activity_logs').countDocuments();
       if (activityCount === 0) {
         await db.collection('activity_logs').insertMany(initialActivityLogs.map(a => ({
-          vendorId: (a as any).vendorId || 'vnd_sipspot_central',
+          vendorId: (a as any).vendorId || 'vnd_kasirkafe_central',
           ...a
         })));
         console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
@@ -949,16 +949,16 @@ export async function seedDatabase() {
       }
 
       // 9. Universal Vendor Partition Migration across all collections
-      await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('discount_rules').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('email_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('email_templates').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('inventory_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('login_history').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
-      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_sipspot_central' } });
+      await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('discount_rules').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('email_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('email_templates').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('inventory_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('login_history').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] All 10 data collections verified and updated with vendorId partition.');
     } catch (err: any) {
       console.warn('[Seeder] MongoDB insert warning, using initialized fallback store:', err.message);

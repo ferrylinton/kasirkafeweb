@@ -120,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-lg text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-                    SipSpot
+                    KasirKafe
                   </span>
                   <span className="px-1.5 py-0.5 rounded-md bg-accent/10 text-accent text-[10px] font-bold">
                     POS
@@ -741,7 +741,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           </button>
 
           <div className="text-center text-[10px] text-stone-400 dark:text-stone-500 flex items-center justify-center gap-1.5">
-            <span>SipSpot POS v2.4</span>
+            <span>KasirKafe POS v2.4</span>
             <span>•</span>
             <span>Enkripsi Aktif</span>
           </div>

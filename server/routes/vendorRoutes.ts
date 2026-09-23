@@ -35,7 +35,7 @@ const vendorUpdateSchema = z.object({
 vendorRouter.get('/', async (req: Request, res: Response) => {
   try {
     const vendors = await getAllVendors();
-    const currentVendorId = req.vendorId || 'vnd_sipspot_central';
+    const currentVendorId = req.vendorId || 'vnd_kasirkafe_central';
 
     // Enhance with live counts for each vendor
     const db = getDB();
@@ -52,9 +52,9 @@ vendorRouter.get('/', async (req: Request, res: Response) => {
             userCount = await db.collection('users').countDocuments({ vendorId: v.id });
           } catch (e) {}
         } else {
-          productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === v.id).length;
-          orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === v.id).length;
-          userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_sipspot_central') === v.id).length;
+          productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === v.id).length;
+          orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === v.id).length;
+          userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === v.id).length;
         }
 
         return {
@@ -85,7 +85,7 @@ vendorRouter.get('/', async (req: Request, res: Response) => {
  */
 vendorRouter.get('/current', async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const vendor = await findVendorById(activeVendorId);
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
@@ -103,9 +103,9 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
         userCount = await db.collection('users').countDocuments({ vendorId: vendor.id });
       } catch (e) {}
     } else {
-      productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === vendor.id).length;
-      orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === vendor.id).length;
-      userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_sipspot_central') === vendor.id).length;
+      productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
+      orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
+      userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
     }
 
     return res.json({
@@ -283,7 +283,7 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
  */
 vendorRouter.get('/test-isolation', async (req: Request, res: Response) => {
   try {
-    const targetVendorId = req.vendorId || 'vnd_sipspot_central';
+    const targetVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const currentVendor = await findVendorById(targetVendorId);
 
     const db = getDB();
@@ -300,10 +300,10 @@ vendorRouter.get('/test-isolation', async (req: Request, res: Response) => {
         discounts = await db.collection('discount_rules').find({ vendorId: targetVendorId }).toArray();
       } catch (e) {}
     } else {
-      products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === targetVendorId);
-      orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === targetVendorId);
-      users = fallbackStore.users.filter(u => (u.vendorId || 'vnd_sipspot_central') === targetVendorId);
-      discounts = fallbackStore.discount_rules.filter(d => (d.vendorId || 'vnd_sipspot_central') === targetVendorId);
+      products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
+      orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
+      users = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
+      discounts = fallbackStore.discount_rules.filter(d => (d.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
     }
 
     return res.json({
@@ -1007,7 +1007,7 @@ function renderConfirmationHtml(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${params.title} - SipSpot POS</title>
+  <title>${params.title} - KasirKafe POS</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -1091,15 +1091,15 @@ function renderConfirmationHtml(params: {
 <body>
   <div class="card">
     <div class="emoji-icon">${iconEmoji}</div>
-    <div class="badge">SipSpot POS Multivendor</div>
+    <div class="badge">KasirKafe POS Multivendor</div>
     <h1>${params.title}</h1>
     <p>${params.message}</p>
     ${isSuccess ? '<p style="font-size: 12px; color: #888;">Mengalihkan secara otomatis ke halaman login dalam 3 detik...</p>' : ''}
     <a href="/?confirmed=true&vendorName=${encodeURIComponent(params.vendorName || '')}" class="btn">
-      Buka POS SipSpot
+      Buka POS KasirKafe
     </a>
     <div class="footer">
-      © ${new Date().getFullYear()} SipSpot Beverage & Snack POS Security.
+      © ${new Date().getFullYear()} KasirKafe Beverage & Snack POS Security.
     </div>
   </div>
 </body>

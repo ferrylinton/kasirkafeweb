@@ -73,7 +73,7 @@ productRouter.get('/cache/stats', (req: Request, res: Response) => {
  * Clear in-memory product and category cache
  */
 productRouter.post('/cache/clear', (req: Request, res: Response) => {
-  const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+  const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
   const isAdmin = (req as any).user?.role === 'ADMIN';
   const clearAll = req.query.all === 'true' && isAdmin;
 
@@ -97,7 +97,7 @@ productRouter.post('/cache/clear', (req: Request, res: Response) => {
  */
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
     const cacheKey = `categories:${activeVendorId}`;
 
@@ -120,8 +120,8 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
 
     if (db) {
       try {
-        const query = (activeVendorId === 'vnd_sipspot_central'
-              ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        const query = (activeVendorId === 'vnd_kasirkafe_central'
+              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         categories = await db.collection('categories').find(query).toArray();
       } catch (e) {}
@@ -129,11 +129,11 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
 
     if (categories.length === 0) {
       const source = fallbackStore.categories || [];
-      categories = source.filter(c => (c.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      categories = source.filter(c => (c.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       
       // If vendor doesn't have custom categories yet, fallback to all default categories
       if (categories.length === 0) {
-        categories = source.filter(c => !c.vendorId || c.vendorId === 'vnd_sipspot_central');
+        categories = source.filter(c => !c.vendorId || c.vendorId === 'vnd_kasirkafe_central');
       }
     }
 
@@ -182,7 +182,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       return res.status(400).json({ success: false, error: 'Data kategori tidak valid' });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const formattedCode = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
 
     const newCategory = {
@@ -240,7 +240,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
 
     const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
@@ -269,11 +269,11 @@ productRouter.get('/', async (req: Request, res: Response) => {
         if (isAllVendors) {
           // No vendor restriction across all vendors
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          filter.vendorId = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : requestedVendor;
-        } else if (activeVendorId === 'vnd_sipspot_central') {
-          filter.$or = [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+        } else if (activeVendorId === 'vnd_kasirkafe_central') {
+          filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
         } else {
           filter.vendorId = activeVendorId;
         }
@@ -290,7 +290,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
     if (products.length === 0) {
       products = fallbackStore.products.filter(p => {
-        const pVendor = p.vendorId || 'vnd_sipspot_central';
+        const pVendor = p.vendorId || 'vnd_kasirkafe_central';
         let matchVendor = true;
         if (isAllVendors) {
           matchVendor = true;
@@ -312,7 +312,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
       cached: false,
       products: products.map(p => ({
         id: p._id ? p._id.toString() : p.id,
-        vendorId: p.vendorId || 'vnd_sipspot_central',
+        vendorId: p.vendorId || 'vnd_kasirkafe_central',
         name: p.name,
         category: p.category,
         price: p.price,
@@ -349,7 +349,7 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
     let products: any[] = [];
@@ -359,12 +359,12 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
         if (isAllVendors) {
           query = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: requestedVendor };
         } else {
-          query = activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId };
         }
         products = await db.collection('products').find(query).toArray();
@@ -374,9 +374,9 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       if (isAllVendors) {
         products = fallbackStore.products;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === requestedVendor);
+        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
       } else {
-        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
+        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       }
     }
 
@@ -387,7 +387,7 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       const isLowStock = stock > 0 && stock <= threshold;
       return {
         id: p._id ? p._id.toString() : p.id,
-        vendorId: p.vendorId || 'vnd_sipspot_central',
+        vendorId: p.vendorId || 'vnd_kasirkafe_central',
         name: p.name,
         category: p.category,
         price: p.price,
@@ -442,7 +442,7 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let logs: any[] = [];
 
@@ -452,12 +452,12 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
         if (isAllVendors) {
           query = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: requestedVendor };
         } else {
-          query = activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId };
         }
         logs = await db.collection('inventory_logs').find(query).sort({ createdAt: -1 }).limit(200).toArray();
@@ -468,9 +468,9 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
       if (isAllVendors) {
         logs = source;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        logs = source.filter(l => (l.vendorId || 'vnd_sipspot_central') === requestedVendor);
+        logs = source.filter(l => (l.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
       } else {
-        logs = source.filter(l => (l.vendorId || 'vnd_sipspot_central') === activeVendorId);
+        logs = source.filter(l => (l.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       }
     }
 
@@ -480,7 +480,7 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
       isAllVendors,
       logs: logs.map(l => ({
         id: l._id ? l._id.toString() : l.id,
-        vendorId: l.vendorId || 'vnd_sipspot_central',
+        vendorId: l.vendorId || 'vnd_kasirkafe_central',
         productId: l.productId,
         productName: l.productName,
         previousStock: l.previousStock,
@@ -509,12 +509,12 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       return res.status(400).json({ success: false, error: 'Batas threshold harus berupa angka positif' });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     const filter: any = {
       $or: [
         { vendorId: activeVendorId },
-        ...(activeVendorId === 'vnd_sipspot_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
+        ...(activeVendorId === 'vnd_kasirkafe_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
       ]
     };
     if (category && category !== 'all') {
@@ -530,7 +530,7 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
     }
 
     fallbackStore.products.forEach(p => {
-      const pVendor = p.vendorId || 'vnd_sipspot_central';
+      const pVendor = p.vendorId || 'vnd_kasirkafe_central';
       if (pVendor === activeVendorId) {
         if (!category || category === 'all' || p.category?.toLowerCase() === category.toLowerCase()) {
           p.lowStockThreshold = thresholdNum;
@@ -597,20 +597,20 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
       return res.status(400).json({ success: false, error: 'Data baris CSV tidak boleh kosong' });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let currentProducts: any[] = [];
     if (db) {
       try {
-        const query = (activeVendorId === 'vnd_sipspot_central'
-              ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        const query = (activeVendorId === 'vnd_kasirkafe_central'
+              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         currentProducts = await db.collection('products').find(query).toArray();
       } catch (e) {}
     }
     if (currentProducts.length === 0) {
       const source = fallbackStore.products || [];
-      currentProducts = source.filter(p => (p.vendorId || 'vnd_sipspot_central') === activeVendorId);
+      currentProducts = source.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
     }
 
     let updatedCount = 0;
@@ -882,7 +882,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
 
     const stockChange = newStock - currentStock;
     const logDoc = {
-      vendorId: product.vendorId || req.vendorId || 'vnd_sipspot_central',
+      vendorId: product.vendorId || req.vendorId || 'vnd_kasirkafe_central',
       productId: id,
       productName: product.name,
       previousStock: currentStock,
@@ -931,7 +931,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
     });
 
     // Invalidate product cache for product's vendor
-    const targetVendor = product.vendorId || req.vendorId || 'vnd_sipspot_central';
+    const targetVendor = product.vendorId || req.vendorId || 'vnd_kasirkafe_central';
     serverProductCache.invalidateProducts(targetVendor);
 
     return res.json({
@@ -964,7 +964,7 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       });
     }
 
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const newProd = {
       ...parsed.data,
       vendorId: activeVendorId,
@@ -1026,7 +1026,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     const { id } = req.params as unknown as IParam;
     const updateData = { ...req.body, updatedAt: new Date() };
 
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let existingProd: any = null;
 
@@ -1045,7 +1045,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
     }
 
-    const prodVendorId = existingProd.vendorId || 'vnd_sipspot_central';
+    const prodVendorId = existingProd.vendorId || 'vnd_kasirkafe_central';
     if (prodVendorId !== activeVendorId) {
       return res.status(403).json({
         success: false,
@@ -1097,7 +1097,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
 productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let targetProd: any = null;
 
@@ -1116,7 +1116,7 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
     }
 
-    const prodVendorId = targetProd.vendorId || 'vnd_sipspot_central';
+    const prodVendorId = targetProd.vendorId || 'vnd_kasirkafe_central';
     if (prodVendorId !== activeVendorId) {
       return res.status(403).json({
         success: false,

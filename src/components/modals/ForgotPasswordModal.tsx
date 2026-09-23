@@ -66,7 +66,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
       if (res.status === 404 || !data.success) {
         setLinkError(
-          data.message || 'Email tidak terdaftar dalam sistem SipSpot POS. Silakan periksa kembali email Anda atau hubungi Administrator.'
+          data.message || 'Email tidak terdaftar dalam sistem KasirKafe POS. Silakan periksa kembali email Anda atau hubungi Administrator.'
         );
       } else {
         setLinkSuccess({
@@ -106,7 +106,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
       if (res.status === 404 || !data.success) {
         setAdminError(
-          data.message || 'Email tidak terdaftar dalam sistem SipSpot POS. Permintaan ke ADMIN hanya dapat diajukan untuk akun yang telah terdaftar.'
+          data.message || 'Email tidak terdaftar dalam sistem KasirKafe POS. Permintaan ke ADMIN hanya dapat diajukan untuk akun yang telah terdaftar.'
         );
       } else {
         setAdminSuccess({

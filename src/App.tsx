@@ -146,7 +146,7 @@ const MainLayout: React.FC = () => {
       <div className="min-h-screen w-full flex items-center justify-center bg-[#fff8f6] dark:bg-[#1f1917] text-stone-700 dark:text-stone-200">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full border-3 border-orange-500 border-t-transparent animate-spin" />
-          <span className="text-xs font-bold font-heading">Memuat POS SipSpot...</span>
+          <span className="text-xs font-bold font-heading">Memuat POS KasirKafe...</span>
         </div>
       </div>
     );

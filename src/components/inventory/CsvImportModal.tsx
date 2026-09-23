@@ -286,7 +286,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'template_import_inventaris_sipspot.csv');
+    link.setAttribute('download', 'template_import_inventaris_kasirkafe.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -317,7 +317,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `inventaris_sipspot_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `inventaris_kasirkafe_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

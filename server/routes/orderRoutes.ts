@@ -72,7 +72,7 @@ export function getTodayDateString(): string {
  */
 export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ orderNumber: string; queueNumber: number; date: string }> {
   const today = getTodayDateString();
-  const activeVendorId = vendorId || 'vnd_sipspot_central';
+  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
   const db = getDB();
   let seq = 1;
 
@@ -125,7 +125,7 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
   }
 
   const today = getTodayDateString();
-  const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+  const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
   const db = getDB();
   let currentSeq = 0;
 
@@ -197,7 +197,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     const subtotal = items.reduce((acc, item) => acc + item.itemTotal, 0);
 
     // Active Vendor ID resolution
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     // 2. Calculate discounts
     let discountAmount = 0;
@@ -243,7 +243,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     // Sequential order number resetting daily as queue number
     const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence(activeVendorId);
-    const cashierName = req.user?.name || 'Kasir SipSpot';
+    const cashierName = req.user?.name || 'Kasir KasirKafe';
 
     const orderDoc: any = {
       vendorId: activeVendorId,
@@ -495,7 +495,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
         orderNumber,
         variables: {
           orderNumber,
-          customerName: customerName || 'Sahabat SipSpot',
+          customerName: customerName || 'Sahabat KasirKafe',
           cashierName,
           date: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
           itemsTable: itemsTableHtml,
@@ -536,7 +536,7 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
     const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let orders: any[] = [];
 
@@ -546,12 +546,12 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
         if (isAllVendors) {
           query = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: requestedVendor };
         } else {
-          query = activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId };
         }
         orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(200).toArray();
@@ -562,9 +562,9 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
       if (isAllVendors) {
         orders = fallbackStore.orders;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === requestedVendor);
+        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
       } else {
-        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_sipspot_central') === activeVendorId);
+        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       }
     }
 
@@ -574,7 +574,7 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
       isAllVendors,
       orders: orders.map(o => ({
         id: o._id ? o._id.toString() : o.id,
-        vendorId: o.vendorId || 'vnd_sipspot_central',
+        vendorId: o.vendorId || 'vnd_kasirkafe_central',
         orderNumber: o.orderNumber,
         queueNumber: o.queueNumber,
         items: o.items,
@@ -669,14 +669,14 @@ orderRouter.post('/:id/resend-email', authMiddleware, async (req: Request, res: 
     `;
 
     const result = await sendReceiptEmail({
-      vendorId: order.vendorId || req.vendorId || 'vnd_sipspot_central',
+      vendorId: order.vendorId || req.vendorId || 'vnd_kasirkafe_central',
       recipientEmail: emailToSend,
       orderId: order._id ? order._id.toString() : id,
       orderNumber: order.orderNumber,
       variables: {
         orderNumber: order.orderNumber,
         customerName: order.customer?.name || 'Pelanggan Setia',
-        cashierName: order.cashier?.name || 'Kasir SipSpot',
+        cashierName: order.cashier?.name || 'Kasir KasirKafe',
         date: new Date(order.createdAt).toLocaleString('id-ID'),
         itemsTable: itemsTableHtml,
         subtotal: `Rp ${order.subtotal?.toLocaleString('id-ID')}`,

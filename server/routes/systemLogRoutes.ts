@@ -207,7 +207,7 @@ systemLogRouter.post('/test', async (req: Request, res: Response) => {
           action: 'CREATED',
           orderId: `test_ord_${Date.now()}`,
           orderNumber: 'TEST-099',
-          vendorId: req.user?.vendorId || 'vnd_sipspot_central',
+          vendorId: req.user?.vendorId || 'vnd_kasirkafe_central',
           totalAmount: 48000,
           paymentMethod: 'QRIS',
           itemsCount: 2,

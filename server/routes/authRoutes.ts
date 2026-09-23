@@ -355,7 +355,7 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
     }
 
     const safeUsers = usersList.map(u => {
-      const vId = u.vendorId || 'vnd_sipspot_central';
+      const vId = u.vendorId || 'vnd_kasirkafe_central';
       const vendor = vendorMap.get(vId);
 
       return {
@@ -365,7 +365,7 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
         role: u.role || 'CASHIER',
         avatar: u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         vendorId: vId,
-        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)',
+        vendorName: vendor?.name || 'KasirKafe Coffee & Boba (Pusat)',
         vendorCode: (vendor as any)?.code || ''
       };
     });
@@ -561,7 +561,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const revokeToken = crypto.randomBytes(24).toString('hex');
 
-    const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_sipspot_central';
+    const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_kasirkafe_central';
     const token = signToken({
       userId,
       email: user.email,
@@ -718,7 +718,7 @@ authRouter.get('/me', authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
-    const resolvedVendorId = user.vendorId || userPayload.vendorId || 'vnd_sipspot_central';
+    const resolvedVendorId = user.vendorId || userPayload.vendorId || 'vnd_kasirkafe_central';
 
     return res.json({
       success: true,
@@ -1013,14 +1013,14 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     }
 
     // Vendor partition filter
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     if (!isAllVendors) {
       if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
         andClauses.push({ vendorId: vendorQuery });
       } else {
         andClauses.push(
-          activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId }
         );
       }
@@ -1063,8 +1063,8 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
         // Vendor partition filter
         if (!isAllVendors) {
           if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
-            if ((item.vendorId || 'vnd_sipspot_central') !== vendorQuery) return false;
-          } else if ((item.vendorId || 'vnd_sipspot_central') !== activeVendorId) {
+            if ((item.vendorId || 'vnd_kasirkafe_central') !== vendorQuery) return false;
+          } else if ((item.vendorId || 'vnd_kasirkafe_central') !== activeVendorId) {
             return false;
           }
         }
@@ -1182,7 +1182,7 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
   try {
     const currentUser = req.user!;
     const targetEmail = req.body.email || currentUser.email;
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
     let history: any[] = [];
@@ -1199,7 +1199,7 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
 
     if (!history || history.length === 0) {
       history = fallbackStore.login_history
-        .filter(h => h.email === targetEmail && (h.vendorId || 'vnd_sipspot_central') === activeVendorId)
+        .filter(h => h.email === targetEmail && (h.vendorId || 'vnd_kasirkafe_central') === activeVendorId)
         .slice(0, 20);
     }
 
@@ -1298,7 +1298,7 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
 
     let isAuthorized = false;
     let managerName = 'Manager';
-    let managerEmail = 'manager@sipspot.com';
+    let managerEmail = 'manager@kasirkafe.com';
 
     // 1. Check if authenticated via JWT token
     const authHeader = req.headers.authorization;
@@ -1469,7 +1469,7 @@ authRouter.get('/revoke-session', async (req: Request, res: Response) => {
   return res.send(renderRevokeHtml({
     status: 'success',
     title: 'Sesi Berhasil Dikeluarkan & Akun Telah Diamankan!',
-    message: `Akses perangkat (${entry.device || 'Perangkat Kasir'}) untuk akun ${entry.name} (${entry.email}) telah diputus seketika. Perangkat tersebut telah dipaksa logout dari sistem SipSpot POS.`,
+    message: `Akses perangkat (${entry.device || 'Perangkat Kasir'}) untuk akun ${entry.name} (${entry.email}) telah diputus seketika. Perangkat tersebut telah dipaksa logout dari sistem KasirKafe POS.`,
     entry
   }));
 });
@@ -1493,7 +1493,7 @@ function renderRevokeHtml(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${params.title} - SipSpot POS Security</title>
+  <title>${params.title} - KasirKafe POS Security</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #fff8f6; color: #221a18; margin: 0; padding: 24px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
     .card { background-color: #ffffff; max-width: 520px; width: 100%; border-radius: 24px; padding: 32px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border: 1px solid #f2dfdc; text-align: center; }
@@ -1541,9 +1541,9 @@ function renderRevokeHtml(params: {
         : ''
     }
 
-    <a href="/" class="btn">Buka Aplikasi SipSpot POS</a>
+    <a href="/" class="btn">Buka Aplikasi KasirKafe POS</a>
     <div class="footer">
-      Sistem Keamanan Terpadu SipSpot POS • Sesi multi-perangkat terlindungi
+      Sistem Keamanan Terpadu KasirKafe POS • Sesi multi-perangkat terlindungi
     </div>
   </div>
 </body>
@@ -1642,7 +1642,7 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'EmailNotFound',
-        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Silakan periksa kembali email Anda atau hubungi Administrator.'
+        message: 'Email tidak terdaftar dalam sistem KasirKafe POS. Silakan periksa kembali email Anda atau hubungi Administrator.'
       });
     }
 
@@ -1767,7 +1767,7 @@ const handleResetVerify = async (req: Request, res: Response) => {
       email: tokenEntry.email,
       userName: user ? user.name : tokenEntry.userName,
       role: user ? user.role : 'CASHIER',
-      vendorName: vendor ? vendor.name : 'SipSpot POS'
+      vendorName: vendor ? vendor.name : 'KasirKafe POS'
     });
   } catch (error: any) {
     console.error('Error in reset verify:', error);
@@ -1916,7 +1916,7 @@ const handlePasswordResetRequest = async (req: Request, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'EmailNotFound',
-        message: 'Email tidak terdaftar dalam sistem SipSpot POS. Permintaan reset password ke ADMIN hanya berlaku untuk akun yang telah terdaftar.'
+        message: 'Email tidak terdaftar dalam sistem KasirKafe POS. Permintaan reset password ke ADMIN hanya berlaku untuk akun yang telah terdaftar.'
       });
     }
 
@@ -1929,7 +1929,7 @@ const handlePasswordResetRequest = async (req: Request, res: Response) => {
       name: user.name,
       role: user.role,
       vendorId: user.vendorId,
-      vendorName: vendor ? vendor.name : 'SipSpot POS',
+      vendorName: vendor ? vendor.name : 'KasirKafe POS',
       note: note ? String(note).slice(0, 300) : 'Pengguna meminta reset password langsung ke role ADMIN',
       status: 'PENDING',
       requestedAt: new Date(),
@@ -2064,7 +2064,7 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
     const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
 
     // Send email to user with the new password
-    const adminEmail = (req as any).user?.email || 'admin@sipspot.id';
+    const adminEmail = (req as any).user?.email || 'admin@kasirkafe.id';
     const adminName = (req as any).user?.name || 'Administrator Sistem';
 
     const mailResult = await sendAdminNewPasswordEmail({
@@ -2073,7 +2073,7 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
       newPassword,
       adminEmail,
       adminName,
-      vendorName: vendor ? vendor.name : 'SipSpot POS'
+      vendorName: vendor ? vendor.name : 'KasirKafe POS'
     });
 
     // If requestId was passed or pending request exists, mark as COMPLETED

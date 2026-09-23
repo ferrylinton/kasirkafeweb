@@ -333,7 +333,7 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
                 onClick={onBackToLogin}
                 className="mt-6 w-full py-3.5 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2"
               >
-                <span>Masuk ke SipSpot POS</span>
+                <span>Masuk ke KasirKafe POS</span>
                 <ArrowRight size={16} />
               </button>
             </div>
@@ -513,7 +513,7 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
                 Pendaftaran Vendor Baru
               </h1>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Daftarkan toko & akun Manager untuk mengoperasikan POS SipSpot
+                Daftarkan toko & akun Manager untuk mengoperasikan POS KasirKafe
               </p>
             </div>
           </div>

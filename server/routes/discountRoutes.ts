@@ -78,7 +78,7 @@ discountRouter.post('/evaluate', async (req: Request, res: Response) => {
     }
 
     const { items, subtotal } = parsed.data;
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const result = await evaluateDiscountsForOrder(items, subtotal, activeVendorId);
 
     return res.json({
@@ -121,7 +121,7 @@ discountRouter.post('/calculate', async (req: Request, res: Response) => {
     }
 
     const { items, subtotal, customerBirthDate, isBirthdayClaimed } = parsed.data;
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const result = await calculateDiscounts(items, subtotal, customerBirthDate, isBirthdayClaimed, activeVendorId);
 
     return res.json({
@@ -142,7 +142,7 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
     let rules: any[] = [];
@@ -152,12 +152,12 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
         if (isAllVendors) {
           filter = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          filter = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          filter = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: requestedVendor };
         } else {
-          filter = activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          filter = activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId };
         }
         rules = await db.collection('discount_rules').find(filter).toArray();
@@ -168,9 +168,9 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
       if (isAllVendors) {
         rules = source;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        rules = source.filter(r => (r.vendorId || 'vnd_sipspot_central') === requestedVendor);
+        rules = source.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
       } else {
-        rules = source.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId);
+        rules = source.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       }
     }
 
@@ -180,7 +180,7 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
       isAllVendors,
       rules: rules.map(r => ({
         id: r._id ? r._id.toString() : r.code,
-        vendorId: r.vendorId || 'vnd_sipspot_central',
+        vendorId: r.vendorId || 'vnd_kasirkafe_central',
         code: r.code,
         name: r.name,
         description: r.description,
@@ -245,7 +245,7 @@ discountRouter.post('/rules', authMiddleware, requireDiscountWriteAccess, async 
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     const newRuleData = {
       vendorId: activeVendorId,
@@ -382,7 +382,7 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
     const db = getDB();
     let existingRule: any = null;
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
   
     if (db) {
       try {
@@ -436,7 +436,7 @@ discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, 
     const db = getDB();
     let targetRule: any = null;
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     if (db) {
       try {

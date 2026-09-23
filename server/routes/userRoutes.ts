@@ -35,7 +35,7 @@ userRouter.get('/', async (req: Request, res: Response) => {
     const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let usersList: any[] = [];
 
@@ -45,12 +45,12 @@ userRouter.get('/', async (req: Request, res: Response) => {
         if (isAllVendors) {
           query = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = requestedVendor === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: requestedVendor };
         } else {
-          query = activeVendorId === 'vnd_sipspot_central'
-            ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          query = activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
             : { vendorId: activeVendorId };
         }
 
@@ -66,9 +66,9 @@ userRouter.get('/', async (req: Request, res: Response) => {
       if (isAllVendors) {
         usersList = allUsers;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        usersList = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === requestedVendor);
+        usersList = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
       } else {
-        usersList = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === activeVendorId);
+        usersList = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
       }
     }
 
@@ -78,7 +78,7 @@ userRouter.get('/', async (req: Request, res: Response) => {
       isAllVendors,
       users: usersList.map(u => ({
         id: u._id ? u._id.toString() : u.id,
-        vendorId: u.vendorId || 'vnd_sipspot_central',
+        vendorId: u.vendorId || 'vnd_kasirkafe_central',
         email: u.email,
         name: u.name,
         role: u.role,
@@ -106,7 +106,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const { name, email, password, role, avatar } = parsed.data;
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
 
     // Check existing email
@@ -192,7 +192,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
 userRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
 
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -221,7 +221,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
     }
 
-    const userVendor = existingUser.vendorId || 'vnd_sipspot_central';
+    const userVendor = existingUser.vendorId || 'vnd_kasirkafe_central';
     if (userVendor !== activeVendorId) {
       return res.status(403).json({
         success: false,
@@ -284,7 +284,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
 userRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
 
     // Prevent deleting self
     if (req.user?.userId === id) {
@@ -313,7 +313,7 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
     }
 
-    const userVendor = targetUser.vendorId || 'vnd_sipspot_central';
+    const userVendor = targetUser.vendorId || 'vnd_kasirkafe_central';
     if (userVendor !== activeVendorId) {
       return res.status(403).json({
         success: false,

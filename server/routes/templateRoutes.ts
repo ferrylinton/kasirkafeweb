@@ -59,7 +59,7 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
     let templates: any[] = [];
@@ -75,7 +75,7 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
             $or: [
               { vendorId: activeVendorId },
               { vendorId: { $exists: false } },
-              { vendorId: 'vnd_sipspot_central' }
+              { vendorId: 'vnd_kasirkafe_central' }
             ]
           };
         }
@@ -91,7 +91,7 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
         );
       } else {
         templates = fallbackStore.email_templates.filter(
-          t => (t as any).vendorId === activeVendorId || !(t as any).vendorId || (t as any).vendorId === 'vnd_sipspot_central'
+          t => (t as any).vendorId === activeVendorId || !(t as any).vendorId || (t as any).vendorId === 'vnd_kasirkafe_central'
         );
       }
     }
@@ -102,7 +102,7 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
       isAllVendors,
       templates: templates.map(t => ({
         id: t._id ? t._id.toString() : t.code,
-        vendorId: (t as any).vendorId || 'vnd_sipspot_central',
+        vendorId: (t as any).vendorId || 'vnd_kasirkafe_central',
         code: t.code,
         name: t.name,
         description: t.description,
@@ -122,14 +122,14 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
  */
 templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     let logs: any[] = [];
 
     if (db) {
       try {
-        const filter = (activeVendorId === 'vnd_sipspot_central'
-              ? { $or: [{ vendorId: 'vnd_sipspot_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        const filter = (activeVendorId === 'vnd_kasirkafe_central'
+              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
               : { vendorId: activeVendorId });
         logs = await db.collection('email_logs').find(filter).sort({ sentAt: -1 }).limit(100).toArray();
       } catch (e) {}
@@ -137,7 +137,7 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
 
     if (logs.length === 0) {
       logs = fallbackStore.email_logs.filter(
-        l => (l.vendorId || 'vnd_sipspot_central') === activeVendorId
+        l => (l.vendorId || 'vnd_kasirkafe_central') === activeVendorId
       );
     }
 
@@ -169,7 +169,7 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
  */
 templateRouter.post('/', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const parsed = updateTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -237,7 +237,7 @@ templateRouter.post('/', authMiddleware, requireTemplateWriteAccess, async (req:
 templateRouter.put('/:id', authMiddleware, requireTemplateWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_sipspot_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const parsed = updateTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({

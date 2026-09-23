@@ -69,7 +69,7 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
 export async function vendorMiddleware(req: Request, res: Response, next: NextFunction) {
   let cookieVendorId: string | undefined;
   if (req.headers.cookie) {
-    const match = req.headers.cookie.match(/(?:^|;\s*)sipspot_vendor_id=([^;]+)/);
+    const match = req.headers.cookie.match(/(?:^|;\s*)kasirkafe_vendor_id=([^;]+)/);
     if (match) {
       try {
         cookieVendorId = decodeURIComponent(match[1].trim());
@@ -92,7 +92,7 @@ export async function vendorMiddleware(req: Request, res: Response, next: NextFu
     if (decoded) {
       req.user = decoded;
       // Default to user's assigned vendorId
-      let chosenVendorId = decoded.vendorId || 'vnd_sipspot_central';
+      let chosenVendorId = decoded.vendorId || 'vnd_kasirkafe_central';
 
       // Admins and Managers can switch active vendor via X-Vendor-Id header or query param
       if ((decoded.role === 'ADMIN' || decoded.role === 'MANAGER') && vendorIdHeader) {
@@ -114,7 +114,7 @@ export async function vendorMiddleware(req: Request, res: Response, next: NextFu
   }
 
   // Case 3: Default Primary Vendor Fallback
-  req.vendorId = 'vnd_sipspot_central';
-  req.vendor = (await findVendorById('vnd_sipspot_central')) || undefined;
+  req.vendorId = 'vnd_kasirkafe_central';
+  req.vendor = (await findVendorById('vnd_kasirkafe_central')) || undefined;
   next();
 }

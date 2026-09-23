@@ -55,18 +55,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('sipspot_token'));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('kasirkafe_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [idleTimedOut, setIdleTimedOut] = useState<boolean>(() => {
     try {
-      return sessionStorage.getItem('sipspot_idle_logout') === 'true';
+      return sessionStorage.getItem('kasirkafe_idle_logout') === 'true';
     } catch (e) {
       return false;
     }
   });
   const [sessionRevoked, setSessionRevoked] = useState<boolean>(() => {
     try {
-      return sessionStorage.getItem('sipspot_remote_revoked') === 'true';
+      return sessionStorage.getItem('kasirkafe_remote_revoked') === 'true';
     } catch (e) {
       return false;
     }
@@ -82,14 +82,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearIdleTimeout = useCallback(() => {
     setIdleTimedOut(false);
     try {
-      sessionStorage.removeItem('sipspot_idle_logout');
+      sessionStorage.removeItem('kasirkafe_idle_logout');
     } catch (e) {}
   }, []);
 
   const clearSessionRevoked = useCallback(() => {
     setSessionRevoked(false);
     try {
-      sessionStorage.removeItem('sipspot_remote_revoked');
+      sessionStorage.removeItem('kasirkafe_remote_revoked');
     } catch (e) {}
   }, []);
 
@@ -99,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (now - lastActivityRef.current > 1000) {
       lastActivityRef.current = now;
       try {
-        localStorage.setItem('sipspot_last_active', String(now));
+        localStorage.setItem('kasirkafe_last_active', String(now));
       } catch (e) {}
     }
 
@@ -117,13 +117,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = Date.now();
     lastActivityRef.current = now;
     try {
-      localStorage.setItem('sipspot_last_active', String(now));
+      localStorage.setItem('kasirkafe_last_active', String(now));
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
     setIdleWarningSecondsLeft(60);
 
-    const currentToken = localStorage.getItem('sipspot_token') || token;
+    const currentToken = localStorage.getItem('kasirkafe_token') || token;
     if (currentToken) {
       lastRedisTouchRef.current = now;
       fetch('/api/auth/touch', {
@@ -138,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const simulatedTime = now - (IDLE_TIMEOUT_MS - 59000);
     lastActivityRef.current = simulatedTime;
     try {
-      localStorage.setItem('sipspot_last_active', String(simulatedTime));
+      localStorage.setItem('kasirkafe_last_active', String(simulatedTime));
     } catch (e) {}
     setShowIdleWarning(true);
     showIdleWarningRef.current = true;
@@ -153,10 +153,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleRemoteRevokedLogout = useCallback(() => {
     try {
-      sessionStorage.setItem('sipspot_remote_revoked', 'true');
-      sessionStorage.removeItem('sipspot_idle_logout');
-      localStorage.removeItem('sipspot_token');
-      localStorage.removeItem('sipspot_last_active');
+      sessionStorage.setItem('kasirkafe_remote_revoked', 'true');
+      sessionStorage.removeItem('kasirkafe_idle_logout');
+      localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_last_active');
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
-    const currentToken = localStorage.getItem('sipspot_token') || token;
+    const currentToken = localStorage.getItem('kasirkafe_token') || token;
     if (currentToken) {
       fetch('/api/auth/logout', {
         method: 'POST',
@@ -175,10 +175,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).catch(() => {});
     }
     try {
-      sessionStorage.removeItem('sipspot_idle_logout');
-      sessionStorage.removeItem('sipspot_remote_revoked');
-      localStorage.removeItem('sipspot_token');
-      localStorage.removeItem('sipspot_last_active');
+      sessionStorage.removeItem('kasirkafe_idle_logout');
+      sessionStorage.removeItem('kasirkafe_remote_revoked');
+      localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_last_active');
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
@@ -191,9 +191,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleIdleLogout = useCallback(() => {
     try {
-      sessionStorage.setItem('sipspot_idle_logout', 'true');
-      localStorage.removeItem('sipspot_token');
-      localStorage.removeItem('sipspot_last_active');
+      sessionStorage.setItem('kasirkafe_idle_logout', 'true');
+      localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_last_active');
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
@@ -235,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = Date.now();
     lastActivityRef.current = now;
     try {
-      localStorage.setItem('sipspot_last_active', String(now));
+      localStorage.setItem('kasirkafe_last_active', String(now));
     } catch (e) {}
 
     const events: (keyof WindowEventMap)[] = [
@@ -265,7 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentTime = Date.now();
       let lastActive = lastActivityRef.current;
       try {
-        const stored = localStorage.getItem('sipspot_last_active');
+        const stored = localStorage.getItem('kasirkafe_last_active');
         if (stored) {
           const parsed = Number(stored);
           if (!isNaN(parsed) && parsed > 0) {
@@ -379,8 +379,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSessionRevoked();
         const now = Date.now();
         lastActivityRef.current = now;
-        localStorage.setItem('sipspot_token', data.token);
-        localStorage.setItem('sipspot_last_active', String(now));
+        localStorage.setItem('kasirkafe_token', data.token);
+        localStorage.setItem('kasirkafe_last_active', String(now));
         setToken(data.token);
         setUser(data.user);
         return { success: true, message: data.message, previousSessionsTerminated: data.previousSessionsTerminated };

@@ -45,9 +45,9 @@ export interface GeneratedOrder {
 }
 
 const VENDOR_CATALOG = {
-  vnd_sipspot_central: {
+  vnd_kasirkafe_central: {
     code: 'SIP',
-    name: 'SipSpot Central',
+    name: 'KasirKafe Central',
     cashiers: [
       { id: 'user_2', name: 'Sarah Barista', role: 'CASHIER' },
       { id: 'user_1', name: 'Ferry Manager', role: 'MANAGER' }
@@ -122,7 +122,7 @@ const CUSTOMERS = [
   { name: 'Gita Savitri', email: 'gita.savitri@gmail.com', phone: '08123456006' },
   { name: 'Hendra Gunawan', email: 'hendra.g@gmail.com', phone: '08123456007' },
   { name: 'Indah Permata', email: 'indah.permata@yahoo.co.id', phone: '08123456008' },
-  { name: 'Joko Widodo', email: 'joko.w@sipspot.com', phone: '08123456009' },
+  { name: 'Joko Widodo', email: 'joko.w@kasirkafe.com', phone: '08123456009' },
   { name: 'Kevin Sanjaya', email: 'kevin.s@gmail.com', phone: '08123456010' },
   { name: 'Lia Anggraini', email: 'lia.ang@gmail.com', phone: '08123456011' },
   { name: 'Mega Utami', email: 'mega.utami@gmail.com', phone: '08123456012' },
@@ -239,7 +239,7 @@ function createOrderAt(vendorId: keyof typeof VENDOR_CATALOG, date: Date, seq: n
 export function generateHistoricalOrders(): GeneratedOrder[] {
   const orders: GeneratedOrder[] = [];
   const vendors: Array<keyof typeof VENDOR_CATALOG> = [
-    'vnd_sipspot_central',
+    'vnd_kasirkafe_central',
     'vnd_kopi_kulo_kemang',
     'vnd_tehpoci_nusantara'
   ];

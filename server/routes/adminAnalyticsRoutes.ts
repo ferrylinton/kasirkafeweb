@@ -16,7 +16,7 @@ export const adminAnalyticsRouter = Router();
 adminAnalyticsRouter.use(authMiddleware, requireManager);
 
 const VENDOR_COLORS: Record<string, string> = {
-  vnd_sipspot_central: '#ea580c', // Orange Amber
+  vnd_kasirkafe_central: '#ea580c', // Orange Amber
   vnd_kopi_kulo_kemang: '#8b5cf6', // Violet Purple
   vnd_tehpoci_nusantara: '#10b981', // Emerald Green
 };
@@ -119,7 +119,7 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
       .map((o: any) => {
         const d = new Date(o.createdAt || now);
         const amount = Number(o.totalAmount ?? o.total ?? 0);
-        const vendorId = o.vendorId || 'vnd_sipspot_central';
+        const vendorId = o.vendorId || 'vnd_kasirkafe_central';
         const ymd = formatDateYMD(d);
         const year = d.getFullYear();
         const monthKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -503,7 +503,7 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
     // JSON Format Export
     if (format === 'json') {
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="sipspot_transaksi_3bulan_${period}_${requestedVendorId}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="kasirkafe_transaksi_3bulan_${period}_${requestedVendorId}.json"`);
       return res.json({
         success: true,
         exportDate: new Date().toISOString(),
@@ -580,9 +580,9 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
         `"${(o.orderNumber || o.id || '').replace(/"/g, '""')}"`,
         `"#${o.queueNumber || '001'}"`,
         `"${dateStr}"`,
-        `"${(vObj?.name || o.vendorId || 'SipSpot Central').replace(/"/g, '""')}"`,
+        `"${(vObj?.name || o.vendorId || 'KasirKafe Central').replace(/"/g, '""')}"`,
         `"${vObj?.code || 'SIP'}"`,
-        `"${(o.cashier?.name || 'Kasir SipSpot').replace(/"/g, '""')}"`,
+        `"${(o.cashier?.name || 'Kasir KasirKafe').replace(/"/g, '""')}"`,
         `"${o.paymentMethod || 'QRIS'}"`,
         `"${itemDesc.replace(/"/g, '""')}"`,
         totalQty,
@@ -598,7 +598,7 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
     const csvContent = '\uFEFF' + [csvHeader.join(','), ...csvRows.map(r => r.join(','))].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="sipspot_transaksi_3bulan_${period}_${requestedVendorId}_${formatDateYMD(now)}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="kasirkafe_transaksi_3bulan_${period}_${requestedVendorId}_${formatDateYMD(now)}.csv"`);
     return res.status(200).send(csvContent);
   } catch (err: any) {
     console.error('[AdminAnalytics] Export transactions error:', err);
@@ -707,9 +707,9 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
     const categoryTotals: Record<string, { quantity: number; revenue: number }> = {};
 
     orders.forEach((o: any) => {
-      const vId = o.vendorId || 'vnd_sipspot_central';
+      const vId = o.vendorId || 'vnd_kasirkafe_central';
       const vObj = vendorMap.get(vId);
-      const vName = vObj?.name || 'SipSpot Central';
+      const vName = vObj?.name || 'KasirKafe Central';
       const vCode = vObj?.code || 'SIP';
 
       const items = Array.isArray(o.items) ? o.items : [];
@@ -918,9 +918,9 @@ adminAnalyticsRouter.get('/top-products/export', async (req: Request, res: Respo
     let totalQtyAll = 0;
 
     orders.forEach((o: any) => {
-      const vId = o.vendorId || 'vnd_sipspot_central';
+      const vId = o.vendorId || 'vnd_kasirkafe_central';
       const vObj = vendorMap.get(vId);
-      const vName = vObj?.name || 'SipSpot Central';
+      const vName = vObj?.name || 'KasirKafe Central';
       const items = Array.isArray(o.items) ? o.items : [];
       const seen = new Set<string>();
 

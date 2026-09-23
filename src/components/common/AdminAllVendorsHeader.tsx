@@ -9,7 +9,7 @@ export interface VendorOption {
 }
 
 export const KNOWN_VENDORS: VendorOption[] = [
-  { id: 'vnd_sipspot_central', name: 'SipSpot Coffee (Pusat)', code: 'SIP-CENTRAL' },
+  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee (Pusat)', code: 'SIP-CENTRAL' },
   { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO-KEMANG' },
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci Nusantara (Bekasi)', code: 'POCI-BEKASI' },
   { id: 'vnd_admin', name: 'Admin Sistem Pusat', code: 'ADMIN-SYS' }
@@ -20,7 +20,7 @@ export function getVendorName(vendorId?: string, vendorsList?: VendorOption[]): 
   const list = vendorsList && vendorsList.length > 0 ? vendorsList : KNOWN_VENDORS;
   const found = list.find(v => v.id === vendorId);
   if (found) return found.name;
-  if (vendorId === 'vnd_sipspot_central') return 'SipSpot Pusat';
+  if (vendorId === 'vnd_kasirkafe_central') return 'KasirKafe Pusat';
   if (vendorId === 'vnd_kopi_kulo_kemang') return 'Kopi Kulo Kemang';
   if (vendorId === 'vnd_tehpoci_nusantara') return 'Teh Poci Bekasi';
   if (vendorId === 'vnd_admin') return 'Admin Pusat';
@@ -28,11 +28,11 @@ export function getVendorName(vendorId?: string, vendorsList?: VendorOption[]): 
 }
 
 export function VendorBadge({ vendorId, vendorsList }: { vendorId?: string; vendorsList?: VendorOption[] }) {
-  const vId = vendorId || 'vnd_sipspot_central';
+  const vId = vendorId || 'vnd_kasirkafe_central';
   const name = getVendorName(vId, vendorsList);
 
   let colorClasses = 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 border-stone-200 dark:border-stone-700';
-  if (vId === 'vnd_sipspot_central') {
+  if (vId === 'vnd_kasirkafe_central') {
     colorClasses = 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800/60';
   } else if (vId === 'vnd_kopi_kulo_kemang') {
     colorClasses = 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60';

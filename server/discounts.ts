@@ -135,7 +135,7 @@ export async function evaluateDiscountsForOrder(
 
     return {
       id: rule._id ? rule._id.toString() : rule.code,
-      vendorId: rule.vendorId || vendorId || 'vnd_sipspot_central',
+      vendorId: rule.vendorId || vendorId || 'vnd_kasirkafe_central',
       code: rule.code,
       name: rule.name,
       description: rule.description,
@@ -158,9 +158,9 @@ export async function evaluateDiscountsForOrder(
 }
 
 export const DEFAULT_RULES: DiscountRule[] = [
-  // SipSpot Central HQ Rules
+  // KasirKafe Central HQ Rules
   {
-    vendorId: 'vnd_sipspot_central',
+    vendorId: 'vnd_kasirkafe_central',
     code: 'BUY_5_FREE_1_SNACK',
     name: 'Beli 5 Gratis 1 Snek',
     description: 'Beli minimal 5 minuman apa saja, dapatkan 1 snek gratis (senilai hingga Rp 20.000).',
@@ -171,7 +171,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
-    vendorId: 'vnd_sipspot_central',
+    vendorId: 'vnd_kasirkafe_central',
     code: 'BUY_10_FREE_1_DRINK_OR_SNACK',
     name: 'Beli 10 Gratis 1 Kopi / Snack',
     description: 'Beli minimal 10 minuman apa saja, dapatkan 1 kopi atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -182,7 +182,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
-    vendorId: 'vnd_sipspot_central',
+    vendorId: 'vnd_kasirkafe_central',
     code: 'SPEND_100K_FREE_ITEM',
     name: 'Belanja Min. Rp 100.000 Gratis 1 Kopi / Snack',
     description: 'Belanja total minimal Rp 100.000, dapatkan 1 kopi atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -193,7 +193,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
     isActive: true
   },
   {
-    vendorId: 'vnd_sipspot_central',
+    vendorId: 'vnd_kasirkafe_central',
     code: 'BIRTHDAY_REWARD',
     name: 'Diskon Ulang Tahun Pembeli',
     description: 'Promo hari ulang tahun pembeli: Dapatkan 1 minuman atau 1 snack gratis (senilai hingga Rp 28.000).',
@@ -242,7 +242,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
 ];
 
 export async function getActiveDiscountRules(vendorId?: string): Promise<DiscountRule[]> {
-  const activeVendorId = vendorId || 'vnd_sipspot_central';
+  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
   const birthdayRule: DiscountRule = {
     vendorId: activeVendorId,
     code: 'BIRTHDAY_REWARD',
@@ -261,7 +261,7 @@ export async function getActiveDiscountRules(vendorId?: string): Promise<Discoun
         isActive: true,
         $or: [
           { vendorId: activeVendorId },
-          ...(activeVendorId === 'vnd_sipspot_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
+          ...(activeVendorId === 'vnd_kasirkafe_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
         ]
       };
       const rules: DiscountRule[] = await db.collection<DiscountRule>('discount_rules').find(query).toArray();
@@ -274,12 +274,12 @@ export async function getActiveDiscountRules(vendorId?: string): Promise<Discoun
   const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
   let rules = source.filter(r => {
     if (!r.isActive) return false;
-    const rVendor = r.vendorId || 'vnd_sipspot_central';
+    const rVendor = r.vendorId || 'vnd_kasirkafe_central';
     return rVendor === activeVendorId;
   });
 
   if (rules.length === 0) {
-    rules = DEFAULT_RULES.filter(r => (r.vendorId || 'vnd_sipspot_central') === activeVendorId);
+    rules = DEFAULT_RULES.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
   }
 
   if (rules.length === 0) {
