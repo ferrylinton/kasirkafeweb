@@ -365,7 +365,8 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
         role: u.role || 'CASHIER',
         avatar: u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         vendorId: vId,
-        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)'
+        vendorName: vendor?.name || 'SipSpot Coffee & Boba (Pusat)',
+        vendorCode: (vendor as any)?.code || ''
       };
     });
 
@@ -374,6 +375,7 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
       vendors: vendors.map(v => ({
         id: v.id,
         name: v.name,
+        code: (v as any).code || v.id,
         status: v.status
       })),
       users: safeUsers

@@ -313,9 +313,6 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
               value={selectedVendor}
               onValueChange={(val) => {
                 setSelectedVendor(val);
-                if (onSelectVendor && val !== 'ALL') {
-                  onSelectVendor(val);
-                }
               }}
               options={vendorOptions}
               placeholder="Pilih Vendor / Cabang..."
@@ -437,9 +434,6 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                     key={user.id}
                     onClick={() => {
                       onSelectUser(user);
-                      if (onSelectVendor && user.vendorId) {
-                        onSelectVendor(user.vendorId);
-                      }
                       onClose();
                     }}
                     className={`group relative p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -549,9 +543,6 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                           onClick={e => {
                             e.stopPropagation();
                             onSelectUser(user);
-                            if (onSelectVendor && user.vendorId) {
-                              onSelectVendor(user.vendorId);
-                            }
                             onClose();
                           }}
                           className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 group-hover:bg-accent group-hover:text-white transition-all shadow-2xs cursor-pointer"

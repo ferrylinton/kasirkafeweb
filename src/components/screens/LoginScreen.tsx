@@ -315,18 +315,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     // Find the users of this vendor (from allUsers or fallback list)
     const matchingUsers = allUsers.filter(u => (u.vendorId || 'vnd_sipspot_central') === newVendorId);
     if (matchingUsers.length > 0) {
-      // Pick manager first if available, else first user
-      const preferred = matchingUsers.find(u => u.role.toUpperCase() === 'MANAGER') || matchingUsers[0];
-      const updatedUser: SelectableUser = {
-        ...preferred
-      };
-      setSelectedUser(updatedUser);
-      setEmail(updatedUser.email);
-      setPassword('');
-      try {
-        localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
-      } catch (e) {}
-      checkLockoutStatus(updatedUser.email);
+      setSelectedUser(prev => {
+        // If currently selected user is already in this vendor, keep them!
+        if (prev && (prev.vendorId || 'vnd_sipspot_central') === newVendorId) {
+          return prev;
+        }
+        // Pick manager first if available, else first user
+        const preferred = matchingUsers.find(u => u.role.toUpperCase() === 'MANAGER') || matchingUsers[0];
+        setEmail(preferred.email);
+        setPassword('');
+        try {
+          localStorage.setItem('sipspot_selected_user', JSON.stringify(preferred));
+        } catch (e) {}
+        checkLockoutStatus(preferred.email);
+        return preferred;
+      });
       const targetVendor = vendors.find(v => v.id === newVendorId);
       if (targetVendor) {
         showToast(`Vendor dialihkan ke ${targetVendor.name}`, 'info');
@@ -352,7 +355,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       localStorage.setItem('sipspot_selected_user', JSON.stringify(updatedUser));
     } catch (e) {}
     checkLockoutStatus(updatedUser.email);
-    showToast(`${updatedUser.name} (${updatedUser.role === 'MANAGER' ? 'Manager' : 'Kasir'}) dipilih!`, 'success');
+    const roleBadge = updatedUser.role.toUpperCase() === 'ADMIN' ? 'Admin' : updatedUser.role.toUpperCase() === 'MANAGER' ? 'Manager' : 'Kasir';
+    showToast(`${updatedUser.name} (${roleBadge}) dipilih!`, 'success');
   };
 
   const attemptPasswordLogin = async (e?: React.FormEvent) => {
@@ -570,7 +574,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         selectedUserId={selectedUser.id}
         selectedVendorId={selectedVendorId}
         onSelectUser={handleSelectUser}
-        onSelectVendor={handleVendorChange}
       />
 
       {/* Concurrent Login Alert Modal */}
