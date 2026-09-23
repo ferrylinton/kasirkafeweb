@@ -1281,7 +1281,7 @@ authRouter.post('/revoke-session', authMiddleware, async (req: Request, res: Res
 /**
  * POST /api/auth/force-logout
  * Allows a Manager to force logout any active user session
- * Can be called with auth token (role MANAGER) OR with managerPin (e.g. from login screen)
+ * Can be called with auth token (role MANAGER) OR with manager credentials (email & password)
  */
 authRouter.post('/force-logout', async (req: Request, res: Response) => {
   try {
@@ -1718,7 +1718,6 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
 };
 
 authRouter.post('/forgot-password', handleForgotCredentials);
-authRouter.post('/forgot-pin', handleForgotCredentials);
 
 // 2. Verify Reset Password Token
 const handleResetVerify = async (req: Request, res: Response) => {
@@ -1737,9 +1736,6 @@ const handleResetVerify = async (req: Request, res: Response) => {
     if (db) {
       try {
         tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
-        if (!tokenEntry) {
-          tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
-        }
       } catch (e) {
         tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
       }
@@ -1781,7 +1777,6 @@ const handleResetVerify = async (req: Request, res: Response) => {
 };
 
 authRouter.get('/reset-password/verify', handleResetVerify);
-authRouter.get('/reset-pin/verify', handleResetVerify);
 
 // 3. Confirm New Password using Token
 const handleResetConfirm = async (req: Request, res: Response) => {
@@ -1807,9 +1802,6 @@ const handleResetConfirm = async (req: Request, res: Response) => {
     if (db) {
       try {
         tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
-        if (!tokenEntry) {
-          tokenEntry = await db.collection('pin_reset_tokens').findOne({ token, used: false });
-        }
       } catch (e) {
         tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
       }
@@ -1848,7 +1840,6 @@ const handleResetConfirm = async (req: Request, res: Response) => {
     if (db) {
       try {
         await db.collection('password_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
-        await db.collection('pin_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
       } catch (e) { }
     }
     const tokenIdx = fallbackStore.password_reset_tokens.findIndex(t => t.token === token);
@@ -1894,7 +1885,6 @@ const handleResetConfirm = async (req: Request, res: Response) => {
 };
 
 authRouter.post('/reset-password/confirm', handleResetConfirm);
-authRouter.post('/reset-pin/confirm', handleResetConfirm);
 
 // 4. User requests reset password to role ADMIN
 const handlePasswordResetRequest = async (req: Request, res: Response) => {
@@ -1992,7 +1982,6 @@ const handlePasswordResetRequest = async (req: Request, res: Response) => {
 };
 
 authRouter.post('/password-reset-requests', handlePasswordResetRequest);
-authRouter.post('/pin-reset-requests', handlePasswordResetRequest);
 
 // 5. Admin: Get all password reset requests
 const handleAdminGetResetRequests = async (req: Request, res: Response) => {
@@ -2002,9 +1991,6 @@ const handleAdminGetResetRequests = async (req: Request, res: Response) => {
     if (db) {
       try {
         requests = await db.collection('password_reset_requests').find().sort({ requestedAt: -1 }).toArray();
-        if (requests.length === 0) {
-          requests = await db.collection('pin_reset_requests').find().sort({ requestedAt: -1 }).toArray();
-        }
       } catch (e) {
         requests = [...fallbackStore.password_reset_requests];
       }
@@ -2028,12 +2014,11 @@ const handleAdminGetResetRequests = async (req: Request, res: Response) => {
 };
 
 authRouter.get('/admin/password-reset-requests', authMiddleware, requireAdmin, handleAdminGetResetRequests);
-authRouter.get('/admin/pin-reset-requests', authMiddleware, requireAdmin, handleAdminGetResetRequests);
 
 // 6. Admin: Generate and Send New Password to User's Email
 const handleAdminSendNewPassword = async (req: Request, res: Response) => {
   try {
-    const { email, customPassword, customPin, requestId } = req.body;
+    const { email, customPassword, requestId } = req.body;
     if (!email || typeof email !== 'string') {
       return res.status(400).json({
         success: false,
@@ -2051,7 +2036,7 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
     }
 
     // Generate or validate password
-    const pwdInput = customPassword || customPin;
+    const pwdInput = customPassword;
     let newPassword: string;
     if (pwdInput) {
       if (String(pwdInput).trim().length < 6) {
@@ -2182,4 +2167,3 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
 };
 
 authRouter.post('/admin/send-new-password', authMiddleware, requireAdmin, handleAdminSendNewPassword);
-authRouter.post('/admin/send-new-pin', authMiddleware, requireAdmin, handleAdminSendNewPassword);

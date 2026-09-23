@@ -82,11 +82,7 @@ export function getSessionStatusLabel(status: string, lang: Language): string {
 }
 
 export function getLoginMethodLabel(method: string, lang: Language): string {
-  if (lang === 'en') {
-    return method === 'PIN' ? '4-Digit PIN' : 'Email & Password';
-  } else {
-    return method === 'PIN' ? 'PIN 4-Digit' : 'Email & Password';
-  }
+  return 'Email & Password';
 }
 
 export function getRoleLabel(role: string, lang: Language): string {

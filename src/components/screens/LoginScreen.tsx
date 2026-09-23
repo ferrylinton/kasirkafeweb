@@ -32,7 +32,7 @@ import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
 import { VendorRegisterScreen } from './VendorRegisterScreen';
-import { ForgotPinModal } from '../modals/ForgotPinModal';
+import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
 
 interface VendorItem {
   id: string;
@@ -44,7 +44,7 @@ interface VendorItem {
 
 export interface LoginScreenProps {
   onOpenRegister?: () => void;
-  onOpenResetPin?: (token?: string) => void;
+  onOpenResetPassword?: (token?: string) => void;
 }
 
 const DEFAULT_VENDORS: VendorItem[] = [
@@ -66,10 +66,9 @@ interface AlreadyLoggedInInfo {
   passwordAttempted?: string;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpenResetPin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpenResetPassword }) => {
   const {
     loginWithPassword,
-    loginWithPin,
     forceLogoutUser,
     idleTimedOut,
     clearIdleTimeout,
@@ -81,7 +80,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const { showToast } = useToast();
 
   const [internalShowRegister, setInternalShowRegister] = useState(false);
-  const [showForgotPinModal, setShowForgotPinModal] = useState<boolean>(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState<boolean>(false);
   const [confirmedVendorNotice, setConfirmedVendorNotice] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -113,8 +112,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       name: 'Ferry Manager',
       email: 'manager@beverage.com',
       role: 'MANAGER',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      pin: '123456'
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
     };
   });
 
@@ -170,7 +168,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   // Concurrent Login State (Single active browser enforcement & Manager Force Logout)
   const [alreadyLoggedInData, setAlreadyLoggedInData] = useState<AlreadyLoggedInInfo | null>(null);
   const [isManagerPromptOpen, setIsManagerPromptOpen] = useState<boolean>(false);
-  const [managerPinError, setManagerPinError] = useState<string>('');
+  const [managerPasswordError, setManagerPasswordError] = useState<string>('');
   const [isForceLoggingOut, setIsForceLoggingOut] = useState<boolean>(false);
 
   // Lockout State Management (3 failed attempts -> 15 min lockout)
@@ -320,8 +318,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       // Pick manager first if available, else first user
       const preferred = matchingUsers.find(u => u.role.toUpperCase() === 'MANAGER') || matchingUsers[0];
       const updatedUser: SelectableUser = {
-        ...preferred,
-        pin: preferred.pin === '1234' ? '123456' : (preferred.pin === '8492' ? '849201' : preferred.pin || '123456')
+        ...preferred
       };
       setSelectedUser(updatedUser);
       setEmail(updatedUser.email);
@@ -339,8 +336,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
 
   const handleSelectUser = (user: SelectableUser) => {
     const updatedUser = {
-      ...user,
-      pin: user.pin === '1234' ? '123456' : (user.pin === '8492' ? '849201' : user.pin || '123456')
+      ...user
     };
     setSelectedUser(updatedUser);
     if (user.vendorId) {
@@ -489,19 +485,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   };
 
   // Manager authorization handler to force logout a cashier's active session
-  const handleManagerAuthorizeForceLogout = async (managerPin: string) => {
+  const handleManagerAuthorizeForceLogout = async (managerPassword: string, managerEmail?: string) => {
     if (!alreadyLoggedInData) return;
-    if (managerPin.length !== 6) {
-      setManagerPinError('PIN Manager harus 6 digit angka');
+    if (managerPassword.length < 6) {
+      setManagerPasswordError('Kata sandi Manager minimal 6 karakter');
       return;
     }
-    setManagerPinError('');
+    setManagerPasswordError('');
     setIsForceLoggingOut(true);
 
     try {
       const res = await forceLogoutUser({
         targetEmail: alreadyLoggedInData.userEmail,
-        managerPin,
+        managerEmail,
+        managerPassword,
         reason: 'Otorisasi Manager untuk kasir'
       });
 
@@ -510,10 +507,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         setIsManagerPromptOpen(false);
         setAlreadyLoggedInData(null);
       } else {
-        setManagerPinError(res.message || 'Gagal otorisasi Manager');
+        setManagerPasswordError(res.message || 'Gagal otorisasi Manager');
       }
     } catch (e) {
-      setManagerPinError('Koneksi ke server gagal');
+      setManagerPasswordError('Koneksi ke server gagal');
     } finally {
       setIsForceLoggingOut(false);
     }
@@ -592,18 +589,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         isLoading={isForceLoggingOut}
       />
 
-      {/* Manager Authorization PIN Modal for Cashier Force Logout */}
+      {/* Manager Authorization Password Modal for Cashier Force Logout */}
       <ManagerAuthModal
         isOpen={isManagerPromptOpen}
         onClose={() => {
           setIsManagerPromptOpen(false);
-          setManagerPinError('');
+          setManagerPasswordError('');
         }}
         targetUserName={alreadyLoggedInData?.userName || selectedUser.name}
-        onSubmitPin={handleManagerAuthorizeForceLogout}
+        onSubmitPassword={handleManagerAuthorizeForceLogout}
         isLoading={isForceLoggingOut}
-        errorMessage={managerPinError}
-        onClearError={() => setManagerPinError('')}
+        errorMessage={managerPasswordError}
+        onClearError={() => setManagerPasswordError('')}
       />
 
       {/* Top Header Bar */}
@@ -666,7 +663,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             <div className="flex-1 min-w-0">
               <h4 className="text-xs sm:text-sm font-bold font-heading">Akun Vendor Aktif!</h4>
               <p className="text-[11px] sm:text-xs text-emerald-800/90 dark:text-emerald-300/90 mt-0.5 leading-relaxed">
-                Pendaftaran untuk <strong>{confirmedVendorNotice}</strong> telah terkonfirmasi. Silakan pilih akun dan masukkan PIN Anda.
+                Pendaftaran untuk <strong>{confirmedVendorNotice}</strong> telah terkonfirmasi. Silakan pilih akun dan masukkan kata sandi Anda.
               </p>
             </div>
             <button
@@ -877,7 +874,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
               <button
                 type="button"
                 id="btn-lockout-forgot-password"
-                onClick={() => setShowForgotPinModal(true)}
+                onClick={() => setShowForgotPasswordModal(true)}
                 className="px-2.5 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <KeyRound className="w-3 h-3" />
@@ -967,7 +964,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
               <button
                 type="button"
                 id="btn-forgot-password-link"
-                onClick={() => setShowForgotPinModal(true)}
+                onClick={() => setShowForgotPasswordModal(true)}
                 className="text-[11px] font-semibold text-accent hover:underline cursor-pointer"
               >
                 Lupa Password?
@@ -1060,7 +1057,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             <button
               id="btn-forgot-credentials-link"
               type="button"
-              onClick={() => setShowForgotPinModal(true)}
+              onClick={() => setShowForgotPasswordModal(true)}
               className="py-1 px-3 rounded-xl text-xs font-semibold text-stone-500 hover:text-accent dark:text-stone-400 dark:hover:text-orange-400 hover:bg-stone-100 dark:hover:bg-stone-900 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <KeyRound className="w-3.5 h-3.5 text-stone-400" />
@@ -1083,15 +1080,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         </form>
       </div>
 
-      {/* Forgot PIN Modal */}
-      <ForgotPinModal
-        isOpen={showForgotPinModal}
-        onClose={() => setShowForgotPinModal(false)}
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
         defaultEmail={selectedUser?.email || ''}
         onOpenResetWithToken={(token) => {
-          setShowForgotPinModal(false);
-          if (onOpenResetPin) {
-            onOpenResetPin(token);
+          setShowForgotPasswordModal(false);
+          if (onOpenResetPassword) {
+            onOpenResetPassword(token);
           }
         }}
       />

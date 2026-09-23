@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, Mail, Sparkles, X, RefreshCw, Send, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
+import { KeyRound, Lock, Sparkles, X, RefreshCw, Send, AlertCircle } from 'lucide-react';
 import { useToast } from '../common/Toast';
 
-interface AdminSendPinModalProps {
+export interface AdminSendPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   targetUser: {
@@ -17,7 +17,7 @@ interface AdminSendPinModalProps {
   token?: string | null;
 }
 
-export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
+export const AdminSendPasswordModal: React.FC<AdminSendPasswordModalProps> = ({
   isOpen,
   onClose,
   targetUser,
@@ -25,10 +25,6 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
   token
 }) => {
   const { showToast } = useToast();
-
-  const generateRandomPin = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
 
   const generateRandomPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
@@ -39,30 +35,23 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
     return res;
   };
 
-  const [credentialType, setCredentialType] = useState<'pin' | 'password'>('pin');
-  const [credentialValue, setCredentialValue] = useState<string>(generateRandomPin());
+  const [passwordValue, setPasswordValue] = useState<string>(generateRandomPassword());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleRandomizePin = () => {
-    setCredentialType('pin');
-    setCredentialValue(generateRandomPin());
-  };
-
   const handleRandomizePassword = () => {
-    setCredentialType('password');
-    setCredentialValue(generateRandomPassword());
+    setPasswordValue(generateRandomPassword());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const val = credentialValue.trim();
+    const val = passwordValue.trim();
     if (!val || val.length < 6) {
-      setError('Kredensial baru minimal harus 6 karakter atau 6 digit angka.');
+      setError('Kata sandi baru minimal harus 6 karakter.');
       return;
     }
 
@@ -77,18 +66,17 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
         body: JSON.stringify({
           email: targetUser.email,
           customPassword: val,
-          customPin: val,
           requestId: targetUser.requestId
         })
       });
 
       const data = await res.json();
       if (data.success) {
-        showToast(`Kredensial baru (${val}) berhasil dikirim ke email ${targetUser.email}!`, 'success');
+        showToast(`Kata sandi baru (${val}) berhasil dikirim ke email ${targetUser.email}!`, 'success');
         if (onSuccess) onSuccess();
         onClose();
       } else {
-        setError(data.message || 'Gagal mengirimkan kredensial baru ke email pengguna.');
+        setError(data.message || 'Gagal mengirimkan kata sandi baru ke email pengguna.');
       }
     } catch (e: any) {
       setError('Koneksi server gagal. Periksa jaringan Anda.');
@@ -99,11 +87,11 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
 
   return (
     <div
-      id="admin-send-pin-modal-backdrop"
+      id="admin-send-password-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
     >
       <div
-        id="admin-send-pin-modal-card"
+        id="admin-send-password-modal-card"
         className="w-full max-w-md bg-white dark:bg-[#251e1c] rounded-3xl shadow-2xl border border-stone-200/80 dark:border-stone-800 overflow-hidden flex flex-col"
       >
         {/* Header */}
@@ -115,14 +103,14 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading">
-                  Kirim Kredensial Baru ke Email
+                  Kirim Kata Sandi Baru ke Email
                 </h3>
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
                   ADMIN
                 </span>
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Terbitkan PIN / password baru dan kirim notifikasi ke email pengguna
+                Terbitkan kata sandi baru dan kirim notifikasi ke email pengguna
               </p>
             </div>
           </div>
@@ -171,39 +159,28 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             )}
           </div>
 
-          {/* Credential Format Toggle & Generator */}
+          {/* Password Format & Generator */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5 text-purple-600" />
-                <span>Kredensial Baru yang Dikirim:</span>
+                <span>Kata Sandi Baru yang Dikirim:</span>
               </label>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleRandomizePin}
-                  className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>PIN 6-Digit</span>
-                </button>
-                <span className="text-stone-300 dark:text-stone-700">•</span>
-                <button
-                  type="button"
-                  onClick={handleRandomizePassword}
-                  className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Password Acak</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleRandomizePassword}
+                className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Acak Sandi Baru</span>
+              </button>
             </div>
 
             <div className="relative">
               <input
                 type="text"
-                value={credentialValue}
-                onChange={e => setCredentialValue(e.target.value)}
+                value={passwordValue}
+                onChange={e => setPasswordValue(e.target.value)}
                 required
                 minLength={6}
                 className="w-full py-3.5 px-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border-2 border-purple-200 dark:border-purple-800/80 text-xl font-mono text-center font-black tracking-widest text-purple-950 dark:text-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -233,7 +210,7 @@ export const AdminSendPinModal: React.FC<AdminSendPinModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || credentialValue.trim().length < 6}
+              disabled={isSubmitting || passwordValue.trim().length < 6}
               className="flex-1 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (

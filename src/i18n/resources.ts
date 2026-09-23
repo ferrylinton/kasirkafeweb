@@ -71,7 +71,7 @@ export const resources = {
       shiftPagi: 'Shift Pagi',
       shiftSore: 'Shift Sore',
       cashFloat: 'Modal Awal Kasir (Cash Float)',
-      enterPin: 'Masukkan 6-Digit PIN Kasir',
+      enterPassword: 'Masukkan Kata Sandi Kasir',
       authSession: 'Otorisasi sesi penjualan aktif',
       openRegister: 'Buka Kasir & Mulai Transaksi',
       encryptionStandard: 'Enkripsi POS Standar Industri v2.4',
@@ -89,8 +89,6 @@ export const resources = {
       currentUserLabel: 'Pengguna Terpilih',
       switchUserBtn: 'Ganti Pengguna',
       orUseEmail: 'Atau Masuk dengan Email & Password',
-      usePinInstead: 'Gunakan PIN Kasir 6-Digit',
-      pinTab: 'PIN Kasir 6-Digit',
       emailTab: 'Email & Password',
       accountLockedTitle: 'Akun Terkunci Selama 15 Menit',
       accountLockedDesc: 'Terjadi 3 kali kegagalan login. Login dinonaktifkan sementara demi keamanan.',
@@ -139,7 +137,6 @@ export const resources = {
       filterDevice: 'Semua Perangkat',
       filterStatus: 'Semua Status',
       searchHistoryPlaceholder: 'Cari nama staf, email, atau IP address...',
-      methodPin: 'PIN 6-Digit',
       methodPassword: 'Email & Password',
 
       // Settings Screen
@@ -374,7 +371,7 @@ export const resources = {
       userTableColName: 'Nama & Avatar',
       userTableColEmail: 'Email',
       userTableColRole: 'Peran Akun',
-      userTableColPin: 'PIN Kasir',
+      userTableColPassword: 'Kata Sandi',
       userTableColAction: 'Aksi',
 
       // Profile
@@ -532,7 +529,7 @@ export const resources = {
       shiftPagi: 'Morning Shift',
       shiftSore: 'Evening Shift',
       cashFloat: 'Cash Drawer Float',
-      enterPin: 'Enter 6-Digit Cashier PIN',
+      enterPassword: 'Enter Cashier Password',
       authSession: 'Authorize active cashier sales session',
       openRegister: 'Open Register & Start Sales',
       encryptionStandard: 'Industry Standard POS Encryption v2.4',
@@ -550,8 +547,6 @@ export const resources = {
       currentUserLabel: 'Selected User',
       switchUserBtn: 'Switch User',
       orUseEmail: 'Or Log In with Email & Password',
-      usePinInstead: 'Use 6-Digit Cashier PIN',
-      pinTab: '6-Digit Cashier PIN',
       emailTab: 'Email & Password',
       accountLockedTitle: 'Account Locked for 15 Minutes',
       accountLockedDesc: '3 consecutive failed login attempts detected. Login is temporarily disabled for security.',
@@ -600,7 +595,6 @@ export const resources = {
       filterDevice: 'All Devices',
       filterStatus: 'All Statuses',
       searchHistoryPlaceholder: 'Search staff name, email, or IP address...',
-      methodPin: '6-Digit PIN',
       methodPassword: 'Email & Password',
 
       // Settings Screen
@@ -835,7 +829,7 @@ export const resources = {
       userTableColName: 'Name & Avatar',
       userTableColEmail: 'Email',
       userTableColRole: 'Role',
-      userTableColPin: 'Cashier PIN',
+      userTableColPassword: 'Password',
       userTableColAction: 'Actions',
 
       // Profile

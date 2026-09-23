@@ -25,7 +25,6 @@ export interface SelectableUser {
   email: string;
   role: 'MANAGER' | 'CASHIER' | string;
   avatar?: string;
-  pin?: string;
   vendorId?: string;
   vendorName?: string;
   vendorCode?: string;
@@ -62,7 +61,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'admin@sipspot.com',
     role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-    pin: '999999',
     vendorId: 'vnd_admin',
     vendorName: 'Admin',
     vendorCode: 'ADMIN'
@@ -73,7 +71,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'manager@beverage.com',
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    pin: '123456',
     vendorId: 'vnd_sipspot_central',
     vendorName: 'SipSpot Coffee & Boba (Pusat)',
     vendorCode: 'SIPSPOT'
@@ -84,7 +81,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'cashier@beverage.com',
     role: 'CASHIER',
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
-    pin: '849201',
     vendorId: 'vnd_sipspot_central',
     vendorName: 'SipSpot Coffee & Boba (Pusat)',
     vendorCode: 'SIPSPOT'
@@ -95,7 +91,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'kulo.manager@beverage.com',
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    pin: '223344',
     vendorId: 'vnd_kopi_kulo_kemang',
     vendorName: 'Kopi Kulo & Toast (Kemang)',
     vendorCode: 'KULO'
@@ -106,7 +101,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'kulo.cashier@beverage.com',
     role: 'CASHIER',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    pin: '556677',
     vendorId: 'vnd_kopi_kulo_kemang',
     vendorName: 'Kopi Kulo & Toast (Kemang)',
     vendorCode: 'KULO'
@@ -117,7 +111,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'poci.manager@beverage.com',
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    pin: '334455',
     vendorId: 'vnd_tehpoci_nusantara',
     vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
     vendorCode: 'TEHPOCI'
@@ -128,7 +121,6 @@ const FALLBACK_USERS: SelectableUser[] = [
     email: 'poci.cashier@beverage.com',
     role: 'CASHIER',
     avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
-    pin: '667788',
     vendorId: 'vnd_tehpoci_nusantara',
     vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
     vendorCode: 'TEHPOCI'

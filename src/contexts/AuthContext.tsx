@@ -45,8 +45,7 @@ interface AuthContextType {
   clearSessionRevoked: () => void;
   resetIdleTimer: () => void;
   loginWithPassword: (email: string, password: string, forceLogout?: boolean) => Promise<LoginResult>;
-  loginWithPin: (pin: string, email?: string, forceLogout?: boolean, managerPin?: string) => Promise<LoginResult>;
-  forceLogoutUser: (params: { targetEmail?: string; sessionId?: string; managerPin?: string; reason?: string }) => Promise<{ success: boolean; message: string }>;
+  forceLogoutUser: (params: { targetEmail?: string; sessionId?: string; managerEmail?: string; managerPassword?: string; reason?: string }) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   updateUserProfile: (data: { name?: string; avatar?: string; currentPassword?: string; newPassword?: string }) => Promise<{ success: boolean; message?: string }>;
   refreshUser: () => Promise<void>;
@@ -406,51 +405,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithPin = async (pin: string, email?: string, forceLogout?: boolean, managerPin?: string) => {
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin,
-          ...(email ? { email } : {}),
-          ...(forceLogout ? { forceLogout: true } : {}),
-          ...(managerPin ? { managerPin } : {})
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.token) {
-        clearIdleTimeout();
-        clearSessionRevoked();
-        const now = Date.now();
-        lastActivityRef.current = now;
-        localStorage.setItem('sipspot_token', data.token);
-        localStorage.setItem('sipspot_last_active', String(now));
-        setToken(data.token);
-        setUser(data.user);
-        return { success: true, message: data.message, previousSessionsTerminated: data.previousSessionsTerminated };
-      }
-      return {
-        success: false,
-        message: data.message || 'PIN tidak valid',
-        error: data.error,
-        isLocked: data.isLocked,
-        lockedUntil: data.lockedUntil,
-        remainingSeconds: data.remainingSeconds,
-        failedAttempts: data.failedAttempts,
-        attemptsRemaining: data.attemptsRemaining,
-        isAlreadyLoggedIn: data.isAlreadyLoggedIn,
-        activeSession: data.activeSession,
-        canManagerForceLogout: data.canManagerForceLogout,
-        isSelfManager: data.isSelfManager,
-        user: data.user
-      };
-    } catch (err: any) {
-      return { success: false, message: 'Koneksi ke server gagal' };
-    }
-  };
-
-  const forceLogoutUser = async (params: { targetEmail?: string; sessionId?: string; managerPin?: string; reason?: string }) => {
+  const forceLogoutUser = async (params: { targetEmail?: string; sessionId?: string; managerEmail?: string; managerPassword?: string; reason?: string }) => {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) {
@@ -515,7 +470,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSessionRevoked,
         resetIdleTimer,
         loginWithPassword,
-        loginWithPin,
         forceLogoutUser,
         logout,
         updateUserProfile,

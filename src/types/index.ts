@@ -26,7 +26,6 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
-  pin?: string;
   createdAt?: string;
 }
 

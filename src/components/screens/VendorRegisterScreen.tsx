@@ -41,8 +41,6 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
   const [managerName, setManagerName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [pin, setPin] = useState('');
-  const [showPin, setShowPin] = useState(false);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -223,7 +221,6 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
           vendorName: cleanVendorName,
           managerName: cleanManagerName,
           password: cleanPassword,
-          pin: pin.trim() || (/^\d{6}$/.test(cleanPassword) ? cleanPassword : '123456'),
           email: cleanEmail,
           phone: phone.trim(),
           address: address.trim(),
@@ -646,7 +643,7 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Email & PIN */}
+          {/* Section 3: Kontak Akun */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Email (must be unique) */}
             <div>

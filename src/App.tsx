@@ -31,15 +31,15 @@ import { AdminLockedUsersScreen } from './components/screens/AdminLockedUsersScr
 import { HousekeepingScreen } from './components/screens/HousekeepingScreen';
 import { HousekeepingNotificationBanner } from './components/common/HousekeepingNotificationBanner';
 import { VendorRegisterScreen } from './components/screens/VendorRegisterScreen';
-import { ResetPinScreen } from './components/screens/ResetPinScreen';
+import { ResetPasswordScreen } from './components/screens/ResetPasswordScreen';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
-  const [resetPinToken, setResetPinToken] = useState<string | null>(() => {
+  const [resetPasswordToken, setResetPasswordToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const action = urlParams.get('action');
-      if (action === 'reset-password' || action === 'reset-pin') {
+      if (action === 'reset-password') {
         return urlParams.get('token') || '';
       }
     }
@@ -153,12 +153,12 @@ const MainLayout: React.FC = () => {
   }
 
   if (!user) {
-    if (resetPinToken !== null) {
+    if (resetPasswordToken !== null) {
       return (
-        <ResetPinScreen
-          token={resetPinToken}
+        <ResetPasswordScreen
+          token={resetPasswordToken}
           onBackToLogin={() => {
-            setResetPinToken(null);
+            setResetPasswordToken(null);
             if (typeof window !== 'undefined' && window.history) {
               window.history.replaceState({}, document.title, window.location.pathname);
             }
@@ -184,7 +184,7 @@ const MainLayout: React.FC = () => {
     return (
       <LoginScreen
         onOpenRegister={() => setIsRegisteringVendor(true)}
-        onOpenResetPin={(tok) => setResetPinToken(tok || '')}
+        onOpenResetPassword={(tok) => setResetPasswordToken(tok || '')}
       />
     );
   }

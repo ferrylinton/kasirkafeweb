@@ -735,7 +735,7 @@ vendorRouter.get('/confirm', async (req: Request, res: Response) => {
       return res.send(renderConfirmationHtml({
         status: 'already_confirmed',
         title: 'Akun Sudah Dikonfirmasi',
-        message: `Vendor "${confirmation.vendorName}" sudah aktif sebelumnya. Anda dapat langsung login menggunakan PIN Anda.`,
+        message: `Vendor "${confirmation.vendorName}" sudah aktif sebelumnya. Anda dapat langsung login menggunakan kata sandi Anda.`,
         vendorName: confirmation.vendorName,
         email: confirmation.email
       }));

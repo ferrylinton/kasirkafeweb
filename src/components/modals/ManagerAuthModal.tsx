@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
   X,
-  Delete,
   RefreshCw,
   AlertCircle,
-  KeyRound,
-  Lock
+  Lock,
+  Eye,
+  EyeOff,
+  UserCheck
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -15,7 +16,7 @@ interface ManagerAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   targetUserName: string;
-  onSubmitPin: (pin: string) => Promise<void> | void;
+  onSubmitPassword: (password: string, managerEmail?: string) => Promise<void> | void;
   isLoading?: boolean;
   errorMessage?: string;
   onClearError?: () => void;
@@ -25,45 +26,32 @@ export const ManagerAuthModal: React.FC<ManagerAuthModalProps> = ({
   isOpen,
   onClose,
   targetUserName,
-  onSubmitPin,
+  onSubmitPassword,
   isLoading = false,
   errorMessage = '',
   onClearError
 }) => {
   const { language } = useLanguage();
-  const [pin, setPin] = useState<string>('');
+  const [managerEmail, setManagerEmail] = useState<string>('manager@beverage.com');
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
-      setPin('');
+      setPassword('');
+      setManagerEmail('manager@beverage.com');
+      setShowPassword(false);
       if (onClearError) onClearError();
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleDigitClick = (num: number) => {
-    if (isLoading) return;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading || !password.trim()) return;
     if (errorMessage && onClearError) onClearError();
-    if (pin.length < 6) {
-      const nextPin = pin + num;
-      setPin(nextPin);
-      if (nextPin.length === 6) {
-        onSubmitPin(nextPin);
-      }
-    }
-  };
-
-  const handleBackspace = () => {
-    if (isLoading) return;
-    if (errorMessage && onClearError) onClearError();
-    setPin(prev => prev.slice(0, -1));
-  };
-
-  const handleClear = () => {
-    if (isLoading) return;
-    if (errorMessage && onClearError) onClearError();
-    setPin('');
+    onSubmitPassword(password.trim(), managerEmail.trim());
   };
 
   return (
@@ -85,7 +73,7 @@ export const ManagerAuthModal: React.FC<ManagerAuthModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-sm bg-white dark:bg-[#201a18] rounded-3xl shadow-2xl border border-stone-200/80 dark:border-stone-800 overflow-hidden z-10 flex flex-col my-auto"
+          className="relative w-full max-w-md bg-white dark:bg-[#201a18] rounded-3xl shadow-2xl border border-stone-200/80 dark:border-stone-800 overflow-hidden z-10 flex flex-col my-auto"
         >
           {/* Header */}
           <div className="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between bg-stone-50/70 dark:bg-stone-900/50">
@@ -95,10 +83,10 @@ export const ManagerAuthModal: React.FC<ManagerAuthModalProps> = ({
               </div>
               <div>
                 <h3 className="text-sm sm:text-base font-bold font-heading text-stone-900 dark:text-stone-100">
-                  {language === 'en' ? 'Manager Force Logout' : 'Otorisasi PIN Manager'}
+                  {language === 'en' ? 'Manager Authorization' : 'Otorisasi Password Manager'}
                 </h3>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                  {language === 'en' ? 'Force logout active cashier session' : 'Putuskan sesi kasir di browser lain'}
+                  {language === 'en' ? 'Force logout active cashier session' : 'Putuskan sesi kasir di browser atau perangkat lain'}
                 </p>
               </div>
             </div>
@@ -114,105 +102,102 @@ export const ManagerAuthModal: React.FC<ManagerAuthModalProps> = ({
             </button>
           </div>
 
-          {/* Prompt description */}
-          <div className="px-6 pt-4 pb-2 text-center">
-            <p className="text-xs text-stone-600 dark:text-stone-300">
+          {/* Form Content */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
               {language === 'en'
-                ? `Enter 6-digit Manager PIN to force logout previous session for `
-                : `Masukkan 6-digit PIN Manager untuk mengeluarkan sesi `}
+                ? `Enter Manager credentials to terminate the active session for `
+                : `Masukkan password akun Manager untuk memutuskan sesi aktif `}
               <strong className="text-stone-900 dark:text-stone-100">{targetUserName}</strong>:
             </p>
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="mt-3 p-2.5 rounded-xl bg-red-500/10 dark:bg-red-500/20 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center justify-center gap-1.5">
+              <div className="p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="font-semibold">{errorMessage}</span>
               </div>
             )}
 
-            {/* 6-Digit PIN Display Indicator */}
-            <div className="flex items-center justify-center gap-2.5 mt-4 mb-2">
-              {[0, 1, 2, 3, 4, 5].map(idx => {
-                const isFilled = pin.length > idx;
-                const isCurrent = pin.length === idx;
-                return (
-                  <div
-                    key={idx}
-                    className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                      isFilled
-                        ? 'bg-accent scale-110 shadow-xs'
-                        : isCurrent
-                        ? 'border-2 border-accent scale-100 bg-transparent animate-pulse'
-                        : 'border-2 border-stone-300 dark:border-stone-700 bg-transparent'
-                    }`}
-                  />
-                );
-              })}
+            {/* Manager Email field */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                {language === 'en' ? 'Manager Email' : 'Email Akun Manager'}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  value={managerEmail}
+                  onChange={(e) => {
+                    setManagerEmail(e.target.value);
+                    if (errorMessage && onClearError) onClearError();
+                  }}
+                  required
+                  placeholder="manager@beverage.com"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/60 text-xs text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-accent"
+                />
+              </div>
             </div>
 
-            <p className="text-[11px] text-stone-400 mt-1">
-              {isLoading ? (
-                <span className="inline-flex items-center gap-1 text-accent font-semibold">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  {language === 'en' ? 'Verifying Manager PIN...' : 'Memverifikasi PIN Manager...'}
-                </span>
-              ) : (
-                `${pin.length}/6 Digit`
-              )}
-            </p>
-          </div>
-
-          {/* Keypad */}
-          <div className="p-4 pt-1">
-            <div className="grid grid-cols-3 gap-2 w-full max-w-[260px] mx-auto">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+            {/* Manager Password field */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                {language === 'en' ? 'Manager Password' : 'Password Akun Manager'}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errorMessage && onClearError) onClearError();
+                  }}
+                  required
+                  placeholder="Masukkan kata sandi manager..."
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/60 text-xs text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-accent"
+                />
                 <button
-                  key={num}
                   type="button"
-                  onClick={() => handleDigitClick(num)}
-                  disabled={isLoading || pin.length >= 6}
-                  className="h-13 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 active:scale-95 text-lg font-bold text-stone-800 dark:text-stone-100 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
                 >
-                  {num}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={handleClear}
-                disabled={isLoading || pin.length === 0}
-                className="h-13 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 active:scale-95 text-xs font-bold text-stone-500 dark:text-stone-400 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30"
-              >
-                C
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDigitClick(0)}
-                disabled={isLoading || pin.length >= 6}
-                className="h-13 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 active:scale-95 text-lg font-bold text-stone-800 dark:text-stone-100 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
-              >
-                0
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBackspace}
-                disabled={isLoading || pin.length === 0}
-                className="h-13 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 active:scale-95 text-stone-600 dark:text-stone-300 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30"
-                title="Hapus"
-              >
-                <Delete className="w-5 h-5" />
-              </button>
+              </div>
             </div>
 
-            <div className="mt-3 text-center">
-              <span className="text-[10px] text-stone-400">
-                Hint: PIN Default Manager: <code className="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded font-bold text-accent">123456</code>
-              </span>
+            {/* Buttons */}
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isLoading}
+                className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 text-xs font-semibold hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors disabled:opacity-50"
+              >
+                {language === 'en' ? 'Cancel' : 'Batal'}
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !password.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>{language === 'en' ? 'Verifying...' : 'Memverifikasi...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'Authorize Logout' : 'Otorisasi Putus Sesi'}</span>
+                )}
+              </button>
             </div>
-          </div>
+          </form>
         </motion.div>
       </div>
     </AnimatePresence>

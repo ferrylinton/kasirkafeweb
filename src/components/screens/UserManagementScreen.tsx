@@ -6,9 +6,9 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { AdminAllVendorsHeader, VendorBadge } from '../common/AdminAllVendorsHeader';
-import { AdminSendPinModal } from '../modals/AdminSendPinModal';
+import { AdminSendPasswordModal } from '../modals/AdminSendPasswordModal';
 
-interface PinResetRequest {
+interface PasswordResetRequest {
   id: string;
   userId: string;
   email: string;
@@ -33,11 +33,11 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
-  // PIN Reset Requests (for role ADMIN)
-  const [pinResetRequests, setPinResetRequests] = useState<PinResetRequest[]>([]);
+  // Password Reset Requests (for role ADMIN)
+  const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState<boolean>(false);
-  const [showAdminSendPinModal, setShowAdminSendPinModal] = useState<boolean>(false);
-  const [targetUserForPin, setTargetUserForPin] = useState<{
+  const [showAdminSendPasswordModal, setShowAdminSendPasswordModal] = useState<boolean>(false);
+  const [targetUserForPassword, setTargetUserForPassword] = useState<{
     email: string;
     name: string;
     role?: string;
@@ -58,7 +58,6 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
     email: '',
     password: '',
     role: 'CASHIER' as UserRole,
-    pin: '123456',
     avatar: ''
   });
 
@@ -85,21 +84,21 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
     }
   };
 
-  const fetchPinResetRequests = async () => {
+  const fetchPasswordResetRequests = async () => {
     if (currentUser?.role !== 'ADMIN') return;
     setLoadingRequests(true);
     try {
-      const res = await fetch('/api/auth/admin/pin-reset-requests', {
+      const res = await fetch('/api/auth/admin/password-reset-requests', {
         headers: {
           Authorization: `Bearer ${token || ''}`
         }
       });
       const data = await res.json();
       if (data.success && data.requests) {
-        setPinResetRequests(data.requests);
+        setPasswordResetRequests(data.requests);
       }
     } catch (err) {
-      console.warn('Failed to fetch PIN reset requests');
+      console.warn('Failed to fetch password reset requests');
     } finally {
       setLoadingRequests(false);
     }
@@ -108,7 +107,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
   useEffect(() => {
     fetchUsers();
     if (currentUser?.role === 'ADMIN') {
-      fetchPinResetRequests();
+      fetchPasswordResetRequests();
     }
   }, [token, allVendorsMode, selectedVendor, currentUser?.role]);
 
@@ -127,7 +126,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
       if (data.success) {
         showToast('Pengguna baru berhasil ditambahkan!', 'success');
         setShowAddModal(false);
-        setFormData({ name: '', email: '', password: '', role: 'CASHIER', pin: '1234', avatar: '' });
+        setFormData({ name: '', email: '', password: '', role: 'CASHIER', avatar: '' });
         fetchUsers();
       } else {
         showToast(data.message || data.error || 'Gagal menambahkan user.', 'error');
@@ -144,7 +143,6 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
       email: targetUser.email,
       password: '',
       role: targetUser.role,
-      pin: targetUser.pin || '1234',
       avatar: targetUser.avatar || ''
     });
     setShowEditModal(true);
@@ -159,7 +157,6 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         name: formData.name,
         email: formData.email,
         role: formData.role,
-        pin: formData.pin,
         avatar: formData.avatar
       };
       if (formData.password) {
@@ -269,7 +266,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
           <button
             type="button"
             onClick={() => {
-              setFormData({ name: '', email: '', password: '', role: 'CASHIER', pin: '1234', avatar: '' });
+              setFormData({ name: '', email: '', password: '', role: 'CASHIER', avatar: '' });
               setShowAddModal(true);
             }}
             className="py-2.5 px-4 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5"
@@ -280,7 +277,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         </div>
       )}
 
-      {/* Password / PIN Reset Requests Section for Role ADMIN */}
+      {/* Password Reset Requests Section for Role ADMIN */}
       {currentUser?.role === 'ADMIN' && (
         <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#251e1c] border border-purple-200/80 dark:border-purple-900/40 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
@@ -291,25 +288,25 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-heading">
-                    Permintaan Reset Password / PIN Masuk
+                    Permintaan Reset Kata Sandi Masuk
                   </h3>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                    pinResetRequests.filter(r => r.status === 'PENDING').length > 0
+                    passwordResetRequests.filter(r => r.status === 'PENDING').length > 0
                       ? 'bg-purple-600 text-white animate-pulse'
                       : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
                   }`}>
-                    {pinResetRequests.filter(r => r.status === 'PENDING').length} Menunggu
+                    {passwordResetRequests.filter(r => r.status === 'PENDING').length} Menunggu
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                  Daftar permohonan reset password atau PIN yang diajukan pengguna ke Role ADMIN
+                  Daftar permohonan reset kata sandi yang diajukan pengguna ke Role ADMIN
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={fetchPinResetRequests}
+              onClick={fetchPasswordResetRequests}
               disabled={loadingRequests}
               className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
               title="Perbarui Permintaan"
@@ -320,14 +317,14 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
 
           {loadingRequests ? (
             <div className="py-4 text-center text-xs text-stone-400">Memuat antrean permintaan...</div>
-          ) : pinResetRequests.filter(r => r.status === 'PENDING').length === 0 ? (
+          ) : passwordResetRequests.filter(r => r.status === 'PENDING').length === 0 ? (
             <div className="py-3 px-4 rounded-2xl bg-stone-50 dark:bg-stone-900/50 border border-stone-200/50 dark:border-stone-800/60 text-xs text-stone-500 dark:text-stone-400 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
               <span>Tidak ada antrean permohonan reset kata sandi yang pending.</span>
             </div>
           ) : (
             <div className="space-y-2.5">
-              {pinResetRequests
+              {passwordResetRequests
                 .filter(r => r.status === 'PENDING')
                 .map(req => (
                   <div
@@ -361,7 +358,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                     <button
                       type="button"
                       onClick={() => {
-                        setTargetUserForPin({
+                        setTargetUserForPassword({
                           email: req.email,
                           name: req.userName,
                           role: req.role,
@@ -369,12 +366,12 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                           requestId: req.id,
                           note: req.note
                         });
-                        setShowAdminSendPinModal(true);
+                        setShowAdminSendPasswordModal(true);
                       }}
                       className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      <span>Kirim Password / PIN ke Email</span>
+                      <span>Kirim Kata Sandi ke Email</span>
                     </button>
                   </div>
                 ))}
@@ -436,9 +433,6 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                       {allVendorsMode && (
                         <VendorBadge vendorId={u.vendorId} />
                       )}
-                      <span className="text-[10px] text-stone-400 font-mono">
-                        PIN: {u.pin || '••••'}
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -448,16 +442,16 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                     <button
                       type="button"
                       onClick={() => {
-                        setTargetUserForPin({
+                        setTargetUserForPassword({
                           email: u.email,
                           name: u.name,
                           role: u.role,
                           vendorName: u.vendorId
                         });
-                        setShowAdminSendPinModal(true);
+                        setShowAdminSendPasswordModal(true);
                       }}
                       className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-400 transition-colors"
-                      title="Kirim Password / PIN Baru ke Email Pengguna"
+                      title="Kirim Kata Sandi Baru ke Email Pengguna"
                     >
                       <KeyRound className="w-4 h-4" />
                     </button>
@@ -542,35 +536,18 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    Role Akun
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-semibold"
-                  >
-                    <option value="CASHIER">CASHIER (Kasir)</option>
-                    <option value="MANAGER">MANAGER (Pengelola)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    PIN Kasir (6 Digit)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={formData.pin}
-                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                    placeholder="123456"
-                    required
-                    className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-mono"
-                  />
-                </div>
+              <div>
+                <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
+                  Role Akun
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
+                  className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-semibold"
+                >
+                  <option value="CASHIER">CASHIER (Kasir)</option>
+                  <option value="MANAGER">MANAGER (Pengelola)</option>
+                </select>
               </div>
 
               <div>
@@ -660,34 +637,18 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    Role
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-semibold"
-                  >
-                    <option value="CASHIER">CASHIER</option>
-                    <option value="MANAGER">MANAGER</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
-                    PIN Kasir (6 Digit)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={formData.pin}
-                    onChange={e => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                    placeholder="123456"
-                    className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-mono"
-                  />
-                </div>
+              <div>
+                <label className="font-semibold text-stone-600 dark:text-stone-400 block mb-1">
+                  Role
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
+                  className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 focus:outline-none focus:ring-2 focus:ring-accent font-semibold"
+                >
+                  <option value="CASHIER">CASHIER</option>
+                  <option value="MANAGER">MANAGER</option>
+                </select>
               </div>
 
               <div className="p-3 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-900/40">
@@ -735,19 +696,19 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ allV
         onCancel={() => setUserToDelete(null)}
       />
 
-      {/* Admin Send PIN Modal */}
-      {targetUserForPin && (
-        <AdminSendPinModal
-          isOpen={showAdminSendPinModal}
+      {/* Admin Send Password Modal */}
+      {targetUserForPassword && (
+        <AdminSendPasswordModal
+          isOpen={showAdminSendPasswordModal}
           onClose={() => {
-            setShowAdminSendPinModal(false);
-            setTargetUserForPin(null);
+            setShowAdminSendPasswordModal(false);
+            setTargetUserForPassword(null);
           }}
-          targetUser={targetUserForPin}
+          targetUser={targetUserForPassword}
           token={token}
           onSuccess={() => {
             fetchUsers();
-            fetchPinResetRequests();
+            fetchPasswordResetRequests();
           }}
         />
       )}

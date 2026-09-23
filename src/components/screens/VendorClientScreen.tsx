@@ -533,7 +533,7 @@ export const VendorClientScreen: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
                 <div>
                   <div className="font-bold text-stone-900 dark:text-stone-100">1. SipSpot Pusat</div>
-                  <div className="text-[10px] text-stone-500">manager@beverage.com (PIN: 123456)</div>
+                  <div className="text-[10px] text-stone-500">manager@beverage.com (Password: Password123!)</div>
                 </div>
                 <span className="text-[10px] font-bold text-stone-400">Arabika & Boba</span>
               </div>
@@ -541,7 +541,7 @@ export const VendorClientScreen: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
                 <div>
                   <div className="font-bold text-stone-900 dark:text-stone-100">2. Kopi Kulo (Kemang)</div>
-                  <div className="text-[10px] text-stone-500">kulo.manager@beverage.com (PIN: 223344)</div>
+                  <div className="text-[10px] text-stone-500">kulo.manager@beverage.com (Password: Password123!)</div>
                 </div>
                 <span className="text-[10px] font-bold text-amber-600">Avocatto & Toast</span>
               </div>
@@ -549,7 +549,7 @@ export const VendorClientScreen: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between">
                 <div>
                   <div className="font-bold text-stone-900 dark:text-stone-100">3. Teh Poci (Bekasi)</div>
-                  <div className="text-[10px] text-stone-500">poci.manager@beverage.com (PIN: 334455)</div>
+                  <div className="text-[10px] text-stone-500">poci.manager@beverage.com (Password: Password123!)</div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-600">Teh Poci & Dimsum</span>
               </div>

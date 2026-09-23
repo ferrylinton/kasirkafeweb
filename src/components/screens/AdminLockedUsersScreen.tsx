@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
-import { AdminSendPinModal } from '../modals/AdminSendPinModal';
+import { AdminSendPasswordModal } from '../modals/AdminSendPasswordModal';
 
 export interface LockedUserItem {
   identifier: string;
@@ -64,14 +64,14 @@ export const AdminLockedUsersScreen: React.FC = () => {
   const [showUnlockAllModal, setShowUnlockAllModal] = useState<boolean>(false);
   const [isUnlockingAll, setIsUnlockingAll] = useState<boolean>(false);
 
-  // Send New PIN Modal State
-  const [targetUserForPin, setTargetUserForPin] = useState<{
+  // Send New Password Modal State
+  const [targetUserForPassword, setTargetUserForPassword] = useState<{
     email: string;
     name: string;
     role?: string;
     vendorName?: string;
   } | null>(null);
-  const [showAdminSendPinModal, setShowAdminSendPinModal] = useState<boolean>(false);
+  const [showAdminSendPasswordModal, setShowAdminSendPasswordModal] = useState<boolean>(false);
 
   // Manual Lock Modal State (for test & security actions)
   const [showManualLockModal, setShowManualLockModal] = useState<boolean>(false);
@@ -317,7 +317,7 @@ export const AdminLockedUsersScreen: React.FC = () => {
             </div>
 
             <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 leading-relaxed max-w-3xl">
-              Kelola daftar akun pengguna dan IP yang terkunci akibat 3 kali salah memasukkan PIN kasir atau password akun. Sebagai role <strong className="text-purple-600 dark:text-purple-400 font-bold">ADMIN</strong>, Anda dapat memantau status secara langsung dari Redis dan membuka kunci (unlock) pengguna seketika.
+              Kelola daftar akun pengguna dan IP yang terkunci akibat 3 kali salah memasukkan password akun. Sebagai role <strong className="text-purple-600 dark:text-purple-400 font-bold">ADMIN</strong>, Anda dapat memantau status secara langsung dari Redis dan membuka kunci (unlock) pengguna seketika.
             </p>
           </div>
 
@@ -678,7 +678,7 @@ export const AdminLockedUsersScreen: React.FC = () => {
                       <td className="py-4 px-4">
                         <div className="max-w-[200px] space-y-0.5">
                           <p className="text-xs text-stone-700 dark:text-stone-300 font-medium truncate" title={item.reason}>
-                            {item.reason || '3x gagal login PIN/Password'}
+                            {item.reason || '3x gagal login Password'}
                           </p>
                           {item.ip && (
                             <span className="text-[10px] text-stone-400 font-mono block">
@@ -704,26 +704,26 @@ export const AdminLockedUsersScreen: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Column 7: Action (Unlock & Send PIN) */}
+                      {/* Column 7: Action (Unlock & Send Password) */}
                       <td className="py-4 px-5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {item.type === 'email' && (
                             <button
                               type="button"
                               onClick={() => {
-                                setTargetUserForPin({
+                                setTargetUserForPassword({
                                   email: item.email || item.identifier,
                                   name: item.name || item.identifier,
                                   role: item.role,
                                   vendorName: item.vendorId
                                 });
-                                setShowAdminSendPinModal(true);
+                                setShowAdminSendPasswordModal(true);
                               }}
                               className="px-2.5 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
-                              title="Buka Kunci & Terbitkan PIN Baru ke Email"
+                              title="Buka Kunci & Terbitkan Password Baru ke Email"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Kirim PIN Baru</span>
+                              <span className="hidden sm:inline">Kirim Password Baru</span>
                             </button>
                           )}
                           <button
@@ -753,7 +753,7 @@ export const AdminLockedUsersScreen: React.FC = () => {
         <div className="space-y-1">
           <span className="font-bold block">Bagaimana Mekanisme Lockout Redis Bekerja?</span>
           <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed text-[11px] sm:text-xs">
-            Setiap kali pengguna gagal memasukkan PIN atau password sebanyak 3 kali berturut-turut, backend secara otomatis membuat kunci di Redis dengan TTL 15 menit (900 detik). Layar login pengguna akan terkunci secara visual dengan countdown timer. Ketika role <strong>ADMIN</strong> menekan tombol <em>Buka Kunci</em>, kunci di Redis dihapus seketika dan penghitung percobaan gagal direset kembali ke 0.
+            Setiap kali pengguna gagal memasukkan password sebanyak 3 kali berturut-turut, backend secara otomatis membuat kunci di Redis dengan TTL 15 menit (900 detik). Layar login pengguna akan terkunci secara visual dengan countdown timer. Ketika role <strong>ADMIN</strong> menekan tombol <em>Buka Kunci</em>, kunci di Redis dihapus seketika dan penghitung percobaan gagal direset kembali ke 0.
           </p>
         </div>
       </div>
@@ -985,15 +985,15 @@ export const AdminLockedUsersScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Admin Send PIN Modal */}
-      {targetUserForPin && (
-        <AdminSendPinModal
-          isOpen={showAdminSendPinModal}
+      {/* Admin Send Password Modal */}
+      {targetUserForPassword && (
+        <AdminSendPasswordModal
+          isOpen={showAdminSendPasswordModal}
           onClose={() => {
-            setShowAdminSendPinModal(false);
-            setTargetUserForPin(null);
+            setShowAdminSendPasswordModal(false);
+            setTargetUserForPassword(null);
           }}
-          targetUser={targetUserForPin}
+          targetUser={targetUserForPassword}
           token={token}
           onSuccess={() => {
             fetchLockedUsers(true);
