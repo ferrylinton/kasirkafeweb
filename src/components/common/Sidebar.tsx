@@ -27,6 +27,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmationModal } from './ConfirmationModal';
+import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
 interface SidebarProps {
   currentTab: string;
@@ -114,8 +115,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           {/* Brand Logo, Name & Close Button */}
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0 shadow-xs">
-                <Coffee className="w-6 h-6" />
+              <div className="w-11 h-11 rounded-2xl bg-orange-100 dark:bg-orange-950/60 overflow-hidden shadow-xs shrink-0 border border-orange-200/70 dark:border-orange-800/70 p-0.5 flex items-center justify-center">
+                <img
+                  src={kasirKafeLogo}
+                  alt="KasirKafe Logo"
+                  className="w-full h-full object-cover rounded-[14px]"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">

@@ -33,6 +33,7 @@ import { ManagerAuthModal } from '../modals/ManagerAuthModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
 import { VendorRegisterScreen } from './VendorRegisterScreen';
 import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
+import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
 interface VendorItem {
   id: string;
@@ -608,8 +609,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       {/* Top Header Bar */}
       <div className="flex items-center justify-between w-full max-w-md mx-auto">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center font-bold shadow-xs shrink-0">
-            <Coffee className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 overflow-hidden shadow-xs shrink-0 border border-orange-200/70 dark:border-orange-800/70 flex items-center justify-center p-0.5">
+            <img
+              src={kasirKafeLogo}
+              alt="KasirKafe Logo"
+              className="w-full h-full object-cover rounded-[14px]"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -734,8 +740,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           </div>
         )}
 
+        {/* Main Logo & Brand Identity */}
+        <div className="flex flex-col items-center text-center mt-2 mb-4">
+          <div className="relative mb-2.5">
+            <div className="w-20 h-20 rounded-3xl overflow-hidden shadow-xl shadow-orange-500/15 ring-4 ring-orange-500/10 border-2 border-orange-200/80 dark:border-orange-900/60 bg-gradient-to-br from-amber-50 to-orange-100 dark:from-stone-900 dark:to-stone-850 p-1">
+              <img
+                src={kasirKafeLogo}
+                alt="KasirKafe POS Logo"
+                className="w-full h-full object-cover rounded-[20px]"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+          <h1 className="text-2xl font-black font-heading text-stone-900 dark:text-stone-100 tracking-tight">
+            KasirKafe POS
+          </h1>
+          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+            Sistem Kasir Minuman &amp; Snack Multi-Vendor
+          </p>
+        </div>
+
         {/* Selected User Profile Header (Foto Profil & Nama yang dipilih) */}
-        <div className="flex flex-col items-center text-center my-6 w-full">
+        <div className="flex flex-col items-center text-center mb-6 w-full">
           {/* Clickable Profile Photo */}
           <div
             onClick={() => setIsSelectModalOpen(true)}

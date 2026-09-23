@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" />
+      <stop offset="50%" stop-color="#ea580c" />
+      <stop offset="100%" stop-color="#c2410c" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#7c2d12" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#grad)" filter="url(#shadow)" />
+
+  <!-- Inner subtle border -->
+  <rect x="3" y="3" width="58" height="58" rx="15" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.25" />
+
+  <!-- Cup Group -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Steam waves -->
+    <path d="M25 15 C23 18, 27 20, 25 23" stroke-width="2.5" stroke-opacity="0.85" />
+    <path d="M32 13 C30 17, 34 19, 32 23" stroke-width="2.5" stroke-opacity="0.95" />
+    <path d="M39 15 C37 18, 41 20, 39 23" stroke-width="2.5" stroke-opacity="0.85" />
+
+    <!-- Cup Body -->
+    <path d="M19 26 L45 26 C45 38, 39 44, 32 44 C25 44, 19 38, 19 26 Z" fill="#ffffff" fill-opacity="0.95" stroke="#ffffff" stroke-width="2" />
+
+    <!-- Cup Handle -->
+    <path d="M45 29 C49 29, 52 32, 52 35 C52 38, 48 41, 44 40.5" stroke-width="3" stroke-opacity="0.95" />
+
+    <!-- Saucer / Plate -->
+    <path d="M16 48 L48 48" stroke-width="3" stroke-opacity="0.95" />
+  </g>
+
+  <!-- Star / Sparkle Accent in top right -->
+  <path d="M49 10 L50.5 13.5 L54 15 L50.5 16.5 L49 20 L47.5 16.5 L44 15 L47.5 13.5 Z" fill="#fef08a" />
+</svg>
