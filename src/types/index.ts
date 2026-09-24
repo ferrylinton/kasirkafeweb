@@ -93,15 +93,17 @@ export interface InventoryAlertSummary {
 }
 
 export interface CartItemModifier {
-  size: 'Regular' | 'Large' | 'Jumbo';
-  sizeExtra: number;
-  ice: 'Normal Ice' | 'Less Ice' | 'No Ice';
-  sugar: '100% Normal' | '50% Less' | '0% No Sugar';
-  milk: 'Fresh Milk' | 'Oat Milk' | 'Almond Milk';
-  milkExtra: number;
-  toppings: string[];
-  toppingsExtra: number;
-  notes: string;
+  size?: 'Regular' | 'Large' | 'Jumbo' | string;
+  sizeExtra?: number;
+  ice?: 'Normal Ice' | 'Less Ice' | 'No Ice' | string;
+  sugar?: '100% Normal' | '50% Less' | '0% No Sugar' | string;
+  shot?: string;
+  shotExtra?: number;
+  milk?: 'Fresh Milk' | 'Oat Milk' | 'Almond Milk' | string;
+  milkExtra?: number;
+  toppings?: string[];
+  toppingsExtra?: number;
+  notes?: string;
 }
 
 export interface CartItem {

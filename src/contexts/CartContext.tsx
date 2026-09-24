@@ -614,6 +614,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const singleItemPrice =
       product.price +
       (modifier?.sizeExtra || 0) +
+      (modifier?.shotExtra || 0) +
       (modifier?.milkExtra || 0) +
       (modifier?.toppingsExtra || 0);
     const itemTotal = singleItemPrice * qty;

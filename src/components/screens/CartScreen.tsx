@@ -280,15 +280,26 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
                   {/* Modifier Tags */}
                   {item.modifier && (
                     <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-stone-500 dark:text-stone-400">
-                      <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
-                        {item.modifier.size}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
-                        {item.modifier.ice}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
-                        {item.modifier.sugar}
-                      </span>
+                      {item.modifier.size && (
+                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
+                          {item.modifier.size}
+                        </span>
+                      )}
+                      {item.modifier.ice && (
+                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
+                          {item.modifier.ice}
+                        </span>
+                      )}
+                      {item.modifier.sugar && (
+                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
+                          {item.modifier.sugar}
+                        </span>
+                      )}
+                      {item.modifier.shot && item.modifier.shot !== 'Normal Shot' && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-semibold">
+                          {item.modifier.shot}
+                        </span>
+                      )}
                       {item.modifier.milk && item.modifier.milk !== 'Fresh Milk' && (
                         <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 font-semibold">
                           {item.modifier.milk}

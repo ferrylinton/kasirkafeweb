@@ -3,7 +3,7 @@ import { Search, ScanBarcode, Sparkles, Coffee, CupSoda, GlassWater, Cookie, Plu
 import { Product, Category } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { DrinkModifierModal } from '../modals/DrinkModifierModal';
+import { ProductModifierModal } from '../modals/ProductModifierModal';
 import { useToast } from '../common/Toast';
 import { ProductImage } from '../common/ProductImage';
 import { getCategoryLabel } from '../../utils/i18nData';
@@ -342,8 +342,9 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
         </div>
       )}
 
-      {/* Drink Modifier Modal */}
-      <DrinkModifierModal
+      {/* Product Modifier Modal */}
+      <ProductModifierModal
+        key={selectedProductForModal?.id || 'none'}
         product={selectedProductForModal}
         onClose={() => setSelectedProductForModal(null)}
       />

@@ -230,7 +230,11 @@ export const resources = {
       },
 
       // Modifier
+      productModifier: 'Kustomisasi Produk',
       drinkModifier: 'Modifier Minuman',
+      shotEspresso: 'Espresso Shot',
+      noSnackVariationTitle: 'Tidak Ada Variasi',
+      noSnackVariationDesc: 'Produk cemilan siap disajikan tanpa opsi variasi ukuran, es, atau gula.',
       cupSize: 'Ukuran Cup',
       requiredSelect1: 'Wajib (Pilih 1)',
       regularStandard: 'Standar',
@@ -688,7 +692,11 @@ export const resources = {
       },
 
       // Modifier
+      productModifier: 'Product Customizer',
       drinkModifier: 'Beverage Customizer',
+      shotEspresso: 'Espresso Shot',
+      noSnackVariationTitle: 'No Variations',
+      noSnackVariationDesc: 'Snack items are served ready without size, ice, or sugar options.',
       cupSize: 'Cup Size',
       requiredSelect1: 'Required (Pick 1)',
       regularStandard: 'Standard',

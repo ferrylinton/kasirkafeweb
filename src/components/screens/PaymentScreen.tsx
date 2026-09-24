@@ -71,6 +71,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
           size: it.modifier?.size,
           ice: it.modifier?.ice,
           sugar: it.modifier?.sugar,
+          shot: it.modifier?.shot,
           milk: it.modifier?.milk,
           toppings: it.modifier?.toppings,
           notes: it.modifier?.notes,
