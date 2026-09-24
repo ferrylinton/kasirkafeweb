@@ -46,7 +46,6 @@ export interface GeneratedOrder {
 
 const VENDOR_CATALOG = {
   vnd_kasirkafe_central: {
-    code: 'SIP',
     name: 'KasirKafe Central',
     cashiers: [
       { id: 'user_2', name: 'Sarah Barista', role: 'CASHIER' },
@@ -68,7 +67,6 @@ const VENDOR_CATALOG = {
     ]
   },
   vnd_kopi_kulo_kemang: {
-    code: 'KLO',
     name: 'Kopi Kulo (Kemang)',
     cashiers: [
       { id: 'user_kulo_2', name: 'Budi Barista Kulo', role: 'CASHIER' },
@@ -90,7 +88,6 @@ const VENDOR_CATALOG = {
     ]
   },
   vnd_tehpoci_nusantara: {
-    code: 'POC',
     name: 'Teh Poci Nusantara',
     cashiers: [
       { id: 'user_poci_2', name: 'Agus Kasir Poci', role: 'CASHIER' },
@@ -198,13 +195,13 @@ function createOrderAt(vendorId: keyof typeof VENDOR_CATALOG, date: Date, seq: n
   const totalAmount = taxable + pb1Tax;
 
   const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
-  const orderNumber = `${vendor.code}-${yyyymmdd}-${String(seq).padStart(3, '0')}`;
+  const orderNumber = `${yyyymmdd}-${String(seq).padStart(3, '0')}`;
 
   const cashReceived = paymentMethod === 'CASH' ? Math.ceil(totalAmount / 10000) * 10000 : totalAmount;
   const change = paymentMethod === 'CASH' ? cashReceived - totalAmount : 0;
 
   return {
-    id: `ord_${orderCounter}_${vendor.code.toLowerCase()}`,
+    id: `ord_${orderCounter}`,
     vendorId,
     orderNumber,
     queueNumber: seq,

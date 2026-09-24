@@ -71,7 +71,6 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
     const vendorMeta = activeVendors.map((v, idx) => ({
       id: v.id,
       name: v.name,
-      code: v.code,
       color: VENDOR_COLORS[v.id] || DYNAMIC_PALETTE[idx % DYNAMIC_PALETTE.length]
     }));
 
@@ -377,7 +376,6 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
       return {
         vendorId: v.id,
         name: v.name,
-        code: v.code,
         color: VENDOR_COLORS[v.id] || '#ea580c',
         orderCount: stats.count,
         revenue: stats.revenue,
@@ -514,7 +512,6 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
             createdAt: o.createdAt,
             vendorId: o.vendorId,
             vendorName: vObj?.name || o.vendorId,
-            vendorCode: vObj?.code || 'SIP',
             cashier: o.cashier?.name || 'Kasir',
             paymentMethod: o.paymentMethod || 'QRIS',
             totalAmount: Number(o.totalAmount ?? o.total ?? 0),
@@ -569,7 +566,6 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
         `"#${o.queueNumber || '001'}"`,
         `"${dateStr}"`,
         `"${(vObj?.name || o.vendorId || 'KasirKafe Central').replace(/"/g, '""')}"`,
-        `"${vObj?.code || 'SIP'}"`,
         `"${(o.cashier?.name || 'Kasir KasirKafe').replace(/"/g, '""')}"`,
         `"${o.paymentMethod || 'QRIS'}"`,
         `"${itemDesc.replace(/"/g, '""')}"`,
@@ -613,7 +609,6 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
     const vendorMeta = activeVendors.map((v, idx) => ({
       id: v.id,
       name: v.name,
-      code: v.code,
       color: VENDOR_COLORS[v.id] || DYNAMIC_PALETTE[idx % DYNAMIC_PALETTE.length]
     }));
 
@@ -677,7 +672,6 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
       category: string;
       vendorId: string;
       vendorName: string;
-      vendorCode: string;
       quantitySold: number;
       totalRevenue: number;
       orderCount: number;
@@ -692,7 +686,6 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
       const vId = o.vendorId || 'vnd_kasirkafe_central';
       const vObj = vendorMap.get(vId);
       const vName = vObj?.name || 'KasirKafe Central';
-      const vCode = vObj?.code || 'SIP';
 
       const items = Array.isArray(o.items) ? o.items : [];
       const seenInOrder = new Set<string>();
@@ -714,7 +707,6 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
             category,
             vendorId: vId,
             vendorName: vName,
-            vendorCode: vCode,
             quantitySold: 0,
             totalRevenue: 0,
             orderCount: 0

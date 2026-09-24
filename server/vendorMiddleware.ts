@@ -5,12 +5,8 @@ import { verifyToken } from './auth';
 export interface VendorRecord {
   id: string;
   name: string;
-  code?: string;
-  email?: string;
-  phone?: string;
   address?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
-  logo?: string;
   currency?: string;
   createdAt: Date | string;
   updatedAt?: Date | string;
@@ -39,9 +35,6 @@ export async function findVendorById(id: string): Promise<VendorRecord | null> {
       if (doc) vendor = doc as unknown as VendorRecord;
     } catch (e) {}
   }
-  if (vendor && !vendor.code) {
-    vendor.code = vendor.id ? vendor.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : 'VND';
-  }
   return vendor;
 }
 
@@ -57,8 +50,7 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
     } catch (e) {}
   }
   return (vendors || []).map(v => ({
-    ...v,
-    code: v.code || (v.id ? v.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : 'VND')
+    ...v
   }));
 }
 
