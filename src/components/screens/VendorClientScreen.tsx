@@ -41,9 +41,6 @@ export const VendorClientScreen: React.FC = () => {
   const [showNewVendorModal, setShowNewVendorModal] = useState<boolean>(false);
   const [newVendorForm, setNewVendorForm] = useState({
     name: '',
-    code: '',
-    email: '',
-    phone: '',
     address: ''
   });
   const [isCreatingVendor, setIsCreatingVendor] = useState<boolean>(false);
@@ -87,8 +84,8 @@ export const VendorClientScreen: React.FC = () => {
       showToast('Hanya role ADMIN yang berhak menambah vendor.', 'error');
       return;
     }
-    if (!newVendorForm.name.trim() || !newVendorForm.code.trim()) {
-      showToast('Nama dan kode vendor wajib diisi', 'error');
+    if (!newVendorForm.name.trim()) {
+      showToast('Nama vendor wajib diisi', 'error');
       return;
     }
 
@@ -106,7 +103,7 @@ export const VendorClientScreen: React.FC = () => {
       if (data.success && data.vendor) {
         showToast(`Vendor '${data.vendor.name}' berhasil didaftarkan!`, 'success');
         setShowNewVendorModal(false);
-        setNewVendorForm({ name: '', code: '', email: '', phone: '', address: '' });
+        setNewVendorForm({ name: '', address: '' });
         fetchVendorData();
       } else {
         showToast(data.error || 'Gagal mendaftarkan vendor', 'error');
@@ -196,7 +193,7 @@ export const VendorClientScreen: React.FC = () => {
             <div className="flex items-center justify-between border-b border-stone-200/60 dark:border-stone-800/60 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center font-black text-lg">
-                  {currentVendor?.code?.substring(0, 3) || 'VND'}
+                  {currentVendor?.name?.substring(0, 3).toUpperCase() || 'VND'}
                 </div>
                 <div>
                   <h2 className="text-base font-black text-stone-900 dark:text-stone-100">
@@ -261,26 +258,6 @@ export const VendorClientScreen: React.FC = () => {
 
             {/* Vendor Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
-                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Email Resmi Vendor:</span>
-                </div>
-                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 truncate">
-                  {currentVendor?.email || 'Belum diatur'}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
-                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>No. Kontak:</span>
-                </div>
-                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
-                  {currentVendor?.phone || 'Belum diatur'}
-                </p>
-              </div>
-
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 sm:col-span-2">
                 <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
                   <MapPin className="w-3.5 h-3.5" />
@@ -291,23 +268,13 @@ export const VendorClientScreen: React.FC = () => {
                 </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
+              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50 sm:col-span-2">
                 <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
                   <Coins className="w-3.5 h-3.5" />
                   <span>Mata Uang Transaksi:</span>
                 </div>
                 <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5">
                   {currentVendor?.currency || 'IDR (Rupiah)'}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/50 dark:border-stone-800/50">
-                <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500 font-medium">
-                  <Store className="w-3.5 h-3.5" />
-                  <span>Kode Gerai:</span>
-                </div>
-                <p className="font-semibold text-stone-800 dark:text-stone-200 mt-0.5 uppercase font-mono">
-                  {currentVendor?.code || 'VND'}
                 </p>
               </div>
             </div>
@@ -392,7 +359,7 @@ export const VendorClientScreen: React.FC = () => {
                             )}
                           </div>
                           <span className="text-[10px] text-stone-400 font-mono">
-                            {vnd.code || vnd.id}
+                            {vnd.id}
                           </span>
                         </div>
                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold ${
@@ -443,41 +410,6 @@ export const VendorClientScreen: React.FC = () => {
                   placeholder="Contoh: Kopi Janji Jiwa (Cilandak)"
                   className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent"
                 />
-              </div>
-
-              <div>
-                <label className="font-bold text-stone-700 dark:text-stone-300">Kode Unik Toko *</label>
-                <input
-                  type="text"
-                  required
-                  value={newVendorForm.code}
-                  onChange={e => setNewVendorForm({ ...newVendorForm, code: e.target.value.toUpperCase().replace(/\s+/g, '') })}
-                  placeholder="Contoh: JJCILANDAK"
-                  className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent uppercase font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-stone-700 dark:text-stone-300">Email Vendor</label>
-                  <input
-                    type="email"
-                    value={newVendorForm.email}
-                    onChange={e => setNewVendorForm({ ...newVendorForm, email: e.target.value })}
-                    placeholder="kontak@vendor.id"
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-stone-700 dark:text-stone-300">No. Telepon</label>
-                  <input
-                    type="text"
-                    value={newVendorForm.phone}
-                    onChange={e => setNewVendorForm({ ...newVendorForm, phone: e.target.value })}
-                    placeholder="+628..."
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-300 dark:border-stone-700 focus:outline-none focus:border-accent"
-                  />
-                </div>
               </div>
 
               <div>

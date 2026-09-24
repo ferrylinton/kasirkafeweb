@@ -7,9 +7,6 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 export interface Vendor {
   id: string;
   name: string;
-  code?: string;
-  email?: string;
-  phone?: string;
   address?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
   currency?: string;
