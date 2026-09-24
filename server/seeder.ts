@@ -901,17 +901,11 @@ export async function seedDatabase() {
         await db.collection('vendors').updateOne(
           { id: v.id },
           { 
-            $setOnInsert: { ...v },
-            $set: { code: v.code }
+            $setOnInsert: { ...v }
           },
           { upsert: true }
         );
       }
-      // Strip any legacy unused fields from vendors collection
-      await db.collection('vendors').updateMany(
-        {},
-        { $unset: { clientId: "", clientSecret: "" } }
-      );
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
       // 1. Users - upsert each by email so all vendors have their staff accounts
@@ -933,10 +927,8 @@ export async function seedDatabase() {
           }
         }
       );
-      // Remove all PIN data from existing users in MongoDB
-      await db.collection('users').updateMany({}, { $unset: { pin: "" } });
+
       // Ensure vendorId is set on legacy users
-      await db.collection('users').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] Users verified and synced in MongoDB.');
 
       // 2. Categories
@@ -954,8 +946,6 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
-      await db.collection('products').updateMany({}, { $unset: { subCategory: "" } });
-      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] Products verified and synced in MongoDB.');
 
       // 4. Email Templates
