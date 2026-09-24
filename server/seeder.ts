@@ -1,4 +1,4 @@
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { hashPassword } from './auth';
 import { DEFAULT_RULES } from './discounts';
 import { generateHistoricalOrders } from './orderGenerator';
@@ -485,19 +485,8 @@ export async function seedDatabase() {
     }
   ];
 
-  // Populate local fallback store first
-  fallbackStore.vendors = initialVendors.map(v => ({ ...v }));
-  fallbackStore.users = initialUsers.map((u, i) => ({ ...u, _id: `user_${i + 1}` }));
-  fallbackStore.categories = initialCategories.map((c, i) => ({ ...c, _id: `cat_${i + 1}` }));
-  fallbackStore.products = initialProducts.map((p, i) => ({
-    ...p,
-    vendorId: (p as any).vendorId || 'vnd_kasirkafe_central',
-    lowStockThreshold: typeof (p as any).lowStockThreshold === 'number' ? (p as any).lowStockThreshold : 15,
-    _id: `prod_${i + 1}`
-  }));
-  fallbackStore.email_templates = initialTemplates.map((t, i) => ({ ...t, _id: `tmpl_${i + 1}` }));
-  fallbackStore.discount_rules = DEFAULT_RULES.map((r, i) => ({ ...r, _id: `rule_${i + 1}` }));
-  fallbackStore.inventory_logs = [
+  // Initial Inventory Logs
+  const initialInventoryLogs = [
     {
       id: 'log_1',
       vendorId: 'vnd_kasirkafe_central',
@@ -828,25 +817,8 @@ export async function seedDatabase() {
     }
   ];
 
-  if (fallbackStore.login_history.length === 0) {
-    fallbackStore.login_history = initialLoginHistory.map(h => ({
-      vendorId: (h as any).vendorId || 'vnd_kasirkafe_central',
-      ...h
-    }));
-  }
-
-  if (!fallbackStore.activity_logs || fallbackStore.activity_logs.length === 0) {
-    fallbackStore.activity_logs = initialActivityLogs.map(a => ({
-      vendorId: (a as any).vendorId || 'vnd_kasirkafe_central',
-      ...a
-    }));
-  }
-
   // Populate historical multi-vendor orders for rich analytics and dashboard
   const historicalOrders = generateHistoricalOrders();
-  if (!fallbackStore.orders || fallbackStore.orders.length === 0) {
-    fallbackStore.orders = historicalOrders.map(o => ({ ...o }));
-  }
 
   const initialSavedOrders = [
     {

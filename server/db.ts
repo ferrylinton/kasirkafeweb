@@ -11,63 +11,18 @@ let client: MongoClient | null = null;
 let dbInstance: Db | null = null;
 let isConnected = false;
 
-// In-memory fallback database to guarantee 100% uptime and resilience
-// if external Atlas MongoDB connection experiences network throttling
-export const fallbackStore: {
-  vendors: any[];
-  users: any[];
-  categories: any[];
-  products: any[];
-  orders: any[];
-  email_templates: any[];
-  email_logs: any[];
-  discount_rules: any[];
-  inventory_logs: any[];
-  login_history: any[];
-  revoked_sessions: string[];
-  daily_counters: Record<string, number>;
-  activity_logs: any[];
-  housekeeping_history: any[];
-  housekeeping_settings: any;
-  vendor_confirmations: any[];
-  password_reset_tokens: any[];
-  password_reset_requests: any[];
-  saved_orders: any[];
-  vendor_status_requests: any[];
-} = {
-  vendors: [],
-  users: [],
-  categories: [],
-  products: [],
-  orders: [],
-  saved_orders: [],
-  email_templates: [],
-  email_logs: [],
-  discount_rules: [],
-  inventory_logs: [],
-  login_history: [],
-  revoked_sessions: [],
-  daily_counters: {},
-  activity_logs: [],
-  housekeeping_history: [],
-  housekeeping_settings: null,
-  vendor_confirmations: [],
-  password_reset_tokens: [],
-  password_reset_requests: [],
-  vendor_status_requests: []
-};
-
 export async function connectDB(): Promise<Db | null> {
   if (dbInstance && isConnected) {
     return dbInstance;
   }
 
   if (!MONGODB_URI) {
-    console.log('[MongoDB] No MONGODB_URI provided; operating seamlessly with in-memory persistence layer.');
+    console.error('[MongoDB] No MONGODB_URI provided. Database connection failed.');
     isConnected = false;
+    dbInstance = null;
     logDatabase({
-      event: 'FALLBACK_MODE',
-      message: 'Tidak ada MONGODB_URI; sistem beroperasi dengan layer persistensi in-memory cache.',
+      event: 'ERROR',
+      message: 'Tidak ada MONGODB_URI; sistem gagal terhubung ke database.',
       dbName: DB_NAME
     }).catch(() => {});
     return null;
@@ -82,8 +37,20 @@ export async function connectDB(): Promise<Db | null> {
     }).catch(() => {});
 
     client = new MongoClient(MONGODB_URI, {
-      connectTimeoutMS: 3000,
-      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 5000,
+    });
+
+    client.on('close', () => {
+      console.warn('[MongoDB] Connection closed.');
+      isConnected = false;
+      dbInstance = null;
+    });
+
+    client.on('error', (err) => {
+      console.error('[MongoDB] Client error:', err);
+      isConnected = false;
+      dbInstance = null;
     });
 
     await client.connect();
@@ -97,12 +64,12 @@ export async function connectDB(): Promise<Db | null> {
     }).catch(() => {});
     return dbInstance;
   } catch (err: any) {
-    console.warn('[MongoDB] Direct connection warning:', err.message);
-    console.log('[MongoDB] Operating with local cached persistence layer for maximum resilience.');
+    console.error('[MongoDB] Direct connection error:', err.message);
     isConnected = false;
+    dbInstance = null;
     logDatabase({
       event: 'ERROR',
-      message: `Peringatan koneksi MongoDB: ${err.message}. Sistem otomatis beralih ke layer persistensi in-memory lokal.`,
+      message: `Gagal terhubung ke MongoDB: ${err.message}.`,
       error: err,
       dbName: DB_NAME
     }).catch(() => {});
@@ -115,5 +82,46 @@ export function getDB(): Db | null {
 }
 
 export function isDbConnected(): boolean {
-  return isConnected;
+  return isConnected && dbInstance !== null;
+}
+
+/**
+ * Checks database health via ping command
+ */
+export async function checkDbConnection(): Promise<{ connected: boolean; latencyMs?: number; error?: string }> {
+  if (!dbInstance || !isConnected) {
+    // Attempt reconnect
+    const db = await connectDB();
+    if (!db) {
+      return { connected: false, error: 'can not connect to db' };
+    }
+  }
+
+  try {
+    const start = Date.now();
+    await dbInstance!.command({ ping: 1 });
+    const latencyMs = Date.now() - start;
+    isConnected = true;
+    return { connected: true, latencyMs };
+  } catch (err: any) {
+    isConnected = false;
+    dbInstance = null;
+    return { connected: false, error: err.message || 'can not connect to db' };
+  }
+}
+
+/**
+ * Force reconnect to MongoDB
+ */
+export async function reconnectDB(): Promise<boolean> {
+  isConnected = false;
+  if (client) {
+    try {
+      await client.close();
+    } catch (e) {}
+    client = null;
+    dbInstance = null;
+  }
+  const db = await connectDB();
+  return !!db;
 }
