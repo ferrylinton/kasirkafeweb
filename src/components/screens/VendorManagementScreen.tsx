@@ -31,7 +31,6 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { VendorStatusRequest } from '../../types';
-import { VendorStatusRequestModal } from '../modals/VendorStatusRequestModal';
 import { AdminReviewVendorRequestModal } from '../modals/AdminReviewVendorRequestModal';
 
 interface AdminVendorItem {
@@ -57,7 +56,6 @@ export const VendorManagementScreen: React.FC = () => {
   const { showToast } = useToast();
 
   const isAdmin = user?.role === 'ADMIN';
-  const isManager = user?.role === 'MANAGER';
 
   const [vendors, setVendors] = useState<AdminVendorItem[]>([]);
   const [summary, setSummary] = useState({
@@ -77,10 +75,6 @@ export const VendorManagementScreen: React.FC = () => {
   const [isLoadingRequests, setIsLoadingRequests] = useState<boolean>(false);
   const [requestStatusFilter, setRequestStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [requestTypeFilter, setRequestTypeFilter] = useState<'ALL' | 'DEACTIVATE' | 'REACTIVATE'>('ALL');
-
-  // Modal State for Manager Requesting Deactivation / Reactivation
-  const [isStatusRequestModalOpen, setIsStatusRequestModalOpen] = useState<boolean>(false);
-  const [statusRequestType, setStatusRequestType] = useState<'DEACTIVATE' | 'REACTIVATE'>('DEACTIVATE');
 
   // Modal State for Admin Reviewing Request
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
@@ -128,14 +122,12 @@ export const VendorManagementScreen: React.FC = () => {
     }
   };
 
-  // Fetch Vendors
+  // Fetch Vendors (Strictly ADMIN only)
   const fetchVendors = async () => {
-    if (!isAdmin && !isManager) return;
+    if (!isAdmin) return;
     setIsLoading(true);
     try {
-      const queryParam = isAdmin
-        ? `?status=${statusFilter}&search=${encodeURIComponent(searchQuery)}`
-        : '';
+      const queryParam = `?status=${statusFilter}&search=${encodeURIComponent(searchQuery)}`;
       const res = await fetch(`/api/admin/vendors${queryParam}`, {
         headers: {
           Authorization: `Bearer ${token || ''}`
@@ -143,12 +135,7 @@ export const VendorManagementScreen: React.FC = () => {
       });
       const data = await res.json();
       if (data.success && data.vendors) {
-        let vendorList: AdminVendorItem[] = data.vendors;
-        // Strict guard: MANAGER only sees their assigned vendor
-        if (isManager && user?.vendorId) {
-          vendorList = vendorList.filter((v: AdminVendorItem) => v.id === user.vendorId);
-        }
-        setVendors(vendorList);
+        setVendors(data.vendors);
         if (data.summary) {
           setSummary(data.summary);
         }
@@ -163,11 +150,11 @@ export const VendorManagementScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAdmin || isManager) {
+    if (isAdmin) {
       fetchVendors();
       fetchStatusRequests();
     }
-  }, [isAdmin, isManager, statusFilter, token]);
+  }, [isAdmin, statusFilter, token]);
 
   // Open Create Modal (Admin Only)
   const handleOpenCreateModal = () => {
@@ -192,11 +179,6 @@ export const VendorManagementScreen: React.FC = () => {
 
   // Open Edit Modal
   const handleOpenEditModal = (vendor: AdminVendorItem) => {
-    // MANAGER can only edit their own vendor
-    if (isManager && vendor.id !== user?.vendorId) {
-      showToast('Anda hanya dapat melihat dan mengedit vendor Anda sendiri.', 'warning');
-      return;
-    }
     setModalMode('EDIT');
     setEditingVendorId(vendor.id);
     setFormData({
@@ -346,9 +328,8 @@ export const VendorManagementScreen: React.FC = () => {
     }
   };
 
-  // Client-side search filter (Only active for Admin view)
+  // Client-side search filter (Admin view)
   const filteredVendors = useMemo(() => {
-    if (isManager) return vendors || [];
     if (!searchQuery.trim()) return vendors || [];
     const q = searchQuery.toLowerCase().trim();
     return (vendors || []).filter(
@@ -358,23 +339,12 @@ export const VendorManagementScreen: React.FC = () => {
         (v.email && v.email.toLowerCase().includes(q)) ||
         (v.id || '').toLowerCase().includes(q)
     );
-  }, [vendors, searchQuery, isManager]);
+  }, [vendors, searchQuery]);
 
   // Pending requests count for Admin badge
   const pendingRequestsCount = useMemo(() => {
     return statusRequests.filter(r => r.status === 'PENDING').length;
   }, [statusRequests]);
-
-  // Manager's own requests
-  const managerRequests = useMemo(() => {
-    const currentVendorId = user?.vendorId || vendors[0]?.id;
-    if (!currentVendorId) return [];
-    return statusRequests.filter(r => r.vendorId === currentVendorId);
-  }, [statusRequests, user?.vendorId, vendors]);
-
-  const managerPendingRequest = useMemo(() => {
-    return managerRequests.find(r => r.status === 'PENDING');
-  }, [managerRequests]);
 
   // Admin filter for requests
   const filteredRequests = useMemo(() => {
@@ -392,8 +362,8 @@ export const VendorManagementScreen: React.FC = () => {
     });
   }, [statusRequests, requestStatusFilter, requestTypeFilter, searchQuery]);
 
-  // Access Denied: If neither ADMIN nor MANAGER
-  if (!isAdmin && !isManager) {
+  // Access Denied: Strictly ADMIN only
+  if (!isAdmin) {
     return (
       <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto py-8">
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl p-8 border border-rose-200 dark:border-rose-900/50 shadow-xl text-center flex flex-col items-center">
@@ -404,12 +374,11 @@ export const VendorManagementScreen: React.FC = () => {
             Akses Ditolak
           </span>
           <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 font-heading mb-2">
-            Halaman Khusus Role ADMIN & MANAGER
+            Halaman Khusus Role ADMIN
           </h2>
           <p className="text-stone-600 dark:text-stone-400 max-w-md text-sm leading-relaxed mb-6">
-            Halaman data vendor dibatasi hanya untuk akun staf dengan wewenang{' '}
-            <strong className="text-stone-900 dark:text-stone-100 font-semibold">ADMIN</strong> atau{' '}
-            <strong className="text-stone-900 dark:text-stone-100 font-semibold">MANAGER</strong>.{' '}
+            Halaman Manajemen Vendor ini dibatasi khusus hanya untuk staf dengan wewenang{' '}
+            <strong className="text-stone-900 dark:text-stone-100 font-semibold">ADMIN SISTEM</strong>.{' '}
             Akun Anda saat ini memiliki role <span className="font-bold underline">{user?.role || 'KASIR'}</span>.
           </p>
           <div className="flex items-center gap-3">
@@ -426,9 +395,6 @@ export const VendorManagementScreen: React.FC = () => {
     );
   }
 
-  // Active manager vendor (for manager KPI calculations)
-  const managerVendor = vendors[0] || null;
-
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-6">
       {/* Top Banner Header */}
@@ -439,20 +405,14 @@ export const VendorManagementScreen: React.FC = () => {
               <Building2 className="w-5 h-5" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-              {isAdmin ? 'Manajemen Vendor' : 'Data Vendor Anda'}
+              Manajemen Vendor
             </h1>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase border ${
-              isAdmin
-                ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60'
-                : 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
-            }`}>
-              {isAdmin ? 'Khusus ADMIN' : 'Role: MANAGER'}
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase border bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60">
+              Khusus ADMIN
             </span>
           </div>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
-            {isAdmin
-              ? 'Kelola pendaftaran merchant, status operasional, dan isolasi data per vendor.'
-              : 'Informasi operasional dan profil toko aktif Anda. Role MANAGER hanya dapat melihat data vendor ini.'}
+            Kelola pendaftaran merchant, status operasional, isolasi data per vendor, dan verifikasi permintaan status.
           </p>
         </div>
 
@@ -859,213 +819,67 @@ export const VendorManagementScreen: React.FC = () => {
       )}
 
       {/* ======================================================== */}
-      {/* VENDORS TAB (Admin View) OR Single Vendor (Manager View) */}
+      {/* VENDORS TAB (Admin View) */}
       {/* ======================================================== */}
-      {(!isAdmin || adminTab === 'VENDORS') && (
+      {adminTab === 'VENDORS' && (
         <>
-          {/* Manager's Pending Request Alert Banner */}
-          {isManager && managerPendingRequest && (
-            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-3xl p-5 mb-6 shadow-xs flex items-start gap-4 animate-in fade-in">
-              <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 animate-pulse" />
-              </div>
-              <div className="flex-1 min-w-0 text-xs">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-bold text-amber-900 dark:text-amber-100 font-heading">
-                    Permintaan {managerPendingRequest.type === 'DEACTIVATE' ? 'Penonaktifan' : 'Pengaktifan Kembali'} Sedang Diproses Admin
-                  </h4>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
-                    MENUNGGU REVIEW
-                  </span>
-                </div>
-                <p className="mt-1 text-stone-700 dark:text-stone-300 leading-relaxed">
-                  Alasan yang diajukan: <span className="font-semibold italic text-stone-900 dark:text-stone-100">"{managerPendingRequest.reason}"</span>
-                </p>
-                <div className="mt-2 flex items-center gap-4 text-[11px] text-stone-500 dark:text-stone-400">
-                  <span>Diajukan: {new Date(managerPendingRequest.createdAt).toLocaleString('id-ID')}</span>
-                  <span>Oleh: {managerPendingRequest.requestedByName}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Manager's Deactivated Notice Banner */}
-          {isManager && managerVendor?.status === 'DEACTIVATE' && (
-            <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-3xl p-5 mb-6 shadow-xs flex items-start gap-4 animate-in fade-in">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0 text-xs">
-                <h4 className="text-sm font-bold text-rose-900 dark:text-rose-100 font-heading">
-                  Status Akun Vendor: DEACTIVATE (Tidak Aktif)
-                </h4>
-                <p className="mt-1 text-rose-800/90 dark:text-rose-300/90 leading-relaxed">
-                  Seluruh akun pengguna di dalam vendor ini tidak dapat melakukan login ke sistem POS. Data vendor tetap tersimpan dan tidak dihapus. Anda dapat mengajukan aktivasi kembali akun vendor kapan saja.
-                </p>
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatusRequestType('REACTIVATE');
-                      setIsStatusRequestModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Ajukan Pengaktifan Kembali Akun Vendor</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Summary KPI Cards */}
-          {isAdmin ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total Vendor</span>
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                    <Building2 className="w-4 h-4" />
-                  </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total Vendor</span>
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Building2 className="w-4 h-4" />
                 </div>
-                <div className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                  {summary.totalVendors || vendors.length}
-                </div>
-                <span className="text-[11px] text-stone-400">Merchant terdaftar</span>
               </div>
-
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Vendor Aktif</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
-                  {vendors.filter(v => v.status === 'ACTIVE').length}
-                </div>
-                <span className="text-[11px] text-stone-400">Siap bertransaksi</span>
+              <div className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
+                {summary.totalVendors || vendors.length}
               </div>
-
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Ditangguhkan</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-heading">
-                  {vendors.filter(v => v.status === 'SUSPENDED').length}
-                </div>
-                <span className="text-[11px] text-stone-400">Akses dibatasi</span>
-              </div>
-
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">DEACTIVATE</span>
-                  <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                    <Power className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-rose-600 dark:text-rose-400 font-heading">
-                  {vendors.filter(v => v.status === 'DEACTIVATE').length}
-                </div>
-                <span className="text-[11px] text-stone-400">Nonaktif / Blokir login</span>
-              </div>
+              <span className="text-[11px] text-stone-400">Merchant terdaftar</span>
             </div>
-          ) : (
-            /* Manager KPI Cards (Scoped strictly to Manager's own vendor) */
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Status Gerai</span>
-                  <div
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                      managerVendor?.status === 'ACTIVE'
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
-                        : managerVendor?.status === 'DEACTIVATE'
-                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
-                        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
-                    }`}
-                  >
-                    {managerVendor?.status === 'ACTIVE' ? (
-                      <CheckCircle2 className="w-4 h-4" />
-                    ) : managerVendor?.status === 'DEACTIVATE' ? (
-                      <Power className="w-4 h-4" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4" />
-                    )}
-                  </div>
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading truncate">
-                  {managerVendor?.status === 'ACTIVE'
-                    ? 'Aktif'
-                    : managerVendor?.status === 'DEACTIVATE'
-                    ? 'DEACTIVATE'
-                    : 'Ditangguhkan'}
-                </div>
-                <span
-                  className={`text-[11px] font-bold ${
-                    managerVendor?.status === 'ACTIVE'
-                      ? 'text-emerald-600'
-                      : managerVendor?.status === 'DEACTIVATE'
-                      ? 'text-rose-600'
-                      : 'text-amber-600'
-                  }`}
-                >
-                  {managerVendor?.status === 'ACTIVE'
-                    ? 'Siap Melayani'
-                    : managerVendor?.status === 'DEACTIVATE'
-                    ? 'Nonaktif / Akses Diblokir'
-                    : 'Operasional Terbatas'}
-                </span>
-              </div>
 
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Katalog Produk</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <Boxes className="w-4 h-4" />
-                  </div>
+            <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Vendor Aktif</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
                 </div>
-                <div className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                  {managerVendor?.stats?.productCount ?? 0}
-                </div>
-                <span className="text-[11px] text-stone-400">Menu terdaftar</span>
               </div>
-
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total Pesanan</span>
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                    <ShoppingCart className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                  {managerVendor?.stats?.orderCount ?? 0}
-                </div>
-                <span className="text-[11px] text-stone-400">Transaksi selesai</span>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
+                {vendors.filter(v => v.status === 'ACTIVE').length}
               </div>
-
-              <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Staf Terdaftar</span>
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                    <Users className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-                  {managerVendor?.stats?.userCount ?? 0}
-                </div>
-                <span className="text-[11px] text-stone-400">Akun kasir & kru</span>
-              </div>
+              <span className="text-[11px] text-stone-400">Siap bertransaksi</span>
             </div>
-          )}
 
-          {/* Filter & Search Bar: HANYA UNTUK ADMIN */}
-          {isAdmin && (
-            <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-3 sm:p-4 border border-stone-200/80 dark:border-stone-800 mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+            <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Ditangguhkan</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-heading">
+                {vendors.filter(v => v.status === 'SUSPENDED').length}
+              </div>
+              <span className="text-[11px] text-stone-400">Akses dibatasi</span>
+            </div>
+
+            <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-4 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">DEACTIVATE</span>
+                <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <Power className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-rose-600 dark:text-rose-400 font-heading">
+                {vendors.filter(v => v.status === 'DEACTIVATE').length}
+              </div>
+              <span className="text-[11px] text-stone-400">Nonaktif / Blokir login</span>
+            </div>
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div className="bg-white dark:bg-[#251e1c] rounded-2xl p-3 sm:p-4 border border-stone-200/80 dark:border-stone-800 mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
               {/* Search Input */}
               <div className="relative w-full sm:max-w-md">
                 <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1111,7 +925,6 @@ export const VendorManagementScreen: React.FC = () => {
                 ))}
               </div>
             </div>
-          )}
 
           {/* Vendors List Cards */}
           {isLoading ? (
@@ -1142,7 +955,7 @@ export const VendorManagementScreen: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1 max-w-3xl'} gap-4`}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredVendors.map(vendor => {
                 const isCentral = vendor.id === 'vnd_kasirkafe_central' || vendor.id === 'vnd_admin';
                 const isAdminVendor = vendor.id === 'vnd_admin';
@@ -1285,7 +1098,7 @@ export const VendorManagementScreen: React.FC = () => {
                       </div>
 
                       {/* Status Toggle Button: HANYA UNTUK ADMIN */}
-                      {isAdmin && !isCentral && (
+                      {!isCentral && (
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(vendor)}
@@ -1300,39 +1113,6 @@ export const VendorManagementScreen: React.FC = () => {
                         </button>
                       )}
 
-                      {/* Manager Controls: Request Deactivate / Reactivate */}
-                      {isManager && (
-                        <div className="flex items-center gap-2">
-                          {isDeactivated ? (
-                            <button
-                              type="button"
-                              id="btn-manager-reactivate"
-                              onClick={() => {
-                                setStatusRequestType('REACTIVATE');
-                                setIsStatusRequestModalOpen(true);
-                              }}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Minta Pengaktifan Kembali</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              id="btn-manager-deactivate"
-                              onClick={() => {
-                                setStatusRequestType('DEACTIVATE');
-                                setIsStatusRequestModalOpen(true);
-                              }}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                            >
-                              <Power className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Ajukan Penonaktifan Vendor</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-
                       {isCentral && (
                         <span className="text-[11px] font-semibold text-stone-400">
                           Vendor Utama
@@ -1342,112 +1122,6 @@ export const VendorManagementScreen: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* Riwayat Permintaan Status Akun Vendor (Manager View) */}
-          {isManager && (
-            <div className="mt-8 bg-white dark:bg-[#251e1c] rounded-3xl p-6 border border-stone-200/80 dark:border-stone-800 shadow-2xs">
-              <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-stone-200/80 dark:border-stone-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading">
-                      Riwayat Permintaan Status Akun Vendor
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Daftar pengajuan penonaktifan dan aktivasi kembali akun gerai Anda
-                    </p>
-                  </div>
-                </div>
-
-                {!managerPendingRequest && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatusRequestType(managerVendor?.status === 'DEACTIVATE' ? 'REACTIVATE' : 'DEACTIVATE');
-                      setIsStatusRequestModalOpen(true);
-                    }}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                      managerVendor?.status === 'DEACTIVATE'
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60'
-                    }`}
-                  >
-                    {managerVendor?.status === 'DEACTIVATE' ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Minta Aktivasi</span>
-                      </>
-                    ) : (
-                      <>
-                        <Power className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Minta Nonaktifkan</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {managerRequests.length === 0 ? (
-                <div className="py-8 text-center text-xs text-stone-400">
-                  Belum ada riwayat permohonan status untuk vendor Anda.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {managerRequests.map(req => (
-                    <div
-                      key={req.id}
-                      className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900/40 border border-stone-200/60 dark:border-stone-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1.5 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              req.type === 'DEACTIVATE'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
-                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                            }`}
-                          >
-                            {req.type === 'DEACTIVATE' ? 'Penonaktifan' : 'Aktivasi Kembali'}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              req.status === 'APPROVED'
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300'
-                                : req.status === 'REJECTED'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/80 dark:text-amber-300'
-                            }`}
-                          >
-                            {req.status === 'APPROVED'
-                              ? 'Disetujui Admin'
-                              : req.status === 'REJECTED'
-                              ? 'Ditolak Admin'
-                              : 'Menunggu Review'}
-                          </span>
-                          <span className="text-stone-400 text-[10px]">
-                            {new Date(req.createdAt).toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <p className="text-stone-800 dark:text-stone-200">
-                          Alasan: <span className="italic font-medium">"{req.reason}"</span>
-                        </p>
-                        {req.adminNotes && (
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 bg-white dark:bg-[#1f1917] p-2 rounded-xl border border-stone-200/50 dark:border-stone-800/50">
-                            Catatan Admin:{' '}
-                            <span className="font-semibold text-stone-700 dark:text-stone-300">
-                              {req.adminNotes}
-                            </span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </>
@@ -1688,19 +1362,6 @@ export const VendorManagementScreen: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* VENDOR STATUS REQUEST MODAL (MANAGER: Deactivate / Reactivate) */}
-      <VendorStatusRequestModal
-        isOpen={isStatusRequestModalOpen}
-        onClose={() => setIsStatusRequestModalOpen(false)}
-        type={statusRequestType}
-        vendorId={isManager ? (user?.vendorId || managerVendor?.id) : undefined}
-        vendorName={isManager ? managerVendor?.name : undefined}
-        onSuccess={() => {
-          fetchStatusRequests();
-          fetchVendors();
-        }}
-      />
 
       {/* ADMIN REVIEW VENDOR REQUEST MODAL (ADMIN: Approve / Reject) */}
       <AdminReviewVendorRequestModal

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDB, fallbackStore } from '../db';
-import { comparePassword, hashPassword, signToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken } from '../auth';
+import { comparePassword, hashPassword, signToken, signRefreshToken, verifyRefreshToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken, isSessionRevoked } from '../auth';
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPasswordResetEmail, sendAdminNewPasswordEmail } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
@@ -28,7 +28,8 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password harus diisi'),
   forceLogout: z.boolean().optional(),
   managerEmail: z.string().email('Format email manager tidak valid').optional(),
-  managerPassword: z.string().optional()
+  managerPassword: z.string().optional(),
+  deviceFingerprint: z.string().optional()
 });
 
 // Helper to get active sessions for a user
@@ -615,15 +616,50 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const revokeToken = crypto.randomBytes(24).toString('hex');
 
+    const incomingFingerprint = (req.body?.deviceFingerprint as string) ||
+      (req.headers['x-device-fingerprint'] as string) ||
+      `fp_${crypto.createHash('sha256').update(`${userAgent}_${ipAddress}`).digest('hex').substring(0, 12)}`;
+
+    let browserName = 'Web Browser';
+    let osName = 'Desktop';
+    if (userAgent.includes('Firefox')) browserName = 'Mozilla Firefox';
+    else if (userAgent.includes('Edg/')) browserName = 'Microsoft Edge';
+    else if (userAgent.includes('Chrome')) browserName = 'Google Chrome';
+    else if (userAgent.includes('Safari')) browserName = 'Apple Safari';
+    else if (userAgent.includes('Opera') || userAgent.includes('OPR')) browserName = 'Opera';
+
+    if (userAgent.includes('Windows')) osName = 'Windows PC';
+    else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS')) osName = 'macOS';
+    else if (userAgent.includes('Android')) osName = 'Android Mobile';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) osName = 'iOS Device';
+    else if (userAgent.includes('Linux')) osName = 'Linux';
+
     const historyVendorId = (user as any).vendorId || req.vendorId || 'vnd_kasirkafe_central';
+
+    // 15-minute Access Token bound to unique browser/device fingerprint
     const token = signToken({
       userId,
       email: user.email,
       role: user.role,
       name: user.name,
       sessionId,
-      vendorId: historyVendorId
-    });
+      vendorId: historyVendorId,
+      deviceFingerprint: incomingFingerprint,
+      browser: browserName,
+      os: osName,
+      deviceInfo: `${browserName} on ${osName}`
+    }, '15m');
+
+    // 7-day Refresh Token bound to user session and device fingerprint
+    const refreshToken = signRefreshToken({
+      userId,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      sessionId,
+      vendorId: historyVendorId,
+      deviceFingerprint: incomingFingerprint
+    }, '7d');
 
     // Write login success to daily rolling log file!
     logLogin({
@@ -640,6 +676,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       details: {
         sessionId,
         device,
+        deviceFingerprint: incomingFingerprint,
         previousSessionsTerminated
       }
     }).catch(() => {});
@@ -656,6 +693,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       ipAddress,
       userAgent,
       device,
+      deviceFingerprint: incomingFingerprint,
       status: 'ACTIVE' as const,
       timestamp: new Date(),
       revokeToken,
@@ -690,7 +728,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       console.warn('[Auth] Async login email notification warning:', err.message);
     });
 
-    // Store active session metadata in Redis with 15-minute idle timeout
+    // Store active session metadata in Redis with 30-second idle timeout
     await saveSessionToRedis(token, {
       sessionId,
       token,
@@ -704,13 +742,18 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       userAgent,
       createdAt: Date.now(),
       lastActive: Date.now()
-    });
+    }, 30);
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookies
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 15 * 60 * 1000 // 15 minutes for access token
+    });
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days for refresh token
     });
 
     return res.json({
@@ -719,7 +762,9 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         ? `Selamat bertugas, ${user.name}! Sesi login di browser lain telah otomatis dipaksa keluar.`
         : `Selamat bertugas, ${user.name}!`,
       token,
+      refreshToken,
       sessionId,
+      deviceFingerprint: incomingFingerprint,
       previousSessionsTerminated: previousSessionsTerminated > 0,
       user: {
         id: userId,
@@ -921,13 +966,250 @@ authRouter.get('/check-session', authMiddleware, (req: Request, res: Response) =
  * POST /api/auth/touch
  * Extend Redis session TTL on user activity (sliding window synchronized with idleTimedOut)
  */
-authRouter.post('/touch', authMiddleware, (req: Request, res: Response) => {
+authRouter.post('/touch', authMiddleware, async (req: Request, res: Response) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
+    await refreshSessionActivity(token);
+  }
   return res.json({
     success: true,
     active: true,
     sessionId: req.user?.sessionId,
     lastActive: Date.now()
   });
+});
+
+/**
+ * POST /api/auth/refresh
+ * Validates Refresh Token and unique device/browser binding, then issues a fresh 15-minute Access Token
+ */
+authRouter.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    let refreshToken = req.body?.refreshToken;
+    if (!refreshToken && req.headers.authorization?.startsWith('Bearer ')) {
+      refreshToken = req.headers.authorization.split(' ')[1];
+    }
+    if (!refreshToken && req.headers.cookie) {
+      const cookies = req.headers.cookie.split(';');
+      for (const c of cookies) {
+        const [name, val] = c.trim().split('=');
+        if (name === 'refreshToken') {
+          refreshToken = val;
+          break;
+        }
+      }
+    }
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'NoRefreshToken',
+        message: 'Refresh token tidak ditemukan.'
+      });
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      return res.status(401).json({
+        success: false,
+        error: 'InvalidRefreshToken',
+        message: 'Refresh token kedaluwarsa atau tidak valid. Silakan login kembali.'
+      });
+    }
+
+    const incomingFingerprint = (req.headers['x-device-fingerprint'] as string | undefined) ||
+      (req.body?.deviceFingerprint as string | undefined);
+
+    if (decoded.deviceFingerprint && incomingFingerprint) {
+      if (decoded.deviceFingerprint !== incomingFingerprint) {
+        return res.status(401).json({
+          success: false,
+          error: 'DeviceMismatch',
+          deviceMismatch: true,
+          message: 'Validasi keamanan gagal: Refresh token tidak cocok dengan perangkat atau browser ini.'
+        });
+      }
+    }
+
+    if (decoded.sessionId) {
+      const isRevoked = await isSessionRevoked(decoded.sessionId);
+      if (isRevoked) {
+        return res.status(401).json({
+          success: false,
+          error: 'SessionRevoked',
+          message: 'Sesi telah dicabut. Silakan login kembali.'
+        });
+      }
+    }
+
+    // Retrieve fresh user info from DB
+    const db = getDB();
+    let user: any = null;
+    if (db) {
+      try {
+        const query = ObjectId.isValid(decoded.userId)
+          ? { _id: new ObjectId(decoded.userId) }
+          : { email: decoded.email };
+        user = await db.collection('users').findOne(query);
+      } catch (e) {}
+    }
+    if (!user) {
+      user = fallbackStore.users.find(u => u.email.toLowerCase() === decoded.email.toLowerCase());
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'UserNotFound',
+        message: 'Pengguna tidak ditemukan.'
+      });
+    }
+
+    // Check vendor status
+    if (user.role !== 'ADMIN') {
+      const userVendorId = user.vendorId || decoded.vendorId || 'vnd_kasirkafe_central';
+      const allVendors = await getAllVendors();
+      const userVendor = allVendors.find(v => v.id === userVendorId);
+      if (userVendor && (userVendor.status === 'DEACTIVATE' || (userVendor as any).status === 'DEACTIVATED')) {
+        return res.status(403).json({
+          success: false,
+          error: 'VENDOR_DEACTIVATED',
+          vendorDeactivated: true,
+          message: 'Akun vendor sudah tidak aktif.'
+        });
+      }
+    }
+
+    const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
+    let browserName = 'Web Browser';
+    let osName = 'Desktop';
+    if (userAgent.includes('Firefox')) browserName = 'Mozilla Firefox';
+    else if (userAgent.includes('Edg/')) browserName = 'Microsoft Edge';
+    else if (userAgent.includes('Chrome')) browserName = 'Google Chrome';
+    else if (userAgent.includes('Safari')) browserName = 'Apple Safari';
+    else if (userAgent.includes('Opera') || userAgent.includes('OPR')) browserName = 'Opera';
+
+    if (userAgent.includes('Windows')) osName = 'Windows PC';
+    else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS')) osName = 'macOS';
+    else if (userAgent.includes('Android')) osName = 'Android Mobile';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) osName = 'iOS Device';
+    else if (userAgent.includes('Linux')) osName = 'Linux';
+
+    const finalFingerprint = incomingFingerprint || decoded.deviceFingerprint;
+    const historyVendorId = user.vendorId || decoded.vendorId || 'vnd_kasirkafe_central';
+
+    // Issue fresh 15-minute Access Token
+    const newAccessToken = signToken({
+      userId: user._id ? user._id.toString() : (user.id || decoded.userId),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      sessionId: decoded.sessionId,
+      vendorId: historyVendorId,
+      deviceFingerprint: finalFingerprint,
+      browser: browserName,
+      os: osName,
+      deviceInfo: `${browserName} on ${osName}`
+    }, '15m');
+
+    // Renew 7-day Refresh Token
+    const newRefreshToken = signRefreshToken({
+      userId: user._id ? user._id.toString() : (user.id || decoded.userId),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      sessionId: decoded.sessionId,
+      vendorId: historyVendorId,
+      deviceFingerprint: finalFingerprint
+    }, '7d');
+
+    // Update active session in Redis with 30-second idle timeout
+    await saveSessionToRedis(newAccessToken, {
+      sessionId: decoded.sessionId,
+      token: newAccessToken,
+      userId: user._id ? user._id.toString() : (user.id || decoded.userId),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      loginMethod: 'REFRESH_TOKEN',
+      device: `${browserName} (${osName})`,
+      ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1',
+      userAgent,
+      createdAt: Date.now(),
+      lastActive: Date.now()
+    }, 30);
+
+    // Set HTTP-only cookies
+    res.cookie('token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 15 * 60 * 1000
+    });
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    return res.json({
+      success: true,
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      sessionId: decoded.sessionId,
+      user: {
+        id: user._id ? user._id.toString() : (user.id || decoded.userId),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar,
+        vendorId: historyVendorId
+      }
+    });
+  } catch (err: any) {
+    console.error('[Auth] Refresh token error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'RefreshFailed',
+      message: 'Gagal memperbarui token otentikasi.'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/invalidate-token
+ * Explicitly invalidates access token and terminates active session on 30-second idle timeout
+ */
+authRouter.post('/invalidate-token', async (req: Request, res: Response) => {
+  let token: string | undefined;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  }
+  const bodyToken = req.body?.token;
+  const targetToken = token || bodyToken;
+
+  if (targetToken) {
+    const decoded = verifyToken(targetToken);
+    if (decoded?.sessionId) {
+      revokedSessionIds.add(decoded.sessionId);
+      await removeSessionFromRedis(decoded.sessionId);
+      const db = getDB();
+      if (db) {
+        try {
+          await db.collection('login_history').updateOne(
+            { sessionId: decoded.sessionId },
+            { $set: { status: 'TIMED_OUT', loggedOutAt: new Date() } }
+          );
+        } catch (e) {}
+      }
+    }
+    await removeSessionFromRedis(targetToken);
+  }
+
+  res.clearCookie('token');
+  res.clearCookie('refreshToken');
+
+  return res.json({ success: true, message: 'Token dan sesi berhasil diinvalidasi.' });
 });
 
 /**
@@ -960,6 +1242,7 @@ authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) =
   }
 
   res.clearCookie('token');
+  res.clearCookie('refreshToken');
 
   logLogin({
     status: 'LOGOUT',

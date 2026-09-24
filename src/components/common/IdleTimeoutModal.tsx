@@ -40,8 +40,9 @@ export const IdleTimeoutModal: React.FC = () => {
   if (!showIdleWarning) return null;
 
   const seconds = Math.max(0, idleWarningSecondsLeft);
-  const isUrgent = seconds <= 15;
-  const progressPercent = Math.min(100, Math.max(0, (seconds / 60) * 100));
+  const maxWarningSec = 10;
+  const isUrgent = seconds <= 5;
+  const progressPercent = Math.min(100, Math.max(0, (seconds / maxWarningSec) * 100));
 
   // Circular progress math (r = 44, circumference = 2 * PI * 44 ≈ 276.46)
   const radius = 44;
@@ -182,7 +183,7 @@ export const IdleTimeoutModal: React.FC = () => {
               <div className="flex justify-between items-center text-[10px] text-stone-400 dark:text-stone-500 mt-1 px-1 font-mono">
                 <span>0s</span>
                 <span>00:{String(seconds).padStart(2, '0')}</span>
-                <span>60s</span>
+                <span>10s</span>
               </div>
             </div>
 

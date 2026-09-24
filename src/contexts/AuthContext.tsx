@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { User } from '../types';
+import { getDeviceMetadata } from '../utils/deviceFingerprint';
 
-export const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes of inactivity
-export const IDLE_WARNING_THRESHOLD_MS = 60 * 1000; // 60 seconds visual countdown before forced logout
+// 30 seconds of inactivity idle timeout
+export const IDLE_TIMEOUT_MS = 60 * 1000;
+// 10 seconds visual countdown before forced logout
+export const IDLE_WARNING_THRESHOLD_MS = 10 * 1000;
 
 export interface LoginResult {
   success: boolean;
@@ -33,9 +36,33 @@ export interface LoginResult {
   };
 }
 
+/**
+ * Extracts remaining lifetime of a JWT token in seconds
+ */
+export function getJwtRemainingSeconds(jwtToken: string): number {
+  try {
+    const parts = jwtToken.split('.');
+    if (parts.length < 2) return 0;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    if (!parsed.exp) return 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+    return parsed.exp - nowSec;
+  } catch (e) {
+    return 0;
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isLoading: boolean;
   idleTimedOut: boolean;
   sessionRevoked: boolean;
@@ -46,6 +73,7 @@ interface AuthContextType {
   clearIdleTimeout: () => void;
   clearSessionRevoked: () => void;
   resetIdleTimer: () => void;
+  refreshAccessToken: () => Promise<string | null>;
   loginWithPassword: (email: string, password: string, forceLogout?: boolean) => Promise<LoginResult>;
   forceLogoutUser: (params: { targetEmail?: string; sessionId?: string; managerEmail?: string; managerPassword?: string; reason?: string }) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
@@ -57,7 +85,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('kasirkafe_token'));
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('kasirkafe_token');
+    } catch {
+      return null;
+    }
+  });
+  const [refreshToken, setRefreshToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('kasirkafe_refresh_token');
+    } catch {
+      return null;
+    }
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [idleTimedOut, setIdleTimedOut] = useState<boolean>(() => {
     try {
@@ -74,11 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [showIdleWarning, setShowIdleWarning] = useState<boolean>(false);
-  const [idleWarningSecondsLeft, setIdleWarningSecondsLeft] = useState<number>(60);
+  const [idleWarningSecondsLeft, setIdleWarningSecondsLeft] = useState<number>(10);
 
   const lastActivityRef = useRef<number>(Date.now());
   const lastSessionCheckRef = useRef<number>(0);
   const lastRedisTouchRef = useRef<number>(0);
+  const lastRefreshCheckRef = useRef<number>(0);
+  const isRefreshingRef = useRef<boolean>(false);
   const showIdleWarningRef = useRef<boolean>(false);
 
   const clearIdleTimeout = useCallback(() => {
@@ -95,69 +138,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   }, []);
 
-  const resetIdleTimer = useCallback(() => {
-    const now = Date.now();
-    // Throttle writes to localStorage to avoid performance overhead on continuous mouse movements
-    if (now - lastActivityRef.current > 1000) {
-      lastActivityRef.current = now;
-      try {
-        localStorage.setItem('kasirkafe_last_active', String(now));
-      } catch (e) {}
-    }
-
-    // Ping /api/auth/touch periodically (every 45 seconds when user is actively interacting) to keep Redis session alive
-    if (now - lastRedisTouchRef.current > 45000 && token) {
-      lastRedisTouchRef.current = now;
-      fetch('/api/auth/touch', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(() => {});
-    }
-  }, [token]);
-
-  const extendSession = useCallback(() => {
-    const now = Date.now();
-    lastActivityRef.current = now;
-    try {
-      localStorage.setItem('kasirkafe_last_active', String(now));
-    } catch (e) {}
-    setShowIdleWarning(false);
-    showIdleWarningRef.current = false;
-    setIdleWarningSecondsLeft(60);
-
-    const currentToken = localStorage.getItem('kasirkafe_token') || token;
-    if (currentToken) {
-      lastRedisTouchRef.current = now;
-      fetch('/api/auth/touch', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${currentToken}` }
-      }).catch(() => {});
-    }
-  }, [token]);
-
-  const simulateIdleWarning = useCallback(() => {
-    const now = Date.now();
-    const simulatedTime = now - (IDLE_TIMEOUT_MS - 59000);
-    lastActivityRef.current = simulatedTime;
-    try {
-      localStorage.setItem('kasirkafe_last_active', String(simulatedTime));
-    } catch (e) {}
-    setShowIdleWarning(true);
-    showIdleWarningRef.current = true;
-    setIdleWarningSecondsLeft(59);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).__triggerIdleWarning = simulateIdleWarning;
-    }
-  }, [simulateIdleWarning]);
-
   const handleRemoteRevokedLogout = useCallback(() => {
     try {
       sessionStorage.setItem('kasirkafe_remote_revoked', 'true');
       sessionStorage.removeItem('kasirkafe_idle_logout');
       localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_refresh_token');
       localStorage.removeItem('kasirkafe_last_active');
     } catch (e) {}
     setShowIdleWarning(false);
@@ -165,8 +151,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSessionRevoked(true);
     setIdleTimedOut(false);
     setToken(null);
+    setRefreshToken(null);
     setUser(null);
   }, []);
+
+  const handleIdleLogout = useCallback(() => {
+    const currentToken = localStorage.getItem('kasirkafe_token') || token;
+    // Explicitly notify backend to invalidate token and session on 30-second idle timeout
+    if (currentToken) {
+      fetch('/api/auth/invalidate-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentToken}`
+        },
+        body: JSON.stringify({ token: currentToken })
+      }).catch(() => {});
+    }
+
+    try {
+      sessionStorage.setItem('kasirkafe_idle_logout', 'true');
+      sessionStorage.removeItem('kasirkafe_remote_revoked');
+      localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_refresh_token');
+      localStorage.removeItem('kasirkafe_last_active');
+    } catch (e) {}
+
+    setShowIdleWarning(false);
+    showIdleWarningRef.current = false;
+    setIdleWarningSecondsLeft(0);
+    setIdleTimedOut(true);
+    setSessionRevoked(false);
+    setToken(null);
+    setRefreshToken(null);
+    setUser(null);
+  }, [token]);
 
   const logout = useCallback(() => {
     const currentToken = localStorage.getItem('kasirkafe_token') || token;
@@ -180,30 +199,154 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('kasirkafe_idle_logout');
       sessionStorage.removeItem('kasirkafe_remote_revoked');
       localStorage.removeItem('kasirkafe_token');
+      localStorage.removeItem('kasirkafe_refresh_token');
       localStorage.removeItem('kasirkafe_last_active');
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
-    setIdleWarningSecondsLeft(60);
+    setIdleWarningSecondsLeft(10);
     setIdleTimedOut(false);
     setSessionRevoked(false);
     setToken(null);
+    setRefreshToken(null);
     setUser(null);
   }, [token]);
 
-  const handleIdleLogout = useCallback(() => {
+  /**
+   * Refreshes the Access Token using the stored Refresh Token and device fingerprint
+   */
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    if (isRefreshingRef.current) return null;
+    const currentRefreshToken = localStorage.getItem('kasirkafe_refresh_token');
+    if (!currentRefreshToken) return null;
+
+    isRefreshingRef.current = true;
     try {
-      sessionStorage.setItem('kasirkafe_idle_logout', 'true');
-      localStorage.removeItem('kasirkafe_token');
-      localStorage.removeItem('kasirkafe_last_active');
+      const metadata = getDeviceMetadata();
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Fingerprint': metadata.fingerprint,
+          'X-Device-Id': metadata.deviceId
+        },
+        body: JSON.stringify({
+          refreshToken: currentRefreshToken,
+          deviceFingerprint: metadata.fingerprint
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.token) {
+        localStorage.setItem('kasirkafe_token', data.token);
+        setToken(data.token);
+        if (data.refreshToken) {
+          localStorage.setItem('kasirkafe_refresh_token', data.refreshToken);
+          setRefreshToken(data.refreshToken);
+        }
+        if (data.user) {
+          setUser(prev => prev ? { ...prev, ...data.user } : data.user);
+        }
+        return data.token;
+      } else {
+        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
+          handleRemoteRevokedLogout();
+        } else if (data.error === 'SessionTimedOut' || data.idleTimedOut) {
+          handleIdleLogout();
+        }
+        return null;
+      }
+    } catch (err) {
+      console.warn('[Auth] Token refresh warning, maintaining local state');
+      return null;
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [handleRemoteRevokedLogout, handleIdleLogout]);
+
+  /**
+   * Activity listener handler:
+   * - Resets idle timer on user action
+   * - Inspects JWT token remaining time; if < 1 minute (60s), refreshes access token from backend
+   * - Pings /api/auth/touch periodically to keep session alive in Redis
+   */
+  const resetIdleTimer = useCallback(() => {
+    const now = Date.now();
+    // Throttle writes to localStorage to avoid performance overhead on continuous mouse movements
+    if (now - lastActivityRef.current > 500) {
+      lastActivityRef.current = now;
+      try {
+        localStorage.setItem('kasirkafe_last_active', String(now));
+      } catch (e) {}
+    }
+
+    // Proactive JWT token inspection on user activity:
+    // If token has less than 1 minute remaining (<= 60s), refresh it from backend
+    if (now - lastRefreshCheckRef.current > 2000) {
+      lastRefreshCheckRef.current = now;
+      const currentToken = localStorage.getItem('kasirkafe_token') || token;
+      if (currentToken) {
+        const remainingSec = getJwtRemainingSeconds(currentToken);
+        if (remainingSec > 0 && remainingSec <= 60 && !isRefreshingRef.current) {
+          refreshAccessToken();
+        }
+      }
+    }
+
+    // Ping /api/auth/touch periodically (every 10 seconds of user activity) to keep Redis session alive
+    if (now - lastRedisTouchRef.current > 10000 && token) {
+      lastRedisTouchRef.current = now;
+      fetch('/api/auth/touch', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
+  }, [token, refreshAccessToken]);
+
+  const extendSession = useCallback(() => {
+    const now = Date.now();
+    lastActivityRef.current = now;
+    try {
+      localStorage.setItem('kasirkafe_last_active', String(now));
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
-    setIdleWarningSecondsLeft(0);
-    setIdleTimedOut(true);
-    setToken(null);
-    setUser(null);
+    setIdleWarningSecondsLeft(10);
+
+    const currentToken = localStorage.getItem('kasirkafe_token') || token;
+    if (currentToken) {
+      lastRedisTouchRef.current = now;
+      fetch('/api/auth/touch', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${currentToken}` }
+      }).catch(() => {});
+
+      // Check remaining lifetime and refresh if < 60s
+      const remainingSec = getJwtRemainingSeconds(currentToken);
+      if (remainingSec > 0 && remainingSec <= 60) {
+        refreshAccessToken();
+      }
+    }
+  }, [token, refreshAccessToken]);
+
+  const simulateIdleWarning = useCallback(() => {
+    const now = Date.now();
+    // Simulate being at 9 seconds left before 30-second timeout
+    const simulatedTime = now - (IDLE_TIMEOUT_MS - 9000);
+    lastActivityRef.current = simulatedTime;
+    try {
+      localStorage.setItem('kasirkafe_last_active', String(simulatedTime));
+    } catch (e) {}
+    setShowIdleWarning(true);
+    showIdleWarningRef.current = true;
+    setIdleWarningSecondsLeft(9);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__triggerIdleWarning = simulateIdleWarning;
+    }
+  }, [simulateIdleWarning]);
 
   const checkRemoteSession = useCallback(async (authToken: string) => {
     try {
@@ -212,7 +355,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (res.status === 401) {
         const data = await res.json().catch(() => ({}));
-        if (data.error === 'SessionRevoked') {
+        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
           handleRemoteRevokedLogout();
           return false;
         } else if (data.error === 'SessionTimedOut' || data.idleTimedOut) {
@@ -226,7 +369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [handleRemoteRevokedLogout, handleIdleLogout]);
 
-  // Idle Timer & Activity Listener for 15-minute inactivity security with 60s warning countdown
+  // Idle Timer & Activity Listener for 30-second inactivity security with 10s warning countdown
   useEffect(() => {
     if (!token && !user) {
       setShowIdleWarning(false);
@@ -250,7 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ];
 
     const handleUserActivity = () => {
-      // If the 60s warning countdown modal is already showing, ignore passive mouse moves/scrolls
+      // If the 10s warning countdown modal is already showing, ignore passive mouse moves/scrolls
       // so user must explicitly click "Extend Session" or press Enter
       if (showIdleWarningRef.current) {
         return;
@@ -279,7 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const elapsed = currentTime - lastActive;
       const remainingMs = IDLE_TIMEOUT_MS - elapsed;
 
-      // When remaining time is up, trigger automatic logout
+      // When 30-second idle limit is exceeded, immediately trigger automatic logout and invalidate access token
       if (remainingMs <= 0) {
         setShowIdleWarning(false);
         showIdleWarningRef.current = false;
@@ -288,7 +431,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // When within 60 seconds of timeout, show countdown modal
+      // When within 10 seconds of timeout, show countdown modal
       if (remainingMs <= IDLE_WARNING_THRESHOLD_MS) {
         const secondsLeft = Math.max(1, Math.ceil(remainingMs / 1000));
         setShowIdleWarning(true);
@@ -298,7 +441,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (showIdleWarningRef.current) {
           setShowIdleWarning(false);
           showIdleWarningRef.current = false;
-          setIdleWarningSecondsLeft(60);
+          setIdleWarningSecondsLeft(10);
         }
       }
 
@@ -309,10 +452,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Check every second to provide a smooth, precise second-by-second countdown
-    const intervalId = setInterval(checkInactivity, 1000);
+    // Check every 500ms for accurate and responsive 30-second timeout tracking
+    const intervalId = setInterval(checkInactivity, 500);
 
-    // Prompt check when switching back to the browser tab or unfreezing
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         checkInactivity();
@@ -335,6 +477,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchCurrentUser = async (authToken: string) => {
     try {
+      // Check if token has < 60s remaining; if so, refresh first
+      const remSec = getJwtRemainingSeconds(authToken);
+      if (remSec > 0 && remSec <= 60) {
+        const refreshedToken = await refreshAccessToken();
+        if (refreshedToken) {
+          authToken = refreshedToken;
+        }
+      }
+
       const res = await fetch('/api/auth/me', {
         headers: {
           Authorization: `Bearer ${authToken}`
@@ -344,13 +495,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.success && data.user) {
         setUser(data.user);
       } else {
-        if (data.error === 'SessionRevoked') {
+        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
           handleRemoteRevokedLogout();
         } else if (data.error === 'SessionTimedOut' || data.idleTimedOut) {
           handleIdleLogout();
         } else {
-          // Stale token
-          logout();
+          // Attempt refresh once before logging out
+          const refreshed = await refreshAccessToken();
+          if (!refreshed) {
+            logout();
+          }
         }
       }
     } catch (e) {
@@ -370,10 +524,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithPassword = async (email: string, password: string, forceLogout?: boolean) => {
     try {
+      const metadata = getDeviceMetadata();
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, ...(forceLogout ? { forceLogout: true } : {}) })
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Fingerprint': metadata.fingerprint,
+          'X-Device-Id': metadata.deviceId
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          deviceFingerprint: metadata.fingerprint,
+          ...(forceLogout ? { forceLogout: true } : {})
+        })
       });
       const data = await res.json();
       if (data.success && data.token) {
@@ -382,6 +546,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const now = Date.now();
         lastActivityRef.current = now;
         localStorage.setItem('kasirkafe_token', data.token);
+        if (data.refreshToken) {
+          localStorage.setItem('kasirkafe_refresh_token', data.refreshToken);
+          setRefreshToken(data.refreshToken);
+        }
         localStorage.setItem('kasirkafe_last_active', String(now));
         setToken(data.token);
         setUser(data.user);
@@ -463,6 +631,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         token,
+        refreshToken,
         isLoading,
         idleTimedOut,
         sessionRevoked,
@@ -473,6 +642,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearIdleTimeout,
         clearSessionRevoked,
         resetIdleTimer,
+        refreshAccessToken,
         loginWithPassword,
         forceLogoutUser,
         logout,

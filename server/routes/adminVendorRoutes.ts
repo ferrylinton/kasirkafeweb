@@ -49,25 +49,12 @@ async function computeVendorStats(vendorId: string) {
 
 /**
  * GET /api/admin/vendors
- * List all vendors with enriched statistics, search, and status filter
+ * List all vendors with enriched statistics, search, and status filter (Strictly ADMIN only)
  */
-adminVendorRouter.get('/', async (req: Request, res: Response) => {
+adminVendorRouter.get('/', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    const currentVendorId = (req as any).vendorId || (req as any).user?.vendorId;
-
-    if (userRole !== 'ADMIN' && userRole !== 'MANAGER') {
-      return res.status(403).json({ success: false, message: 'Akses ditolak: Hanya ADMIN dan MANAGER yang dapat mengakses data vendor.' });
-    }
-
     const { search, status } = req.query;
-    let vendors = await getAllVendors();
-
-    // Strict role MANAGER rule: MANAGER can ONLY view their own vendor data
-    if (userRole === 'MANAGER') {
-      vendors = vendors.filter(v => v.id === currentVendorId);
-    }
-
+    const vendors = await getAllVendors();
     let filtered = vendors;
 
     if (status && status !== 'ALL') {
@@ -187,18 +174,12 @@ adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) =>
 
 /**
  * PUT /api/admin/vendors/:id
- * Update vendor profile
+ * Update vendor profile (Strictly ADMIN only)
  */
-adminVendorRouter.put('/:id', async (req: Request, res: Response) => {
+adminVendorRouter.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const userRole = (req as any).user?.role;
-    const currentVendorId = (req as any).vendorId || (req as any).user?.vendorId;
-
-    if (userRole !== 'ADMIN' && (userRole !== 'MANAGER' || id !== currentVendorId)) {
-      return res.status(403).json({ success: false, message: 'Akses ditolak: Anda hanya dapat mengedit vendor Anda sendiri.' });
-    }
-
+    const userRole = (req as any).user?.role || 'ADMIN';
     const { name, currency, status } = req.body;
 
     const vendor = await findVendorById(id);

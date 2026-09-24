@@ -36,8 +36,11 @@ async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
 
-  // Favicon
-  //app.use('/favicon.ico', express.static('favicon.ico'));
+  // Favicon & Public Assets static serving
+  app.use('/favicon.ico', express.static(path.join(process.cwd(), 'public', 'favicon.ico')));
+  app.use('/favicon.svg', express.static(path.join(process.cwd(), 'public', 'favicon.svg')));
+  app.use('/kasirkafe_logo.jpg', express.static(path.join(process.cwd(), 'public', 'kasirkafe_logo.jpg')));
+  app.use(express.static(path.join(process.cwd(), 'public')));
 
   // Basic Middlewares
   app.use(cors({ origin: true, credentials: true }));

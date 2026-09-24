@@ -8,6 +8,7 @@ import { getSessionFromRedis, removeSessionFromRedis, getActiveTokenForUser, Red
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'beverage_pos_jwt_secret_key_2026';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'beverage_pos_jwt_refresh_secret_key_2026';
 
 export interface TokenPayload {
   userId: string;
@@ -16,6 +17,11 @@ export interface TokenPayload {
   name: string;
   sessionId?: string;
   vendorId?: string;
+  deviceFingerprint?: string;
+  browser?: string;
+  os?: string;
+  deviceInfo?: string;
+  tokenType?: 'access' | 'refresh';
 }
 
 // In-memory set of revoked session IDs for O(1) instantaneous lookup
@@ -34,7 +40,7 @@ export async function isSessionRevoked(sessionId: string): Promise<boolean> {
     try {
       const revoked = await db.collection('login_history').findOne({
         sessionId,
-        status: { $in: ['REVOKED', 'LOGGED_OUT'] }
+        status: { $in: ['REVOKED', 'LOGGED_OUT', 'TIMED_OUT'] }
       });
       if (revoked) {
         revokedSessionIds.add(sessionId);
@@ -43,7 +49,7 @@ export async function isSessionRevoked(sessionId: string): Promise<boolean> {
     } catch (e) {}
   } else {
     const entry = fallbackStore.login_history.find(h => h.sessionId === sessionId);
-    if (entry && (entry.status === 'REVOKED' || entry.status === 'LOGGED_OUT')) {
+    if (entry && (entry.status === 'REVOKED' || entry.status === 'LOGGED_OUT' || entry.status === 'TIMED_OUT')) {
       revokedSessionIds.add(sessionId);
       return true;
     }
@@ -51,13 +57,25 @@ export async function isSessionRevoked(sessionId: string): Promise<boolean> {
   return false;
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+export function signToken(payload: TokenPayload, expiresIn: string = '15m'): string {
+  return jwt.sign({ ...payload, tokenType: 'access' }, JWT_SECRET, { expiresIn: (expiresIn as any) });
+}
+
+export function signRefreshToken(payload: any, expiresIn: string = '7d'): string {
+  return jwt.sign({ ...payload, tokenType: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: (expiresIn as any) });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  } catch (err) {
+    return null;
+  }
+}
+
+export function verifyRefreshToken(token: string): any | null {
+  try {
+    return jwt.verify(token, JWT_REFRESH_SECRET);
   } catch (err) {
     return null;
   }
@@ -120,6 +138,21 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     });
   }
 
+  // Verify unique browser/device payload binding
+  const clientDeviceFingerprint = (req.headers['x-device-fingerprint'] as string | undefined) ||
+    (req.query.deviceFingerprint as string | undefined);
+
+  if (decoded.deviceFingerprint && clientDeviceFingerprint) {
+    if (decoded.deviceFingerprint !== clientDeviceFingerprint) {
+      return res.status(401).json({
+        success: false,
+        error: 'DeviceMismatch',
+        deviceMismatch: true,
+        message: 'Validasi keamanan gagal: Token otentikasi tidak cocok dengan perangkat atau browser yang aktif.'
+      });
+    }
+  }
+
   // Check if session has been revoked via email or admin or concurrent login on another browser
   if (decoded.sessionId) {
     const isRevoked = await isSessionRevoked(decoded.sessionId);
@@ -153,7 +186,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   }
 
   // Validate active session in Redis on EVERY request
-  // Synchronized with client-side idleTimedOut (15 minutes idle timeout)
+  // Synchronized with client-side idleTimedOut (30 seconds idle timeout)
   const redisSession = await getSessionFromRedis(token, true);
   if (!redisSession) {
     // Check if session was revoked due to another login before treating as idle timeout
@@ -167,7 +200,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       });
     }
 
-    const msg = req.t ? req.t('auth.sessionTimedOut') : 'Sesi Anda telah berakhir otomatis karena 15 menit tanpa aktivitas.';
+    const msg = req.t ? req.t('auth.sessionTimedOut') : 'Sesi Anda telah berakhir otomatis karena 30 detik tanpa aktivitas.';
     return res.status(401).json({
       success: false,
       error: 'SessionTimedOut',
