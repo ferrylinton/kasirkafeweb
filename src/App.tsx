@@ -32,6 +32,7 @@ import { HousekeepingScreen } from './components/screens/HousekeepingScreen';
 import { HousekeepingNotificationBanner } from './components/common/HousekeepingNotificationBanner';
 import { VendorRegisterScreen } from './components/screens/VendorRegisterScreen';
 import { ResetPasswordScreen } from './components/screens/ResetPasswordScreen';
+import { DatabaseAlertModal } from './components/modals/DatabaseAlertModal';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -376,6 +377,7 @@ export default function App() {
           <CartProvider>
             <ToastProvider>
               <MainLayout />
+              <DatabaseAlertModal />
             </ToastProvider>
           </CartProvider>
         </AuthProvider>

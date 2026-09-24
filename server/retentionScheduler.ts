@@ -14,9 +14,6 @@ import { writeDailyLog } from './dailyRollingLogger';
 export const RETENTION_DAYS = 90;
 export const RETENTION_MONTHS = 3;
 
-let localHousekeepingSettings: HousekeepingSettings = { ...DEFAULT_SETTINGS };
-let localHousekeepingHistory: HousekeepingExecutionRecord[] = [];
-
 export interface HousekeepingSettings {
   enabled: boolean;
   retentionMonths: number;
@@ -27,6 +24,21 @@ export interface HousekeepingSettings {
   simulationActive: boolean; // enables immediate visual preview of the end-of-month banner
   lastMonthExecuted?: string; // YYYY-MM
 }
+
+const DEFAULT_SETTINGS: HousekeepingSettings = {
+  enabled: true,
+  retentionMonths: 3,
+  noticeDaysBefore: 2,
+  notificationTitle: 'Jadwal Housekeeping Data Awal Bulan',
+  notificationMessage:
+    'Pemberitahuan Housekeeping: Pembersihan data otomatis berkala (orders, inventory_logs, email_logs, activity_logs) berusia lebih dari 3 bulan dijadwalkan berjalan pada awal bulan mendatang.',
+  runAtBeginningOfMonth: true,
+  simulationActive: false,
+  lastMonthExecuted: ''
+};
+
+let localHousekeepingSettings: HousekeepingSettings = { ...DEFAULT_SETTINGS };
+let localHousekeepingHistory: HousekeepingExecutionRecord[] = [];
 
 export interface CollectionHousekeepingStats {
   collection: 'orders' | 'inventory_logs' | 'email_logs' | 'activity_logs';
@@ -96,18 +108,6 @@ let schedulerCheckTimer: NodeJS.Timeout | null = null;
 let lastRunTime: Date | null = null;
 let lastDeletedCount = 0;
 let totalPurgedLifetime = 0;
-
-const DEFAULT_SETTINGS: HousekeepingSettings = {
-  enabled: true,
-  retentionMonths: 3,
-  noticeDaysBefore: 2,
-  notificationTitle: 'Jadwal Housekeeping Data Awal Bulan',
-  notificationMessage:
-    'Pemberitahuan Housekeeping: Pembersihan data otomatis berkala (orders, inventory_logs, email_logs, activity_logs) berusia lebih dari 3 bulan dijadwalkan berjalan pada awal bulan mendatang.',
-  runAtBeginningOfMonth: true,
-  simulationActive: false,
-  lastMonthExecuted: ''
-};
 
 /**
  * Calculates cutoff date (older than X months)

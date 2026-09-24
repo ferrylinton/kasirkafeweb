@@ -431,7 +431,7 @@ export async function getLockedUsersFromRedis(): Promise<LockedUserDetail[]> {
 
   const result = Array.from(lockedUsersMap.values());
 
-  // 3. Enrich with user data (name, role, vendorId, avatar) from DB / fallbackStore
+  // 3. Enrich with user data (name, role, vendorId, avatar) from DB
   for (const item of result) {
     if (item.email) {
       const emailLower = item.email.toLowerCase();

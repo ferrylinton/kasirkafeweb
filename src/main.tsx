@@ -23,11 +23,12 @@ try {
   document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(savedVendor)}; path=/; max-age=31536000; SameSite=Lax`;
 } catch (e) {}
 
-// Safely intercept fetch to attach X-Vendor-Id, X-Device-Fingerprint, and X-Device-Id headers
+// Safely intercept fetch to attach headers and trigger DB connection error alerts
 try {
   if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
     const originalFetch = window.fetch.bind(window);
-    const patchedFetch = function (input: RequestInfo | URL, init?: RequestInit) {
+    const patchedFetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+      let finalInit = init;
       try {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request)?.url || '';
         if (url && (url.startsWith('/api') || url.includes('/api/'))) {
@@ -46,12 +47,39 @@ try {
             headers.set('X-Device-Id', metadata.deviceId);
           }
 
-          return originalFetch(input, { ...init, headers });
+          finalInit = { ...init, headers };
         }
       } catch {
         // Fall back gracefully
       }
-      return originalFetch(input, init);
+
+      try {
+        const response = await originalFetch(input, finalInit);
+
+        // If backend reports database unavailable (503), trigger alert modal
+        if (response.status === 503) {
+          try {
+            const clone = response.clone();
+            const data = await clone.json();
+            const msg = data?.message || data?.error || 'can not connect to db';
+            window.dispatchEvent(
+              new CustomEvent('kasirkafe:db-error', {
+                detail: { message: msg }
+              })
+            );
+          } catch {
+            window.dispatchEvent(
+              new CustomEvent('kasirkafe:db-error', {
+                detail: { message: 'can not connect to db' }
+              })
+            );
+          }
+        }
+
+        return response;
+      } catch (err) {
+        throw err;
+      }
     };
 
     try {

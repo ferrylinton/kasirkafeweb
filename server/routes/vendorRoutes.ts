@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { ObjectId } from 'mongodb';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import {
   getAllVendors,
   findVendorById,
@@ -35,6 +35,15 @@ const vendorUpdateSchema = z.object({
  */
 vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const userRole = (req as any).user?.role;
     const currentVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     let vendors = await getAllVendors();
@@ -45,24 +54,17 @@ vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
     }
 
     // Enhance with live counts for each vendor
-    const db = getDB();
     const enriched = await Promise.all(
       vendors.map(async (v) => {
         let productCount = 0;
         let orderCount = 0;
         let userCount = 0;
 
-        if (db) {
-          try {
-            productCount = await db.collection('products').countDocuments({ vendorId: v.id });
-            orderCount = await db.collection('orders').countDocuments({ vendorId: v.id });
-            userCount = await db.collection('users').countDocuments({ vendorId: v.id });
-          } catch (e) {}
-        } else {
-          productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === v.id).length;
-          orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === v.id).length;
-          userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === v.id).length;
-        }
+        try {
+          productCount = await db.collection('products').countDocuments({ vendorId: v.id });
+          orderCount = await db.collection('orders').countDocuments({ vendorId: v.id });
+          userCount = await db.collection('users').countDocuments({ vendorId: v.id });
+        } catch (e) {}
 
         return {
           ...v,
@@ -92,28 +94,30 @@ vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
  */
 vendorRouter.get('/current', async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const vendor = await findVendorById(activeVendorId);
     if (!vendor) {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
-    const db = getDB();
     let productCount = 0;
     let orderCount = 0;
     let userCount = 0;
 
-    if (db) {
-      try {
-        productCount = await db.collection('products').countDocuments({ vendorId: vendor.id });
-        orderCount = await db.collection('orders').countDocuments({ vendorId: vendor.id });
-        userCount = await db.collection('users').countDocuments({ vendorId: vendor.id });
-      } catch (e) {}
-    } else {
-      productCount = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
-      orderCount = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
-      userCount = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === vendor.id).length;
-    }
+    try {
+      productCount = await db.collection('products').countDocuments({ vendorId: vendor.id });
+      orderCount = await db.collection('orders').countDocuments({ vendorId: vendor.id });
+      userCount = await db.collection('users').countDocuments({ vendorId: vendor.id });
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -138,6 +142,15 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
  */
 vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const parsed = vendorCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -159,16 +172,7 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
       updatedAt: new Date()
     };
 
-    const db = getDB();
-    if (db) {
-      try {
-        await db.collection('vendors').insertOne(newVendor);
-      } catch (e) {}
-    }
-
-    // Always keep fallbackStore updated
-    if (!fallbackStore.vendors) fallbackStore.vendors = [];
-    fallbackStore.vendors.push(newVendor);
+    await db.collection('vendors').insertOne(newVendor);
 
     // Seed 1 default Manager and 1 default Cashier for this vendor
     const defaultManager = {
@@ -193,12 +197,7 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
       updatedAt: new Date()
     };
 
-    if (db) {
-      try {
-        await db.collection('users').insertMany([defaultManager, defaultCashier]);
-      } catch (e) {}
-    }
-    fallbackStore.users.push(defaultManager, defaultCashier);
+    await db.collection('users').insertMany([defaultManager, defaultCashier]);
 
     // Record activity log
     await recordActivityLog({
@@ -231,6 +230,15 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
  */
 vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const { id } = req.params as unknown as IParam;
     const vendor = await findVendorById(id);
     if (!vendor) {
@@ -251,18 +259,7 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
       updatedAt: new Date()
     };
 
-    const db = getDB();
-    if (db) {
-      try {
-        await db.collection('vendors').updateOne({ id }, { $set: updateData });
-      } catch (e) {}
-    }
-
-    // Update in fallbackStore
-    const idx = fallbackStore.vendors.findIndex(v => v.id === id);
-    if (idx !== -1) {
-      fallbackStore.vendors[idx] = { ...fallbackStore.vendors[idx], ...updateData };
-    }
+    await db.collection('vendors').updateOne({ id }, { $set: updateData });
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -290,28 +287,29 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
  */
 vendorRouter.get('/test-isolation', async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const targetVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const currentVendor = await findVendorById(targetVendorId);
 
-    const db = getDB();
     let products: any[] = [];
     let orders: any[] = [];
     let users: any[] = [];
     let discounts: any[] = [];
 
-    if (db) {
-      try {
-        products = await db.collection('products').find({ vendorId: targetVendorId }).toArray();
-        orders = await db.collection('orders').find({ vendorId: targetVendorId }).toArray();
-        users = await db.collection('users').find({ vendorId: targetVendorId }, { projection: { password: 0 } }).toArray();
-        discounts = await db.collection('discount_rules').find({ vendorId: targetVendorId }).toArray();
-      } catch (e) {}
-    } else {
-      products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
-      orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
-      users = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
-      discounts = fallbackStore.discount_rules.filter(d => (d.vendorId || 'vnd_kasirkafe_central') === targetVendorId);
-    }
+    try {
+      products = await db.collection('products').find({ vendorId: targetVendorId }).toArray();
+      orders = await db.collection('orders').find({ vendorId: targetVendorId }).toArray();
+      users = await db.collection('users').find({ vendorId: targetVendorId }, { projection: { password: 0 } }).toArray();
+      discounts = await db.collection('discount_rules').find({ vendorId: targetVendorId }).toArray();
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -380,7 +378,6 @@ async function checkVendorUniqueness(params: {
   let isManagerNameTaken = false;
   let isEmailTaken = false;
 
-  // 1. Check MongoDB
   if (db) {
     try {
       if (vName) {
@@ -409,31 +406,6 @@ async function checkVendorUniqueness(params: {
     } catch (e) {
       console.warn('[VendorUniqueness] MongoDB check warning:', e);
     }
-  }
-
-  // 2. Check fallbackStore
-  if (vName && !isVendorNameTaken) {
-    const foundV = fallbackStore.vendors?.some(
-      (v: any) => v.name?.trim().toLowerCase() === vName
-    );
-    if (foundV) isVendorNameTaken = true;
-  }
-
-  if (mName && !isManagerNameTaken) {
-    const foundM = fallbackStore.users?.some(
-      (u: any) => u.name?.trim().toLowerCase() === mName
-    );
-    if (foundM) isManagerNameTaken = true;
-  }
-
-  if (em && !isEmailTaken) {
-    const foundU = fallbackStore.users?.some(
-      (u: any) => u.email?.trim().toLowerCase() === em
-    );
-    const foundV = fallbackStore.vendors?.some(
-      (v: any) => v.email?.trim().toLowerCase() === em
-    );
-    if (foundU || foundV) isEmailTaken = true;
   }
 
   return { isVendorNameTaken, isManagerNameTaken, isEmailTaken };
@@ -576,26 +548,19 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       expiresAt
     };
 
-    // 6. Persist to MongoDB or fallbackStore
+    // 6. Persist to MongoDB
     const db = getDB();
-    if (db) {
-      try {
-        await db.collection('vendors').insertOne(newVendor);
-        await db.collection('users').insertOne(newManagerUser);
-        await db.collection('vendor_confirmations').insertOne(confirmationDoc);
-      } catch (dbErr: any) {
-        console.warn('[VendorRegister] MongoDB insert failed, persisting to in-memory store:', dbErr.message);
-        fallbackStore.vendors.push(newVendor);
-        fallbackStore.users.push(newManagerUser);
-        if (!fallbackStore.vendor_confirmations) fallbackStore.vendor_confirmations = [];
-        fallbackStore.vendor_confirmations.push(confirmationDoc);
-      }
-    } else {
-      fallbackStore.vendors.push(newVendor);
-      fallbackStore.users.push(newManagerUser);
-      if (!fallbackStore.vendor_confirmations) fallbackStore.vendor_confirmations = [];
-      fallbackStore.vendor_confirmations.push(confirmationDoc);
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
+
+    await db.collection('vendors').insertOne(newVendor);
+    await db.collection('users').insertOne(newManagerUser);
+    await db.collection('vendor_confirmations').insertOne(confirmationDoc);
 
     // 7. Resolve dynamic application URL
     const appUrl =
@@ -696,17 +661,15 @@ vendorRouter.get('/confirm', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
-    let confirmation: any = null;
-
-    if (db) {
-      try {
-        confirmation = await db.collection('vendor_confirmations').findOne({ token });
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).send(renderConfirmationHtml({
+        status: 'error',
+        title: 'Database Tidak Tersedia',
+        message: 'can not connect to db'
+      }));
     }
 
-    if (!confirmation && fallbackStore.vendor_confirmations) {
-      confirmation = fallbackStore.vendor_confirmations.find((c: any) => c.token === token);
-    }
+    const confirmation: any = await db.collection('vendor_confirmations').findOne({ token });
 
     if (!confirmation) {
       return res.status(404).send(renderConfirmationHtml({
@@ -738,44 +701,18 @@ vendorRouter.get('/confirm', async (req: Request, res: Response) => {
 
     // Mark confirmation as used and activate email
     const now = new Date();
-    if (db) {
-      try {
-        await db.collection('vendor_confirmations').updateOne(
-          { token },
-          { $set: { used: true, confirmedAt: now } }
-        );
-        await db.collection('vendors').updateOne(
-          { id: confirmation.vendorId },
-          { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
-        );
-        await db.collection('users').updateOne(
-          { id: confirmation.userId },
-          { $set: { isEmailConfirmed: true, updatedAt: now } }
-        );
-      } catch (dbErr) {
-        console.warn('[VendorConfirm] Error updating MongoDB, updating fallback:', dbErr);
-      }
-    }
-
-    // Update in fallback store
-    if (fallbackStore.vendor_confirmations) {
-      const fc = fallbackStore.vendor_confirmations.find((c: any) => c.token === token);
-      if (fc) {
-        fc.used = true;
-        fc.confirmedAt = now;
-      }
-    }
-    const fv = fallbackStore.vendors?.find((v: any) => v.id === confirmation.vendorId);
-    if (fv) {
-      fv.isEmailConfirmed = true;
-      fv.status = 'ACTIVE';
-      fv.updatedAt = now;
-    }
-    const fu = fallbackStore.users?.find((u: any) => u.id === confirmation.userId);
-    if (fu) {
-      fu.isEmailConfirmed = true;
-      fu.updatedAt = now;
-    }
+    await db.collection('vendor_confirmations').updateOne(
+      { token },
+      { $set: { used: true, confirmedAt: now } }
+    );
+    await db.collection('vendors').updateOne(
+      { id: confirmation.vendorId },
+      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
+    );
+    await db.collection('users').updateOne(
+      { id: confirmation.userId },
+      { $set: { isEmailConfirmed: true, updatedAt: now } }
+    );
 
     // Log confirmation
     await writeDailyLog({
@@ -835,17 +772,15 @@ vendorRouter.post('/confirm', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
-    let confirmation: any = null;
-
-    if (db) {
-      try {
-        confirmation = await db.collection('vendor_confirmations').findOne({ token });
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (!confirmation && fallbackStore.vendor_confirmations) {
-      confirmation = fallbackStore.vendor_confirmations.find((c: any) => c.token === token);
-    }
+    const confirmation: any = await db.collection('vendor_confirmations').findOne({ token });
 
     if (!confirmation) {
       return res.status(404).json({ success: false, message: 'Token konfirmasi tidak valid atau tidak ditemukan' });
@@ -866,41 +801,18 @@ vendorRouter.post('/confirm', async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    if (db) {
-      try {
-        await db.collection('vendor_confirmations').updateOne(
-          { token },
-          { $set: { used: true, confirmedAt: now } }
-        );
-        await db.collection('vendors').updateOne(
-          { id: confirmation.vendorId },
-          { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
-        );
-        await db.collection('users').updateOne(
-          { id: confirmation.userId },
-          { $set: { isEmailConfirmed: true, updatedAt: now } }
-        );
-      } catch (e) {}
-    }
-
-    if (fallbackStore.vendor_confirmations) {
-      const fc = fallbackStore.vendor_confirmations.find((c: any) => c.token === token);
-      if (fc) {
-        fc.used = true;
-        fc.confirmedAt = now;
-      }
-    }
-    const fv = fallbackStore.vendors?.find((v: any) => v.id === confirmation.vendorId);
-    if (fv) {
-      fv.isEmailConfirmed = true;
-      fv.status = 'ACTIVE';
-      fv.updatedAt = now;
-    }
-    const fu = fallbackStore.users?.find((u: any) => u.id === confirmation.userId);
-    if (fu) {
-      fu.isEmailConfirmed = true;
-      fu.updatedAt = now;
-    }
+    await db.collection('vendor_confirmations').updateOne(
+      { token },
+      { $set: { used: true, confirmedAt: now } }
+    );
+    await db.collection('vendors').updateOne(
+      { id: confirmation.vendorId },
+      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
+    );
+    await db.collection('users').updateOne(
+      { id: confirmation.userId },
+      { $set: { isEmailConfirmed: true, updatedAt: now } }
+    );
 
     return res.json({
       success: true,
@@ -927,23 +839,19 @@ vendorRouter.post('/resend-confirmation', async (req: Request, res: Response) =>
 
     const cleanEmail = email.toLowerCase().trim();
     const db = getDB();
-    let confirmation: any = null;
-
-    if (db) {
-      try {
-        confirmation = await db.collection('vendor_confirmations')
-          .find({ email: cleanEmail })
-          .sort({ createdAt: -1 })
-          .limit(1)
-          .next();
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (!confirmation && fallbackStore.vendor_confirmations) {
-      confirmation = fallbackStore.vendor_confirmations
-        .filter((c: any) => c.email.toLowerCase() === cleanEmail)
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-    }
+    const confirmation: any = await db.collection('vendor_confirmations')
+      .find({ email: cleanEmail })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .next();
 
     if (!confirmation) {
       return res.status(404).json({ success: false, message: 'Tidak ada data pendaftaran yang sesuai dengan email ini.' });
@@ -957,14 +865,10 @@ vendorRouter.post('/resend-confirmation', async (req: Request, res: Response) =>
     const newToken = crypto.randomBytes(32).toString('hex');
     const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    if (db) {
-      try {
-        await db.collection('vendor_confirmations').updateOne(
-          { _id: confirmation._id },
-          { $set: { token: newToken, expiresAt: newExpiresAt, updatedAt: new Date() } }
-        );
-      } catch (e) {}
-    }
+    await db.collection('vendor_confirmations').updateOne(
+      { _id: confirmation._id },
+      { $set: { token: newToken, expiresAt: newExpiresAt, updatedAt: new Date() } }
+    );
     confirmation.token = newToken;
     confirmation.expiresAt = newExpiresAt;
 
@@ -1028,20 +932,18 @@ vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (
     }
 
     const db = getDB();
-    let existingPending: any = null;
-    if (db) {
-      try {
-        existingPending = await db.collection('vendor_status_requests').findOne({
-          vendorId,
-          status: 'PENDING'
-        });
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
-    if (!existingPending) {
-      existingPending = fallbackStore.vendor_status_requests?.find(
-        (r: any) => r.vendorId === vendorId && r.status === 'PENDING'
-      );
-    }
+
+    const existingPending = await db.collection('vendor_status_requests').findOne({
+      vendorId,
+      status: 'PENDING'
+    });
 
     if (existingPending) {
       return res.status(400).json({
@@ -1064,15 +966,7 @@ vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (
       updatedAt: new Date().toISOString()
     };
 
-    if (db) {
-      try {
-        await db.collection('vendor_status_requests').insertOne(newRequest);
-      } catch (e) {}
-    }
-    if (!fallbackStore.vendor_status_requests) {
-      fallbackStore.vendor_status_requests = [];
-    }
-    fallbackStore.vendor_status_requests.unshift(newRequest);
+    await db.collection('vendor_status_requests').insertOne(newRequest);
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -1102,6 +996,15 @@ vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (
  */
 vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
     if (reason.length < 5 || reason.length > 200) {
       return res.status(400).json({
@@ -1118,15 +1021,7 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
       const token = authHeader.split(' ')[1];
       const decoded = verifyToken(token);
       if (decoded && (decoded.role === 'MANAGER' || decoded.role === 'ADMIN')) {
-        const db = getDB();
-        if (db) {
-          try {
-            managerUser = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
-          } catch (e) {}
-        }
-        if (!managerUser) {
-          managerUser = fallbackStore.users.find(u => u.email.toLowerCase() === decoded.email.toLowerCase());
-        }
+        managerUser = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
       }
     }
 
@@ -1142,15 +1037,7 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
         });
       }
 
-      const db = getDB();
-      if (db) {
-        try {
-          managerUser = await db.collection('users').findOne({ email });
-        } catch (e) {}
-      }
-      if (!managerUser) {
-        managerUser = fallbackStore.users.find(u => u.email.toLowerCase() === email);
-      }
+      managerUser = await db.collection('users').findOne({ email });
 
       if (!managerUser) {
         return res.status(401).json({
@@ -1195,21 +1082,10 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
       });
     }
 
-    const db = getDB();
-    let existingPending: any = null;
-    if (db) {
-      try {
-        existingPending = await db.collection('vendor_status_requests').findOne({
-          vendorId,
-          status: 'PENDING'
-        });
-      } catch (e) {}
-    }
-    if (!existingPending) {
-      existingPending = fallbackStore.vendor_status_requests?.find(
-        (r: any) => r.vendorId === vendorId && r.status === 'PENDING'
-      );
-    }
+    const existingPending = await db.collection('vendor_status_requests').findOne({
+      vendorId,
+      status: 'PENDING'
+    });
 
     if (existingPending) {
       return res.status(400).json({
@@ -1232,15 +1108,7 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
       updatedAt: new Date().toISOString()
     };
 
-    if (db) {
-      try {
-        await db.collection('vendor_status_requests').insertOne(newRequest);
-      } catch (e) {}
-    }
-    if (!fallbackStore.vendor_status_requests) {
-      fallbackStore.vendor_status_requests = [];
-    }
-    fallbackStore.vendor_status_requests.unshift(newRequest);
+    await db.collection('vendor_status_requests').insertOne(newRequest);
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -1270,24 +1138,19 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
  */
 vendorRouter.get('/status-requests', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    const userVendorId = (req as any).user?.vendorId;
     const db = getDB();
-    let requests: any[] = [];
-
-    if (db) {
-      try {
-        const query = userRole === 'ADMIN' ? {} : { vendorId: userVendorId };
-        requests = await db.collection('vendor_status_requests').find(query).sort({ createdAt: -1 }).toArray();
-      } catch (e) {}
-    }
-
-    if (!requests || requests.length === 0) {
-      requests = (fallbackStore.vendor_status_requests || []).filter((r: any) => {
-        if (userRole === 'ADMIN') return true;
-        return r.vendorId === userVendorId;
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
       });
     }
+
+    const userRole = (req as any).user?.role;
+    const userVendorId = (req as any).user?.vendorId;
+    const query = userRole === 'ADMIN' ? {} : { vendorId: userVendorId };
+    const requests = await db.collection('vendor_status_requests').find(query).sort({ createdAt: -1 }).toArray();
 
     return res.json({
       success: true,
@@ -1304,6 +1167,15 @@ vendorRouter.get('/status-requests', authMiddleware, async (req: Request, res: R
  */
 vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
   try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const { id } = req.params;
     const { action, adminNotes } = req.body;
 
@@ -1311,16 +1183,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
       return res.status(400).json({ success: false, message: 'Action harus bernilai APPROVE atau REJECT.' });
     }
 
-    const db = getDB();
-    let requestItem: any = null;
-    if (db) {
-      try {
-        requestItem = await db.collection('vendor_status_requests').findOne({ id });
-      } catch (e) {}
-    }
-    if (!requestItem) {
-      requestItem = fallbackStore.vendor_status_requests?.find((r: any) => r.id === id);
-    }
+    const requestItem: any = await db.collection('vendor_status_requests').findOne({ id });
 
     if (!requestItem) {
       return res.status(404).json({ success: false, message: 'Permintaan status vendor tidak ditemukan.' });
@@ -1345,17 +1208,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
       updatedAt: reviewedAt
     };
 
-    if (db) {
-      try {
-        await db.collection('vendor_status_requests').updateOne({ id }, { $set: updates });
-      } catch (e) {}
-    }
-    if (fallbackStore.vendor_status_requests) {
-      const idx = fallbackStore.vendor_status_requests.findIndex((r: any) => r.id === id);
-      if (idx !== -1) {
-        fallbackStore.vendor_status_requests[idx] = { ...fallbackStore.vendor_status_requests[idx], ...updates };
-      }
-    }
+    await db.collection('vendor_status_requests').updateOne({ id }, { $set: updates });
 
     // If APPROVED, update vendor status!
     if (action === 'APPROVE') {
@@ -1363,17 +1216,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
 
       if (requestItem.type === 'DEACTIVATE') {
         const vendorStatusUpdate = { status: 'DEACTIVATE', updatedAt: new Date() };
-        if (db) {
-          try {
-            await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
-          } catch (e) {}
-        }
-        if (fallbackStore.vendors) {
-          const vIdx = fallbackStore.vendors.findIndex(v => v.id === targetVendorId);
-          if (vIdx !== -1) {
-            fallbackStore.vendors[vIdx] = { ...fallbackStore.vendors[vIdx], ...vendorStatusUpdate };
-          }
-        }
+        await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
 
         // Kick all users in that vendor immediately
         const revokedCount = await revokeAllSessionsForVendor(targetVendorId, 'Akun vendor dinonaktifkan oleh Admin');
@@ -1396,17 +1239,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
         });
       } else if (requestItem.type === 'REACTIVATE') {
         const vendorStatusUpdate = { status: 'ACTIVE', updatedAt: new Date() };
-        if (db) {
-          try {
-            await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
-          } catch (e) {}
-        }
-        if (fallbackStore.vendors) {
-          const vIdx = fallbackStore.vendors.findIndex(v => v.id === targetVendorId);
-          if (vIdx !== -1) {
-            fallbackStore.vendors[vIdx] = { ...fallbackStore.vendors[vIdx], ...vendorStatusUpdate };
-          }
-        }
+        await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
 
         await recordActivityLog({
           action: 'UPDATE',

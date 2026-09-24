@@ -1747,7 +1747,7 @@ function renderRevokeHtml(params: {
 }
 
 /**
- * Helper to find user by email across MongoDB and fallbackStore
+ * Helper to find user by email in MongoDB
  */
 async function findUserByEmail(email: string) {
   const normalizedEmail = email.toLowerCase().trim();
@@ -1766,7 +1766,7 @@ async function findUserByEmail(email: string) {
 }
 
 /**
- * Helper to update user password across MongoDB and fallbackStore
+ * Helper to update user password in MongoDB
  */
 async function updateUserPassword(userIdOrEmail: string, newPassword: string) {
   const db = getDB();

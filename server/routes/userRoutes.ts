@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { hashPassword, authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
@@ -37,40 +37,29 @@ userRouter.get('/', async (req: Request, res: Response) => {
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
-    let usersList: any[] = [];
-
-    if (db) {
-      try {
-        let query: any = {};
-        if (isAllVendors) {
-          query = {};
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: requestedVendor };
-        } else {
-          query = activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId };
-        }
-
-        const cursor = db.collection('users').find(query, { projection: { password: 0 } });
-        usersList = await cursor.toArray();
-      } catch (e) {
-        // Fallback
-      }
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (usersList.length === 0) {
-      const allUsers = fallbackStore.users.map(({ password, ...rest }) => rest);
-      if (isAllVendors) {
-        usersList = allUsers;
-      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        usersList = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
-      } else {
-        usersList = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
-      }
+    let query: any = {};
+    if (isAllVendors) {
+      query = {};
+    } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+      query = requestedVendor === 'vnd_kasirkafe_central'
+        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        : { vendorId: requestedVendor };
+    } else {
+      query = activeVendorId === 'vnd_kasirkafe_central'
+        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        : { vendorId: activeVendorId };
     }
+
+    const cursor = db.collection('users').find(query, { projection: { password: 0 } });
+    const usersList = await cursor.toArray();
 
     return res.json({
       success: true,
@@ -108,18 +97,16 @@ userRouter.post('/', async (req: Request, res: Response) => {
     const { name, email, password, role, avatar } = parsed.data;
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
 
     // Check existing email
-    let existingUser = null;
-    if (db) {
-      try {
-        existingUser = await db.collection('users').findOne({ email: email.toLowerCase() });
-      } catch (e) {}
-    }
-    if (!existingUser) {
-      existingUser = fallbackStore.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    }
-
+    const existingUser = await db.collection('users').findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -140,17 +127,8 @@ userRouter.post('/', async (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    let insertedId: any = new ObjectId().toString();
-    if (db) {
-      try {
-        const result = await db.collection('users').insertOne(newUser);
-        insertedId = result.insertedId.toString();
-      } catch (e) {
-        fallbackStore.users.push({ ...newUser, _id: insertedId });
-      }
-    } else {
-      fallbackStore.users.push({ ...newUser, _id: insertedId });
-    }
+    const result = await db.collection('users').insertOne(newUser);
+    const insertedId = result.insertedId.toString();
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -204,18 +182,16 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
-    let existingUser: any = null;
-
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        existingUser = await db.collection('users').findOne(query);
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (!existingUser) {
-      existingUser = fallbackStore.users.find(u => (u._id && u._id.toString() === id) || u.id === id);
-    }
+    const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+    const existingUser: any = await db.collection('users').findOne(query);
 
     if (!existingUser) {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
@@ -238,18 +214,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       updateFields.password = await hashPassword(parsed.data.newPassword);
     }
 
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        await db.collection('users').updateOne(query, { $set: updateFields });
-      } catch (e) {}
-    }
-
-    // Update fallback store
-    const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
-    if (idx !== -1) {
-      fallbackStore.users[idx] = { ...fallbackStore.users[idx], ...updateFields };
-    }
+    await db.collection('users').updateOne(query, { $set: updateFields });
 
     const userName = existingUser?.name || updateFields.name || id;
 
@@ -296,18 +261,16 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
-    let targetUser: any = null;
-
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        targetUser = await db.collection('users').findOne(query);
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (!targetUser) {
-      targetUser = fallbackStore.users.find(u => (u._id && u._id.toString() === id) || u.id === id);
-    }
+    const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+    const targetUser: any = await db.collection('users').findOne(query);
 
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
@@ -321,17 +284,7 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       });
     }
 
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        await db.collection('users').deleteOne(query);
-      } catch (e) {}
-    }
-
-    const idx = fallbackStore.users.findIndex(u => (u._id && u._id.toString() === id) || u.id === id);
-    if (idx !== -1) {
-      fallbackStore.users.splice(idx, 1);
-    }
+    await db.collection('users').deleteOne(query);
 
     const userName = targetUser?.name ? `${targetUser.name} (${targetUser.role || 'User'})` : id;
 

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
@@ -62,39 +62,29 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
-    let templates: any[] = [];
-    if (db) {
-      try {
-        let filter: any = {};
-        if (isAllVendors) {
-          filter = {};
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          filter = { vendorId: requestedVendor };
-        } else {
-          filter = {
-            $or: [
-              { vendorId: activeVendorId },
-              { vendorId: { $exists: false } },
-              { vendorId: 'vnd_kasirkafe_central' }
-            ]
-          };
-        }
-        templates = await db.collection('email_templates').find(filter).toArray();
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
-    if (templates.length === 0) {
-      if (isAllVendors) {
-        templates = fallbackStore.email_templates;
-      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        templates = fallbackStore.email_templates.filter(
-          t => (t as any).vendorId === requestedVendor
-        );
-      } else {
-        templates = fallbackStore.email_templates.filter(
-          t => (t as any).vendorId === activeVendorId || !(t as any).vendorId || (t as any).vendorId === 'vnd_kasirkafe_central'
-        );
-      }
+
+    let filter: any = {};
+    if (isAllVendors) {
+      filter = {};
+    } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+      filter = { vendorId: requestedVendor };
+    } else {
+      filter = {
+        $or: [
+          { vendorId: activeVendorId },
+          { vendorId: { $exists: false } },
+          { vendorId: 'vnd_kasirkafe_central' }
+        ]
+      };
     }
+    const templates = await db.collection('email_templates').find(filter).toArray();
 
     return res.json({
       success: true,
@@ -124,22 +114,18 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
   try {
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
-    let logs: any[] = [];
-
-    if (db) {
-      try {
-        const filter = (activeVendorId === 'vnd_kasirkafe_central'
-              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-              : { vendorId: activeVendorId });
-        logs = await db.collection('email_logs').find(filter).sort({ sentAt: -1 }).limit(100).toArray();
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    if (logs.length === 0) {
-      logs = fallbackStore.email_logs.filter(
-        l => (l.vendorId || 'vnd_kasirkafe_central') === activeVendorId
-      );
-    }
+    const filter = (activeVendorId === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId });
+    const logs = await db.collection('email_logs').find(filter).sort({ sentAt: -1 }).limit(100).toArray();
 
     return res.json({
       success: true,
@@ -201,14 +187,16 @@ templateRouter.post('/', authMiddleware, requireTemplateWriteAccess, async (req:
     };
 
     const db = getDB();
-    if (db) {
-      try {
-        const result = await db.collection('email_templates').insertOne(newTemplate);
-        (newTemplate as any)._id = result.insertedId;
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    fallbackStore.email_templates.push(newTemplate);
+    const result = await db.collection('email_templates').insertOne(newTemplate);
+    (newTemplate as any)._id = result.insertedId;
 
     await recordActivityLog({
       action: 'CREATE',
@@ -254,21 +242,21 @@ templateRouter.put('/:id', authMiddleware, requireTemplateWriteAccess, async (re
     };
 
     const db = getDB();
-    let targetTemplate: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
-        targetTemplate = await db.collection('email_templates').findOne(query);
-        await db.collection('email_templates').updateOne(query, { $set: updateData });
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    const idx = fallbackStore.email_templates.findIndex(t => (t._id && t._id.toString() === id) || t.code === id);
-    if (idx !== -1) {
-      if (!targetTemplate) targetTemplate = fallbackStore.email_templates[idx];
-      fallbackStore.email_templates[idx] = { ...fallbackStore.email_templates[idx], ...updateData };
+    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+    const targetTemplate: any = await db.collection('email_templates').findOne(query);
+    if (!targetTemplate) {
+      return res.status(404).json({ success: false, error: 'Template email tidak ditemukan.' });
     }
+
+    await db.collection('email_templates').updateOne(query, { $set: updateData });
 
     const templateName = targetTemplate?.name || id;
 
@@ -304,28 +292,28 @@ templateRouter.delete('/:id', authMiddleware, requireTemplateWriteAccess, async 
   try {
     const { id } = req.params as unknown as IParam;
     const db = getDB();
-    let targetTemplate: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
-        targetTemplate = await db.collection('email_templates').findOne(query);
-        await db.collection('email_templates').deleteOne(query);
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    const idx = fallbackStore.email_templates.findIndex(t => (t._id && t._id.toString() === id) || t.code === id);
-    if (idx !== -1) {
-      if (!targetTemplate) targetTemplate = fallbackStore.email_templates[idx];
-      fallbackStore.email_templates.splice(idx, 1);
+    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
+    const targetTemplate: any = await db.collection('email_templates').findOne(query);
+    if (!targetTemplate) {
+      return res.status(404).json({ success: false, error: 'Template email tidak ditemukan.' });
     }
+
+    await db.collection('email_templates').deleteOne(query);
 
     const templateName = targetTemplate?.name || id;
 
     await recordActivityLog({
       action: 'DELETE',
       entity: 'EMAIL_TEMPLATE',
-      entityId: id ,
+      entityId: id,
       entityName: templateName,
       summary: `Menghapus template email '${templateName}'`,
       details: { templateId: id },

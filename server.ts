@@ -5,7 +5,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 
-import { connectDB } from './server/db';
+import { connectDB, checkDbConnection, isDbConnected } from './server/db';
 import { seedDatabase } from './server/seeder';
 import { tokenBucketRateLimiter } from './server/redis';
 import { authRouter } from './server/routes/authRoutes';
@@ -55,11 +55,38 @@ async function startServer() {
   app.use('/api', vendorMiddleware);
 
   // API Health Check
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', async (req, res) => {
+    const dbHealth = await checkDbConnection();
+    if (!dbHealth.connected) {
+      return res.status(503).json({
+        status: 'error',
+        error: 'can not connect to db',
+        message: 'can not connect to db',
+        timestamp: new Date().toISOString()
+      });
+    }
     res.json({
       status: 'ok',
       service: 'KasirKafe POS API',
+      database: 'connected',
+      latencyMs: dbHealth.latencyMs,
       timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get('/api/health/db', async (req, res) => {
+    const dbHealth = await checkDbConnection();
+    if (!dbHealth.connected) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+    return res.json({
+      success: true,
+      connected: true,
+      latencyMs: dbHealth.latencyMs
     });
   });
 

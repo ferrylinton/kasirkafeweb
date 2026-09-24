@@ -73,7 +73,7 @@ adminVendorRouter.get('/', requireAdmin, async (req: Request, res: Response) => 
           : 'VND');
         return {
           ...v,
-          id: v.id || (v._id ? v._id.toString() : 'VND'),
+          id: v.id || ((v as any)._id ? (v as any)._id.toString() : 'VND'),
           code,
           stats
         };

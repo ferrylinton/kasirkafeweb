@@ -678,7 +678,7 @@ export async function sendVendorConfirmationEmail(params: {
     }
   }
 
-  // Record log into database / fallbackStore
+  // Record log into database
   const logData: EmailLogEntry = {
     recipientEmail,
     subject,

@@ -124,7 +124,7 @@ export function getTodayDateString(): string {
 export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ orderNumber: string; queueNumber: number; date: string }> {
   const today = getTodayDateString();
   const activeVendorId = vendorId || 'vnd_kasirkafe_central';
-  const db = getDB();
+  let db = getDB();
   let seq = 1;
 
   if (!db) {
