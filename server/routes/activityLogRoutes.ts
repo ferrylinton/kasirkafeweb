@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireManager } from '../auth';
 import { queryActivityLogs, recordActivityLog } from '../activityLogger';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 
 export const activityLogRouter = Router();
 
@@ -88,14 +88,6 @@ activityLogRouter.delete('/clear', async (req: Request, res: Response) => {
         });
         deletedCount = resMongo.deletedCount || 0;
       } catch (e) {}
-    }
-
-    const beforeLen = fallbackStore.activity_logs.length;
-    fallbackStore.activity_logs = fallbackStore.activity_logs.filter(
-      l => new Date(l.createdAt) >= cutoff
-    );
-    if (!db) {
-      deletedCount = beforeLen - fallbackStore.activity_logs.length;
     }
 
     // Record this cleanup action itself in the activity log!

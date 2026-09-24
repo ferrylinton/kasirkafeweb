@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getDB, fallbackStore } from '../db';
+import { getDB, connectDB } from '../db';
 import { calculateDiscounts, getActiveDiscountRules } from '../discounts';
 import { sendReceiptEmail } from '../mail';
 import { authMiddleware } from '../auth';
@@ -127,6 +127,10 @@ export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ or
   const db = getDB();
   let seq = 1;
 
+  if (!db) {
+    db = await connectDB();
+  }
+
   if (db) {
     try {
       const counterResult: any = await db.collection('daily_counters').findOneAndUpdate(
@@ -139,17 +143,11 @@ export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ or
         seq = doc.seq;
       }
     } catch (e) {
-      console.warn('[Orders] Could not get daily counter from DB, using fallback memory store:', e);
-      fallbackStore.daily_counters = fallbackStore.daily_counters || {};
-      const key = `${today}_${activeVendorId}`;
-      fallbackStore.daily_counters[key] = (fallbackStore.daily_counters[key] || 0) + 1;
-      seq = fallbackStore.daily_counters[key];
+      console.error('[Orders] Could not get daily counter from DB:', e);
+      seq = 1;
     }
   } else {
-    fallbackStore.daily_counters = fallbackStore.daily_counters || {};
-    const key = `${today}_${activeVendorId}`;
-    fallbackStore.daily_counters[key] = (fallbackStore.daily_counters[key] || 0) + 1;
-    seq = fallbackStore.daily_counters[key];
+    throw new Error('can not connect to db');
   }
 
   const orderNumber = String(seq).padStart(3, '0');
@@ -178,20 +176,21 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
   const today = getTodayDateString();
   const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
   const db = getDB();
+  if (!db) {
+    return res.status(503).json({
+      success: false,
+      error: 'can not connect to db',
+      message: 'can not connect to db'
+    });
+  }
   let currentSeq = 0;
 
-  if (db) {
-    try {
-      const doc = await db.collection('daily_counters').findOne({ date: today, vendorId: activeVendorId });
-      if (doc && typeof doc.seq === 'number') {
-        currentSeq = doc.seq;
-      }
-    } catch (e) {}
-  }
-  const key = `${today}_${activeVendorId}`;
-  if (!currentSeq && fallbackStore.daily_counters && (fallbackStore.daily_counters[key] || fallbackStore.daily_counters[today])) {
-    currentSeq = fallbackStore.daily_counters[key] || fallbackStore.daily_counters[today];
-  }
+  try {
+    const doc = await db.collection('daily_counters').findOne({ date: today, vendorId: activeVendorId });
+    if (doc && typeof doc.seq === 'number') {
+      currentSeq = doc.seq;
+    }
+  } catch (e) {}
 
   const nextSeq = currentSeq + 1;
   const nextOrderNumber = String(nextSeq).padStart(3, '0');
@@ -328,127 +327,105 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       createdAt: new Date()
     };
 
-    const db = getDB();
+    let db = getDB();
+    if (!db) {
+      db = await connectDB();
+    }
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let orderId = new ObjectId().toString();
 
     // Deduct stock for ordered products
     for (const item of items) {
-      if (db) {
-        try {
-          const query: any = ObjectId.isValid(item.productId)
-            ? { _id: new ObjectId(item.productId) }
-            : { _id: item.productId };
-          await db.collection('products').updateOne(query, {
-            $inc: { stock: -item.quantity }
-          });
-        } catch (e) {}
-      }
+      try {
+        const query: any = ObjectId.isValid(item.productId)
+          ? { _id: new ObjectId(item.productId) }
+          : { _id: item.productId };
 
-      const pIdx = fallbackStore.products.findIndex(
-        p => (p._id && p._id.toString() === item.productId) || p.id === item.productId
-      );
-      if (pIdx !== -1) {
-        fallbackStore.products[pIdx].stock = Math.max(0, fallbackStore.products[pIdx].stock - item.quantity);
-      }
-      const prevStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock + item.quantity : 0;
-      const nextStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock : 0;
+        const existingProd = await db.collection('products').findOne(query);
+        const prevStock = existingProd?.stock ?? 0;
+        const nextStock = Math.max(0, prevStock - item.quantity);
 
-      const saleLog = {
-        vendorId: activeVendorId,
-        productId: item.productId,
-        productName: item.name,
-        previousStock: prevStock,
-        newStock: nextStock,
-        change: -item.quantity,
-        type: 'SALE_DEDUCTION',
-        reason: `Pengurangan penjualan Order #${orderNumber}`,
-        performedBy: {
-          id: req.user?.userId || '',
-          name: cashierName,
-          role: req.user?.role || 'CASHIER'
-        },
-        createdAt: new Date()
-      };
+        await db.collection('products').updateOne(query, {
+          $inc: { stock: -item.quantity }
+        });
 
-      if (db) {
-        try {
-          await db.collection('inventory_logs').insertOne(saleLog);
-        } catch (e) {}
+        const saleLog = {
+          vendorId: activeVendorId,
+          productId: item.productId,
+          productName: item.name,
+          previousStock: prevStock,
+          newStock: nextStock,
+          change: -item.quantity,
+          type: 'SALE_DEDUCTION',
+          reason: `Pengurangan penjualan Order #${orderNumber}`,
+          performedBy: {
+            id: req.user?.userId || '',
+            name: cashierName,
+            role: req.user?.role || 'CASHIER'
+          },
+          createdAt: new Date()
+        };
+
+        await db.collection('inventory_logs').insertOne(saleLog);
+      } catch (e) {
+        console.error('[Orders] Inventory update error:', e);
       }
-      fallbackStore.inventory_logs = fallbackStore.inventory_logs || [];
-      fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...saleLog });
     }
 
     // Deduct stock for discount item if provided
     if (discountItem) {
-      if (db) {
-        try {
-          const query: any = ObjectId.isValid(discountItem.productId)
-            ? { _id: new ObjectId(discountItem.productId) }
-            : { _id: discountItem.productId };
-          await db.collection('products').updateOne(query, {
-            $inc: { stock: -1 }
-          });
-        } catch (e) {}
-      }
-
-      const pIdx = fallbackStore.products.findIndex(
-        p => (p._id && p._id.toString() === discountItem.productId) || p.id === discountItem.productId
-      );
-      if (pIdx !== -1) {
-        fallbackStore.products[pIdx].stock = Math.max(0, fallbackStore.products[pIdx].stock - 1);
-      }
-      const prevStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock + 1 : 0;
-      const nextStock = pIdx !== -1 ? fallbackStore.products[pIdx].stock : 0;
-
-      const promoLog = {
-        vendorId: activeVendorId,
-        productId: discountItem.productId,
-        productName: discountItem.name,
-        previousStock: prevStock,
-        newStock: nextStock,
-        change: -1,
-        type: 'SALE_DEDUCTION',
-        reason: `Pengurangan promo diskon Order #${orderNumber} (${discountItem.ruleName})`,
-        performedBy: {
-          id: req.user?.userId || '',
-          name: cashierName,
-          role: req.user?.role || 'CASHIER'
-        },
-        createdAt: new Date()
-      };
-
-      if (db) {
-        try {
-          await db.collection('inventory_logs').insertOne(promoLog);
-        } catch (e) {}
-      }
-      fallbackStore.inventory_logs = fallbackStore.inventory_logs || [];
-      fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...promoLog });
-    }
-
-    if (db) {
       try {
-        const insertRes = await db.collection('orders').insertOne(orderDoc);
-        orderId = insertRes.insertedId.toString();
+        const query: any = ObjectId.isValid(discountItem.productId)
+          ? { _id: new ObjectId(discountItem.productId) }
+          : { _id: discountItem.productId };
+
+        const existingProd = await db.collection('products').findOne(query);
+        const prevStock = existingProd?.stock ?? 0;
+        const nextStock = Math.max(0, prevStock - 1);
+
+        await db.collection('products').updateOne(query, {
+          $inc: { stock: -1 }
+        });
+
+        const promoLog = {
+          vendorId: activeVendorId,
+          productId: discountItem.productId,
+          productName: discountItem.name,
+          previousStock: prevStock,
+          newStock: nextStock,
+          change: -1,
+          type: 'SALE_DEDUCTION',
+          reason: `Pengurangan promo diskon Order #${orderNumber} (${discountItem.ruleName})`,
+          performedBy: {
+            id: req.user?.userId || '',
+            name: cashierName,
+            role: req.user?.role || 'CASHIER'
+          },
+          createdAt: new Date()
+        };
+
+        await db.collection('inventory_logs').insertOne(promoLog);
       } catch (e) {
-        fallbackStore.orders.unshift({ ...orderDoc, _id: orderId });
+        console.error('[Orders] Promo item inventory update error:', e);
       }
-    } else {
-      fallbackStore.orders.unshift({ ...orderDoc, _id: orderId });
     }
+
+    const insertRes = await db.collection('orders').insertOne(orderDoc);
+    orderId = insertRes.insertedId.toString();
 
     // If order was loaded from a saved draft, remove the draft now that it has been paid & completed
     if (draftId) {
-      if (db) {
-        try {
-          const q = ObjectId.isValid(draftId) ? { _id: new ObjectId(draftId) } : { id: draftId };
-          await db.collection('saved_orders').deleteOne(q);
-        } catch (e) {}
-      }
-      fallbackStore.saved_orders = (fallbackStore.saved_orders || []).filter(
-        d => (d._id && d._id.toString() !== draftId) && d.id !== draftId
-      );
+      try {
+        const q = ObjectId.isValid(draftId) ? { _id: new ObjectId(draftId) } : { id: draftId };
+        await db.collection('saved_orders').deleteOne(q);
+      } catch (e) {}
     }
 
     // Invalidate product cache so updated stock is immediately reflected in catalog
@@ -610,23 +587,21 @@ orderRouter.get('/drafts', authMiddleware, async (req: Request, res: Response) =
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
     let drafts: any[] = [];
 
-    if (db) {
-      try {
-        const query: any = activeVendorId === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
-        drafts = await db.collection('saved_orders').find(query).sort({ updatedAt: -1, createdAt: -1 }).toArray();
-      } catch (e) {}
-    }
-
-    if (drafts.length === 0) {
-      fallbackStore.saved_orders = fallbackStore.saved_orders || [];
-      drafts = fallbackStore.saved_orders.filter(
-        d => (d.vendorId || 'vnd_kasirkafe_central') === activeVendorId
-      );
-    }
+    try {
+      const query: any = activeVendorId === 'vnd_kasirkafe_central'
+        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        : { vendorId: activeVendorId };
+      drafts = await db.collection('saved_orders').find(query).sort({ updatedAt: -1, createdAt: -1 }).toArray();
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -733,20 +708,16 @@ orderRouter.post('/drafts', authMiddleware, async (req: Request, res: Response) 
     };
 
     const db = getDB();
-    let draftId = new ObjectId().toString();
-
-    if (db) {
-      try {
-        const insertRes = await db.collection('saved_orders').insertOne(draftDoc);
-        draftId = insertRes.insertedId.toString();
-      } catch (e) {
-        fallbackStore.saved_orders = fallbackStore.saved_orders || [];
-        fallbackStore.saved_orders.unshift({ ...draftDoc, _id: draftId, id: draftId });
-      }
-    } else {
-      fallbackStore.saved_orders = fallbackStore.saved_orders || [];
-      fallbackStore.saved_orders.unshift({ ...draftDoc, _id: draftId, id: draftId });
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
+
+    const insertRes = await db.collection('saved_orders').insertOne(draftDoc);
+    const draftId = insertRes.insertedId.toString();
 
     await recordActivityLog({
       action: 'CREATE',
@@ -837,39 +808,24 @@ orderRouter.put('/drafts/:id', authMiddleware, async (req: Request, res: Respons
     };
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let updatedDraft: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        const result = await db.collection('saved_orders').findOneAndUpdate(
-          query,
-          { $set: updateFields },
-          { returnDocument: 'after' }
-        );
-        updatedDraft = result?.value || result;
-      } catch (e) {}
-    }
-
-    fallbackStore.saved_orders = fallbackStore.saved_orders || [];
-    const idx = fallbackStore.saved_orders.findIndex(
-      d => (d._id && d._id.toString() === id) || d.id === id
-    );
-    if (idx !== -1) {
-      fallbackStore.saved_orders[idx] = {
-        ...fallbackStore.saved_orders[idx],
-        ...updateFields,
-        customer: {
-          name: customerName || '',
-          email: customerEmail || '',
-          phone: customerPhone || ''
-        },
-        updatedAt: now
-      };
-      if (!updatedDraft) {
-        updatedDraft = fallbackStore.saved_orders[idx];
-      }
-    }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      const result = await db.collection('saved_orders').findOneAndUpdate(
+        query,
+        { $set: updateFields },
+        { returnDocument: 'after' }
+      );
+      updatedDraft = result?.value || result;
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -903,17 +859,18 @@ orderRouter.delete('/drafts/:id', authMiddleware, async (req: Request, res: Resp
 
     const { id } = req.params as unknown as IParam;
     const db = getDB();
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        await db.collection('saved_orders').deleteOne(query);
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    fallbackStore.saved_orders = (fallbackStore.saved_orders || []).filter(
-      d => (d._id && d._id.toString() !== id) && d.id !== id
-    );
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      await db.collection('saved_orders').deleteOne(query);
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -963,18 +920,19 @@ orderRouter.put('/:id/adjust', authMiddleware, async (req: Request, res: Respons
     } = parsed.data;
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let existingOrder: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        existingOrder = await db.collection('orders').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!existingOrder) {
-      existingOrder = fallbackStore.orders.find(o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id);
-    }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      existingOrder = await db.collection('orders').findOne(query);
+    } catch (e) {}
 
     if (!existingOrder) {
       return res.status(404).json({
@@ -1080,42 +1038,16 @@ orderRouter.put('/:id/adjust', authMiddleware, async (req: Request, res: Respons
     }
 
     let updatedOrder: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        const result = await db.collection('orders').findOneAndUpdate(
-          query,
-          { $set: updateFields },
-          { returnDocument: 'after' }
-        );
-        updatedOrder = result?.value || result;
-      } catch (e) {
-        console.warn('[Orders] Could not update order in MongoDB, updating memory store:', e);
-      }
-    }
-
-    // Update fallback store
-    fallbackStore.orders = fallbackStore.orders || [];
-    const orderIdx = fallbackStore.orders.findIndex(
-      o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id
-    );
-
-    if (orderIdx !== -1) {
-      fallbackStore.orders[orderIdx] = {
-        ...fallbackStore.orders[orderIdx],
-        ...updateFields,
-        customer: {
-          ...fallbackStore.orders[orderIdx].customer,
-          ...(customerName !== undefined ? { name: customerName } : {}),
-          ...(customerEmail !== undefined ? { email: customerEmail } : {}),
-          ...(customerPhone !== undefined ? { phone: customerPhone } : {})
-        },
-        updatedAt: now
-      };
-      if (!updatedOrder) {
-        updatedOrder = fallbackStore.orders[orderIdx];
-      }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      const result = await db.collection('orders').findOneAndUpdate(
+        query,
+        { $set: updateFields },
+        { returnDocument: 'after' }
+      );
+      updatedOrder = result?.value || result;
+    } catch (e) {
+      console.error('[Orders] Could not update order in MongoDB:', e);
     }
 
     // Record activity log
@@ -1186,18 +1118,19 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
     const { reason, refundMethod } = parsed.data;
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let existingOrder: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        existingOrder = await db.collection('orders').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!existingOrder) {
-      existingOrder = fallbackStore.orders.find(o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id);
-    }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      existingOrder = await db.collection('orders').findOne(query);
+    } catch (e) {}
 
     if (!existingOrder) {
       return res.status(404).json({
@@ -1227,6 +1160,37 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
       cancelledBy: cashierName
     };
 
+    // Restore stock for cancelled order items
+    if (Array.isArray(existingOrder.items)) {
+      for (const item of existingOrder.items) {
+        if (item.productId) {
+          try {
+            const query: any = ObjectId.isValid(item.productId)
+              ? { _id: new ObjectId(item.productId) }
+              : { _id: item.productId };
+            await db.collection('products').updateOne(query, { $inc: { stock: item.quantity || 1 } });
+            await db.collection('inventory_logs').insertOne({
+              vendorId: activeVendorId,
+              productId: item.productId,
+              productName: item.name || 'Produk',
+              change: item.quantity || 1,
+              type: 'CANCEL_RESTORE',
+              reason: `Pengembalian stok pembatalan pesanan #${existingOrder.orderNumber}`,
+              performedBy: {
+                id: req.user?.userId || '',
+                name: cashierName,
+                role: req.user?.role || 'CASHIER'
+              },
+              createdAt: now
+            });
+          } catch (e) {}
+        }
+      }
+    }
+
+    // Invalidate product cache
+    serverProductCache.invalidateProducts(activeVendorId);
+
     const updateFields: any = {
       status: 'CANCELLED',
       cancellation: cancellationData,
@@ -1234,34 +1198,16 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
     };
 
     let updatedOrder: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
-        const result = await db.collection('orders').findOneAndUpdate(
-          query,
-          { $set: updateFields },
-          { returnDocument: 'after' }
-        );
-        updatedOrder = result?.value || result;
-      } catch (e) {
-        console.warn('[Orders] Could not update order cancellation in MongoDB:', e);
-      }
-    }
-
-    fallbackStore.orders = fallbackStore.orders || [];
-    const orderIdx = fallbackStore.orders.findIndex(
-      o => (o._id && o._id.toString() === id) || o.id === id || o.orderNumber === id
-    );
-
-    if (orderIdx !== -1) {
-      fallbackStore.orders[orderIdx] = {
-        ...fallbackStore.orders[orderIdx],
-        ...updateFields
-      };
-      if (!updatedOrder) {
-        updatedOrder = fallbackStore.orders[orderIdx];
-      }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+      const result = await db.collection('orders').findOneAndUpdate(
+        query,
+        { $set: updateFields },
+        { returnDocument: 'after' }
+      );
+      updatedOrder = result?.value || result;
+    } catch (e) {
+      console.warn('[Orders] Could not update order cancellation in MongoDB:', e);
     }
 
     // Record activity log
@@ -1308,35 +1254,30 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let orders: any[] = [];
-
-    if (db) {
-      try {
-        let query: any = {};
-        if (isAllVendors) {
-          query = {};
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: requestedVendor };
-        } else {
-          query = activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId };
-        }
-        orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(200).toArray();
-      } catch (e) {}
-    }
-
-    if (orders.length === 0) {
+    try {
+      let query: any = {};
       if (isAllVendors) {
-        orders = fallbackStore.orders;
+        query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
+        query = requestedVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: requestedVendor };
       } else {
-        orders = fallbackStore.orders.filter(o => (o.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
+        query = activeVendorId === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
       }
-    }
+      orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(200).toArray();
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -1385,18 +1326,19 @@ orderRouter.post('/:id/resend-email', authMiddleware, async (req: Request, res: 
     const { targetEmail } = req.body;
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let order: any = null;
-
-    if (db) {
-      try {
-        const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { orderNumber: id };
-        order = await db.collection('orders').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!order) {
-      order = fallbackStore.orders.find(o => (o._id && o._id.toString() === id) || o.orderNumber === id);
-    }
+    try {
+      const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { orderNumber: id };
+      order = await db.collection('orders').findOne(query);
+    } catch (e) {}
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Pesanan tidak ditemukan' });

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { verifyToken } from './auth';
 
 export interface VendorRecord {
@@ -27,7 +27,7 @@ declare global {
 }
 
 /**
- * Find vendor by ID from MongoDB or fallback in-memory store
+ * Find vendor by ID from MongoDB
  */
 export async function findVendorById(id: string): Promise<VendorRecord | null> {
   if (!id) return null;
@@ -38,10 +38,6 @@ export async function findVendorById(id: string): Promise<VendorRecord | null> {
       const doc = await db.collection('vendors').findOne({ id });
       if (doc) vendor = doc as unknown as VendorRecord;
     } catch (e) {}
-  }
-  if (!vendor) {
-    const found = fallbackStore.vendors?.find((v: VendorRecord) => v.id === id);
-    vendor = found || null;
   }
   if (vendor && !vendor.code) {
     vendor.code = vendor.id ? vendor.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : 'VND';
@@ -59,9 +55,6 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
     try {
       vendors = (await db.collection('vendors').find({}).toArray()) as unknown as VendorRecord[];
     } catch (e) {}
-  }
-  if (!vendors || vendors.length === 0) {
-    vendors = (fallbackStore.vendors || []) as VendorRecord[];
   }
   return (vendors || []).map(v => ({
     ...v,

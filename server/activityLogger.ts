@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { ObjectId } from 'mongodb';
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { logDataMutation } from './dailyRollingLogger';
 
 export type ActivityAction =
@@ -145,18 +145,7 @@ export async function recordActivityLog(params: RecordActivityParams): Promise<A
     }
   }
 
-  // 2. Persist to fallback store for resilient in-memory retrieval
-  if (!fallbackStore.activity_logs) {
-    fallbackStore.activity_logs = [];
-  }
-  fallbackStore.activity_logs.unshift(logDoc);
-
-  // Keep in-memory store bounded to prevent unlimited growth (keep latest 2000 entries)
-  if (fallbackStore.activity_logs.length > 2000) {
-    fallbackStore.activity_logs.pop();
-  }
-
-  // 3. Mirror data modifications to the daily rolling log file (DATA_MUTATION category)
+  // Mirror data modifications to the daily rolling log file (DATA_MUTATION category)
   if (entity !== 'ORDER') {
     logDataMutation({
       action: action as any,
@@ -258,51 +247,8 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
     }
   }
 
-  // Fallback to in-memory store if db returns empty or is disconnected
-  if (allLogs.length === 0 && fallbackStore.activity_logs.length > 0) {
-    allLogs = fallbackStore.activity_logs.filter(log => {
-      if (vendorId && vendorId !== 'ALL' && (log.vendorId || 'vnd_kasirkafe_central') !== vendorId) {
-        return false;
-      }
-      if (action && action !== 'ALL' && log.action !== action.toUpperCase()) {
-        return false;
-      }
-      if (entity && entity !== 'ALL' && log.entity !== entity.toUpperCase()) {
-        return false;
-      }
-      if (userId && userId !== 'ALL' && log.performedBy?.id !== userId && log.performedBy?.email !== userId) {
-        return false;
-      }
-      if (startDate) {
-        const logTime = new Date(log.createdAt).getTime();
-        const start = new Date(startDate).getTime();
-        if (logTime < start) return false;
-      }
-      if (endDate) {
-        const logTime = new Date(log.createdAt).getTime();
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        if (logTime > end.getTime()) return false;
-      }
-      if (search && search.trim()) {
-        const term = search.trim().toLowerCase();
-        const matchSummary = (log.summary || '').toLowerCase().includes(term);
-        const matchEntityName = (log.entityName || '').toLowerCase().includes(term);
-        const matchPerformer = (log.performedBy?.name || '').toLowerCase().includes(term);
-        const matchEmail = (log.performedBy?.email || '').toLowerCase().includes(term);
-        const matchIp = (log.ipAddress || '').toLowerCase().includes(term);
-        if (!matchSummary && !matchEntityName && !matchPerformer && !matchEmail && !matchIp) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  // Compute summary stats over all logs in store
-  const fullCollection = fallbackStore.activity_logs.length > allLogs.length
-    ? fallbackStore.activity_logs
-    : allLogs;
+  // Compute summary stats over all retrieved logs
+  const fullCollection = allLogs;
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

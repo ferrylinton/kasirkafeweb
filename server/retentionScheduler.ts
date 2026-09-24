@@ -8,11 +8,14 @@
  * 4. Provides complete management endpoints and audit history for the ADMIN role.
  */
 
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { writeDailyLog } from './dailyRollingLogger';
 
 export const RETENTION_DAYS = 90;
 export const RETENTION_MONTHS = 3;
+
+let localHousekeepingSettings: HousekeepingSettings = { ...DEFAULT_SETTINGS };
+let localHousekeepingHistory: HousekeepingExecutionRecord[] = [];
 
 export interface HousekeepingSettings {
   enabled: boolean;
@@ -181,26 +184,19 @@ export async function getHousekeepingSettings(): Promise<HousekeepingSettings> {
         return { ...DEFAULT_SETTINGS, ...doc.value };
       }
     } catch (e) {
-      console.warn('[Housekeeping] Error reading settings from MongoDB, falling back to memory:', e);
+      console.warn('[Housekeeping] Error reading settings from MongoDB:', e);
     }
   }
 
-  if (fallbackStore.housekeeping_settings) {
-    return { ...DEFAULT_SETTINGS, ...fallbackStore.housekeeping_settings };
-  }
-
-  return { ...DEFAULT_SETTINGS };
+  return localHousekeepingSettings;
 }
 
 function getHousekeepingSettingsSync(): HousekeepingSettings {
-  if (fallbackStore.housekeeping_settings) {
-    return { ...DEFAULT_SETTINGS, ...fallbackStore.housekeeping_settings };
-  }
-  return { ...DEFAULT_SETTINGS };
+  return localHousekeepingSettings;
 }
 
 /**
- * Saves housekeeping settings to MongoDB & fallbackStore
+ * Saves housekeeping settings to MongoDB
  */
 export async function saveHousekeepingSettings(settings: Partial<HousekeepingSettings>): Promise<HousekeepingSettings> {
   const current = await getHousekeepingSettings();
@@ -209,7 +205,7 @@ export async function saveHousekeepingSettings(settings: Partial<HousekeepingSet
     ...settings
   };
 
-  fallbackStore.housekeeping_settings = updated;
+  localHousekeepingSettings = updated;
 
   const db = getDB();
   if (db) {
@@ -246,31 +242,26 @@ export async function getHousekeepingStats(customCutoffDate?: Date): Promise<{
     collection: 'orders' | 'inventory_logs' | 'email_logs' | 'activity_logs';
     label: string;
     dateFields: string[];
-    fallbackArray: any[];
   }> = [
     {
       collection: 'orders',
       label: 'Pesanan Transaksi (orders)',
-      dateFields: ['createdAt', 'date'],
-      fallbackArray: fallbackStore.orders || []
+      dateFields: ['createdAt', 'date']
     },
     {
       collection: 'inventory_logs',
       label: 'Log Mutasi Stok (inventory_logs)',
-      dateFields: ['createdAt', 'timestamp'],
-      fallbackArray: fallbackStore.inventory_logs || []
+      dateFields: ['createdAt', 'timestamp']
     },
     {
       collection: 'email_logs',
       label: 'Log Pengiriman Email (email_logs)',
-      dateFields: ['sentAt', 'createdAt'],
-      fallbackArray: fallbackStore.email_logs || []
+      dateFields: ['sentAt', 'createdAt']
     },
     {
       collection: 'activity_logs',
       label: 'Log Aktivitas DB (activity_logs)',
-      dateFields: ['createdAt', 'timestamp'],
-      fallbackArray: fallbackStore.activity_logs || []
+      dateFields: ['createdAt', 'timestamp']
     }
   ];
 
@@ -301,32 +292,7 @@ export async function getHousekeepingStats(customCutoffDate?: Date): Promise<{
           if (rawDate) oldestDate = new Date(rawDate);
         }
       } catch (err) {
-        console.warn(`[Housekeeping] Error querying MongoDB for ${meta.collection}, checking fallback:`, err);
-      }
-    }
-
-    // If MongoDB is not connected or returned zero while fallback has data
-    if (!db || (totalCount === 0 && meta.fallbackArray.length > 0)) {
-      const items = meta.fallbackArray;
-      totalCount = items.length;
-      olderThanCutoffCount = 0;
-
-      for (const item of items) {
-        let itemDate: Date | null = null;
-        for (const field of meta.dateFields) {
-          if (item[field]) {
-            itemDate = new Date(item[field]);
-            break;
-          }
-        }
-        if (itemDate && !isNaN(itemDate.getTime())) {
-          if (itemDate < cutoffDate) {
-            olderThanCutoffCount++;
-          }
-          if (!oldestDate || itemDate < oldestDate) {
-            oldestDate = itemDate;
-          }
-        }
+        console.warn(`[Housekeeping] Error querying MongoDB for ${meta.collection}:`, err);
       }
     }
 
@@ -403,22 +369,6 @@ export async function runHousekeepingCleanup(
         console.error('[Housekeeping] Orders deletion error:', err);
       }
     }
-    // Fallback store orders
-    if (fallbackStore.orders) {
-      const initial = fallbackStore.orders.length;
-      const keep = fallbackStore.orders.filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return isNaN(d.getTime()) || d >= cutoffDate;
-      });
-      if (isDryRun) {
-        ordersDeleted = Math.max(ordersDeleted, initial - keep.length);
-      } else {
-        fallbackStore.orders = keep;
-        ordersDeleted = Math.max(ordersDeleted, initial - fallbackStore.orders.length);
-      }
-      if (!activeOrders) activeOrders = fallbackStore.orders.length;
-    }
-
     // 2. INVENTORY_LOGS
     if (db) {
       try {
@@ -435,21 +385,6 @@ export async function runHousekeepingCleanup(
       } catch (err) {
         console.error('[Housekeeping] Inventory logs deletion error:', err);
       }
-    }
-    // Fallback store inventory logs
-    if (fallbackStore.inventory_logs) {
-      const initial = fallbackStore.inventory_logs.length;
-      const keep = fallbackStore.inventory_logs.filter((l: any) => {
-        const d = new Date(l.createdAt || l.timestamp);
-        return isNaN(d.getTime()) || d >= cutoffDate;
-      });
-      if (isDryRun) {
-        inventoryLogsDeleted = Math.max(inventoryLogsDeleted, initial - keep.length);
-      } else {
-        fallbackStore.inventory_logs = keep;
-        inventoryLogsDeleted = Math.max(inventoryLogsDeleted, initial - fallbackStore.inventory_logs.length);
-      }
-      if (!activeInventoryLogs) activeInventoryLogs = fallbackStore.inventory_logs.length;
     }
 
     // 3. EMAIL_LOGS
@@ -468,21 +403,6 @@ export async function runHousekeepingCleanup(
       } catch (err) {
         console.error('[Housekeeping] Email logs deletion error:', err);
       }
-    }
-    // Fallback store email logs
-    if (fallbackStore.email_logs) {
-      const initial = fallbackStore.email_logs.length;
-      const keep = fallbackStore.email_logs.filter((l: any) => {
-        const d = new Date(l.sentAt || l.createdAt);
-        return isNaN(d.getTime()) || d >= cutoffDate;
-      });
-      if (isDryRun) {
-        emailLogsDeleted = Math.max(emailLogsDeleted, initial - keep.length);
-      } else {
-        fallbackStore.email_logs = keep;
-        emailLogsDeleted = Math.max(emailLogsDeleted, initial - fallbackStore.email_logs.length);
-      }
-      if (!activeEmailLogs) activeEmailLogs = fallbackStore.email_logs.length;
     }
 
     // 4. ACTIVITY_LOGS
@@ -503,22 +423,6 @@ export async function runHousekeepingCleanup(
       } catch (err) {
         console.error('[Housekeeping] Activity logs deletion error:', err);
       }
-    }
-    // Fallback store activity logs
-    if (fallbackStore.activity_logs) {
-      const initial = fallbackStore.activity_logs.length;
-      const keep = fallbackStore.activity_logs.filter((l: any) => {
-        if (l.action === 'HOUSEKEEPING_CLEANUP') return true;
-        const d = new Date(l.createdAt || l.timestamp);
-        return isNaN(d.getTime()) || d >= cutoffDate;
-      });
-      if (isDryRun) {
-        activityLogsDeleted = Math.max(activityLogsDeleted, initial - keep.length);
-      } else {
-        fallbackStore.activity_logs = keep;
-        activityLogsDeleted = Math.max(activityLogsDeleted, initial - fallbackStore.activity_logs.length);
-      }
-      if (!activeActivityLogs) activeActivityLogs = fallbackStore.activity_logs.length;
     }
 
     const totalDeleted = ordersDeleted + inventoryLogsDeleted + emailLogsDeleted + activityLogsDeleted;
@@ -574,10 +478,6 @@ export async function runHousekeepingCleanup(
           });
         } catch {}
       }
-      fallbackStore.activity_logs.unshift({
-        ...logEntry,
-        id: `log_hk_${Date.now()}`
-      } as any);
 
       writeDailyLog({
         level: 'INFO',
@@ -603,12 +503,9 @@ export async function runHousekeepingCleanup(
  * Saves execution audit record
  */
 async function recordHousekeepingHistory(record: HousekeepingExecutionRecord): Promise<void> {
-  if (!fallbackStore.housekeeping_history) {
-    fallbackStore.housekeeping_history = [];
-  }
-  fallbackStore.housekeeping_history.unshift(record);
-  if (fallbackStore.housekeeping_history.length > 50) {
-    fallbackStore.housekeeping_history.pop();
+  localHousekeepingHistory.unshift(record);
+  if (localHousekeepingHistory.length > 50) {
+    localHousekeepingHistory.pop();
   }
 
   const db = getDB();
@@ -643,7 +540,7 @@ export async function getHousekeepingHistory(): Promise<HousekeepingExecutionRec
     }
   }
 
-  return fallbackStore.housekeeping_history || [];
+  return localHousekeepingHistory;
 }
 
 /**
@@ -659,10 +556,8 @@ export async function getRetentionStatus(): Promise<RetentionStatus> {
     try {
       activeOrders = await db.collection('orders').countDocuments();
     } catch {
-      activeOrders = fallbackStore.orders?.length || 0;
+      activeOrders = 0;
     }
-  } else {
-    activeOrders = fallbackStore.orders?.length || 0;
   }
 
   const nextRun = getNextMonthFirstDay();
@@ -739,9 +634,9 @@ export function initRetentionScheduler(): void {
   console.log(' - Notification: End-of-month alert 2 days prior to month end');
 
   // Seed an initial history record if empty
-  if (!fallbackStore.housekeeping_history || fallbackStore.housekeeping_history.length === 0) {
+  if (localHousekeepingHistory.length === 0) {
     const sampleCutoff = getCutoffDate(3);
-    fallbackStore.housekeeping_history = [
+    localHousekeepingHistory = [
       {
         id: 'hk_init_sample_01',
         executedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),

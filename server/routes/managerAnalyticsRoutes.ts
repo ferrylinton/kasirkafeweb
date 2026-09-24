@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireManager } from '../auth';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { getAllVendors, findVendorById } from '../vendorMiddleware';
 import {
   getCutoffDate,
@@ -98,12 +98,6 @@ managerAnalyticsRouter.get('/transactions', async (req: Request, res: Response) 
       } catch (e) {
         console.error('[ManagerAnalytics] MongoDB find error:', e);
       }
-    }
-    if (rawOrders.length === 0) {
-      rawOrders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return o.vendorId === vendorId && d >= cutoffDate;
-      });
     }
 
     interface CleanOrder {
@@ -361,12 +355,6 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
         console.error('[ManagerAnalytics] Export find error:', e);
       }
     }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return o.vendorId === vendorId && d >= startDate && d <= endDate;
-      }).sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-    }
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount ?? o.total ?? 0), 0);
     const vendorName = vendor?.name || 'Vendor Toko';
@@ -594,12 +582,6 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
         console.error('[ManagerAnalytics] Mongo query error:', e);
       }
     }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return o.vendorId === vendorId && d >= startDate && d <= endDate && d >= cutoffDate;
-      });
-    }
 
     interface ProductAgg {
       productId: string;
@@ -804,12 +786,6 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
       } catch (e) {
         console.error('[ManagerAnalytics] Export top-products Mongo error:', e);
       }
-    }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return o.vendorId === vendorId && d >= startDate && d <= endDate && d >= cutoffDate;
-      });
     }
 
     interface ProductAgg {

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getDB, fallbackStore } from '../db';
+import { getDB, connectDB } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
@@ -116,26 +116,21 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let categories: any[] = [];
-
-    if (db) {
-      try {
-        const query = (activeVendorId === 'vnd_kasirkafe_central'
-              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-              : { vendorId: activeVendorId });
-        categories = await db.collection('categories').find(query).toArray();
-      } catch (e) {}
-    }
-
-    if (categories.length === 0) {
-      const source = fallbackStore.categories || [];
-      categories = source.filter(c => (c.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
-      
-      // If vendor doesn't have custom categories yet, fallback to all default categories
-      if (categories.length === 0) {
-        categories = source.filter(c => !c.vendorId || c.vendorId === 'vnd_kasirkafe_central');
-      }
-    }
+    try {
+      const query = (activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId });
+      categories = await db.collection('categories').find(query).toArray();
+    } catch (e) {}
 
     const payload = {
       success: true,
@@ -194,16 +189,19 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     };
 
     const db = getDB();
-    let insertedId = `cat_${Date.now()}`;
-
-    if (db) {
-      try {
-        const result = await db.collection('categories').insertOne(newCategory);
-        insertedId = result.insertedId.toString();
-      } catch (e) {}
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
     }
 
-    fallbackStore.categories.push({ ...newCategory, _id: insertedId });
+    let insertedId = `cat_${Date.now()}`;
+    try {
+      const result = await db.collection('categories').insertOne(newCategory);
+      insertedId = result.insertedId.toString();
+    } catch (e) {}
 
     // Invalidate categories cache for active vendor
     serverProductCache.invalidateCategories(activeVendorId);
@@ -261,49 +259,37 @@ productRouter.get('/', async (req: Request, res: Response) => {
     }
 
     const db = getDB();
-    let products: any[] = [];
-
-    if (db) {
-      try {
-        const filter: any = {};
-        if (isAllVendors) {
-          // No vendor restriction across all vendors
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : requestedVendor;
-        } else if (activeVendorId === 'vnd_kasirkafe_central') {
-          filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
-        } else {
-          filter.vendorId = activeVendorId;
-        }
-
-        if (category && category !== 'all') {
-          filter.category = category.toLowerCase();
-        }
-        if (search) {
-          filter.name = { $regex: search, $options: 'i' };
-        }
-        products = await db.collection('products').find(filter).toArray();
-      } catch (e) {}
-    }
-
-    if (products.length === 0) {
-      products = fallbackStore.products.filter(p => {
-        const pVendor = p.vendorId || 'vnd_kasirkafe_central';
-        let matchVendor = true;
-        if (isAllVendors) {
-          matchVendor = true;
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          matchVendor = pVendor === requestedVendor;
-        } else {
-          matchVendor = pVendor === activeVendorId;
-        }
-        const matchCategory = !category || category === 'all' || p.category.toLowerCase() === category.toLowerCase();
-        const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-        return matchVendor && matchCategory && matchSearch;
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
       });
     }
+
+    let products: any[] = [];
+    try {
+      const filter: any = {};
+      if (isAllVendors) {
+        // No vendor restriction across all vendors
+      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+        filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : requestedVendor;
+      } else if (activeVendorId === 'vnd_kasirkafe_central') {
+        filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+      } else {
+        filter.vendorId = activeVendorId;
+      }
+
+      if (category && category !== 'all') {
+        filter.category = category.toLowerCase();
+      }
+      if (search) {
+        filter.name = { $regex: search, $options: 'i' };
+      }
+      products = await db.collection('products').find(filter).toArray();
+    } catch (e) {}
 
     const payload = {
       success: true,
@@ -352,33 +338,30 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let products: any[] = [];
-    if (db) {
-      try {
-        let query: any = {};
-        if (isAllVendors) {
-          query = {};
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: requestedVendor };
-        } else {
-          query = activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId };
-        }
-        products = await db.collection('products').find(query).toArray();
-      } catch (e) {}
-    }
-    if (products.length === 0) {
+    try {
+      let query: any = {};
       if (isAllVendors) {
-        products = fallbackStore.products;
+        query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
+        query = requestedVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: requestedVendor };
       } else {
-        products = fallbackStore.products.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
+        query = activeVendorId === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
       }
-    }
+      products = await db.collection('products').find(query).toArray();
+    } catch (e) {}
 
     const mapped = products.map(p => {
       const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
@@ -444,35 +427,30 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
     const requestedVendor = (req.query.vendorId as string) || '';
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
-    let logs: any[] = [];
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
 
-    if (db) {
-      try {
-        let query: any = {};
-        if (isAllVendors) {
-          query = {};
-        } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          query = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: requestedVendor };
-        } else {
-          query = activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId };
-        }
-        logs = await db.collection('inventory_logs').find(query).sort({ createdAt: -1 }).limit(200).toArray();
-      } catch (e) {}
-    }
-    if (logs.length === 0) {
-      const source = fallbackStore.inventory_logs || [];
+    let logs: any[] = [];
+    try {
+      let query: any = {};
       if (isAllVendors) {
-        logs = source;
+        query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        logs = source.filter(l => (l.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
+        query = requestedVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: requestedVendor };
       } else {
-        logs = source.filter(l => (l.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
+        query = activeVendorId === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: activeVendorId };
       }
-    }
+      logs = await db.collection('inventory_logs').find(query).sort({ createdAt: -1 }).limit(200).toArray();
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -511,6 +489,14 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     const filter: any = {
       $or: [
         { vendorId: activeVendorId },
@@ -521,23 +507,11 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       filter.category = category.toLowerCase();
     }
 
-    if (db) {
-      try {
-        await db.collection('products').updateMany(filter, {
-          $set: { lowStockThreshold: thresholdNum, updatedAt: new Date() }
-        });
-      } catch (e) {}
-    }
-
-    fallbackStore.products.forEach(p => {
-      const pVendor = p.vendorId || 'vnd_kasirkafe_central';
-      if (pVendor === activeVendorId) {
-        if (!category || category === 'all' || p.category?.toLowerCase() === category.toLowerCase()) {
-          p.lowStockThreshold = thresholdNum;
-          p.updatedAt = new Date();
-        }
-      }
-    });
+    try {
+      await db.collection('products').updateMany(filter, {
+        $set: { lowStockThreshold: thresholdNum, updatedAt: new Date() }
+      });
+    } catch (e) {}
 
     const logDoc = {
       vendorId: activeVendorId,
@@ -556,12 +530,9 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       createdAt: new Date()
     };
 
-    if (db) {
-      try {
-        await db.collection('inventory_logs').insertOne(logDoc);
-      } catch (e) {}
-    }
-    fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...logDoc });
+    try {
+      await db.collection('inventory_logs').insertOne(logDoc);
+    } catch (e) {}
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -599,19 +570,21 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let currentProducts: any[] = [];
-    if (db) {
-      try {
-        const query = (activeVendorId === 'vnd_kasirkafe_central'
-              ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-              : { vendorId: activeVendorId });
-        currentProducts = await db.collection('products').find(query).toArray();
-      } catch (e) {}
-    }
-    if (currentProducts.length === 0) {
-      const source = fallbackStore.products || [];
-      currentProducts = source.filter(p => (p.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
-    }
+    try {
+      const query = (activeVendorId === 'vnd_kasirkafe_central'
+            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+            : { vendorId: activeVendorId });
+      currentProducts = await db.collection('products').find(query).toArray();
+    } catch (e) {}
 
     let updatedCount = 0;
     let createdCount = 0;
@@ -680,17 +653,10 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         }
 
         const existingId = existing._id ? existing._id.toString() : existing.id;
-        if (db) {
-          try {
-            const query: any = ObjectId.isValid(existingId) ? { _id: new ObjectId(existingId) } : { _id: existingId };
-            await db.collection('products').updateOne(query, { $set: updateFields });
-          } catch (e) {}
-        }
-
-        const fbIdx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === existingId) || p.id === existingId);
-        if (fbIdx !== -1) {
-          fallbackStore.products[fbIdx] = { ...fallbackStore.products[fbIdx], ...updateFields };
-        }
+        try {
+          const query: any = ObjectId.isValid(existingId) ? { _id: new ObjectId(existingId) } : { _id: existingId };
+          await db.collection('products').updateOne(query, { $set: updateFields });
+        } catch (e) {}
 
         // Audit log if stock changed or price changed
         const priceChanged = updateFields.price !== undefined && updateFields.price !== prevPrice;
@@ -747,16 +713,13 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         };
 
         let insertedId = new ObjectId().toString();
-        if (db) {
-          try {
-            const resInsert = await db.collection('products').insertOne(newDoc);
-            insertedId = resInsert.insertedId.toString();
-          } catch (e) {}
-        }
+        try {
+          const resInsert = await db.collection('products').insertOne(newDoc);
+          insertedId = resInsert.insertedId.toString();
+        } catch (e) {}
         newDoc._id = insertedId;
         newDoc.id = insertedId;
         currentProducts.push(newDoc);
-        fallbackStore.products.push(newDoc);
 
         const logDoc = {
           vendorId: activeVendorId,
@@ -782,14 +745,9 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
 
     // Insert logs
     if (inventoryLogs.length > 0) {
-      if (db) {
-        try {
-          await db.collection('inventory_logs').insertMany(inventoryLogs);
-        } catch (e) {}
-      }
-      for (const log of inventoryLogs) {
-        fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...log });
-      }
+      try {
+        await db.collection('inventory_logs').insertMany(inventoryLogs);
+      } catch (e) {}
     }
 
     // Record system-wide activity log
@@ -833,18 +791,19 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
     const { stock, adjustment, lowStockThreshold, reason } = req.body;
 
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let product: any = null;
-
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        product = await db.collection('products').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!product) {
-      product = fallbackStore.products.find(p => (p._id && p._id.toString() === id) || p.id === id);
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      product = await db.collection('products').findOne(query);
+    } catch (e) {}
 
     if (!product) {
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan' });
@@ -868,17 +827,10 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       updateFields.lowStockThreshold = Math.max(0, Math.floor(lowStockThreshold));
     }
 
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        await db.collection('products').updateOne(query, { $set: updateFields });
-      } catch (e) {}
-    }
-
-    const fbIdx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
-    if (fbIdx !== -1) {
-      fallbackStore.products[fbIdx] = { ...fallbackStore.products[fbIdx], ...updateFields };
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      await db.collection('products').updateOne(query, { $set: updateFields });
+    } catch (e) {}
 
     const stockChange = newStock - currentStock;
     const logDoc = {
@@ -904,12 +856,9 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       createdAt: new Date()
     };
 
-    if (db) {
-      try {
-        await db.collection('inventory_logs').insertOne(logDoc);
-      } catch (e) {}
-    }
-    fallbackStore.inventory_logs.unshift({ id: new ObjectId().toString(), ...logDoc });
+    try {
+      await db.collection('inventory_logs').insertOne(logDoc);
+    } catch (e) {}
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -973,17 +922,20 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
     };
 
     const db = getDB();
-    let insertedId = new ObjectId().toString();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
 
-    if (db) {
-      try {
-        const result = await db.collection('products').insertOne(newProd);
-        insertedId = result.insertedId.toString();
-      } catch (e) {
-        fallbackStore.products.push({ ...newProd, _id: insertedId });
-      }
-    } else {
-      fallbackStore.products.push({ ...newProd, _id: insertedId });
+    let insertedId = new ObjectId().toString();
+    try {
+      const result = await db.collection('products').insertOne(newProd);
+      insertedId = result.insertedId.toString();
+    } catch (e) {
+      return res.status(500).json({ success: false, error: 'Failed to create product in db' });
     }
 
     // Record system-wide activity log
@@ -1028,18 +980,19 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
 
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let existingProd: any = null;
-
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        existingProd = await db.collection('products').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!existingProd) {
-      existingProd = fallbackStore.products.find(p => (p._id && p._id.toString() === id) || p.id === id);
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      existingProd = await db.collection('products').findOne(query);
+    } catch (e) {}
 
     if (!existingProd) {
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
@@ -1053,17 +1006,10 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       });
     }
 
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        await db.collection('products').updateOne(query, { $set: updateData });
-      } catch (e) {}
-    }
-
-    const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
-    if (idx !== -1) {
-      fallbackStore.products[idx] = { ...fallbackStore.products[idx], ...updateData };
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      await db.collection('products').updateOne(query, { $set: updateData });
+    } catch (e) {}
 
     const prodName = existingProd?.name || updateData.name || id;
 
@@ -1099,18 +1045,19 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     const { id } = req.params as unknown as IParam;
     const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
     let targetProd: any = null;
-
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        targetProd = await db.collection('products').findOne(query);
-      } catch (e) {}
-    }
-
-    if (!targetProd) {
-      targetProd = fallbackStore.products.find(p => (p._id && p._id.toString() === id) || p.id === id);
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      targetProd = await db.collection('products').findOne(query);
+    } catch (e) {}
 
     if (!targetProd) {
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
@@ -1124,17 +1071,10 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
       });
     }
 
-    if (db) {
-      try {
-        const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-        await db.collection('products').deleteOne(query);
-      } catch (e) {}
-    }
-
-    const idx = fallbackStore.products.findIndex(p => (p._id && p._id.toString() === id) || p.id === id);
-    if (idx !== -1) {
-      fallbackStore.products.splice(idx, 1);
-    }
+    try {
+      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      await db.collection('products').deleteOne(query);
+    } catch (e) {}
 
     const prodName = targetProd?.name || id;
 

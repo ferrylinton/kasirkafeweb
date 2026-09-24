@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireManager } from '../auth';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { getAllVendors, VendorRecord } from '../vendorMiddleware';
 import {
   getCutoffDate,
@@ -91,12 +91,6 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
       } catch (e) {
         console.error('[AdminAnalytics] MongoDB find error:', e);
       }
-    }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return d >= cutoffDate;
-      });
     }
 
     // Normalize each order within 3-month window
@@ -484,12 +478,6 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
         console.error('[AdminAnalytics] Export Mongo query error:', e);
       }
     }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return d >= startDate && d <= endDate && d >= cutoffDate;
-      }).sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-    }
 
     // Vendor filter
     if (requestedVendorId !== 'all') {
@@ -675,12 +663,6 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
       } catch (e) {
         console.error('[AdminAnalytics] Mongo query error:', e);
       }
-    }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return d >= startDate && d <= endDate && d >= cutoffDate;
-      });
     }
 
     // Filter by vendor if requested
@@ -891,12 +873,6 @@ adminAnalyticsRouter.get('/top-products/export', async (req: Request, res: Respo
       } catch (e) {
         console.error('[AdminAnalytics] Export Mongo query error:', e);
       }
-    }
-    if (orders.length === 0) {
-      orders = (fallbackStore.orders || []).filter((o: any) => {
-        const d = new Date(o.createdAt || o.date);
-        return d >= startDate && d <= endDate && d >= cutoffDate;
-      });
     }
 
     if (requestedVendorId !== 'all') {

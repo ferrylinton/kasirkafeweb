@@ -1,5 +1,5 @@
 import { getRedisClient } from './redis';
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { logRedis } from './dailyRollingLogger';
 
 export interface LockoutRecord {
@@ -441,10 +441,6 @@ export async function getLockedUsersFromRedis(): Promise<LockedUserDetail[]> {
         try {
           matchedUser = await db.collection('users').findOne({ email: emailLower });
         } catch (e) {}
-      }
-
-      if (!matchedUser) {
-        matchedUser = fallbackStore.users.find(u => u.email.toLowerCase() === emailLower);
       }
 
       if (matchedUser) {

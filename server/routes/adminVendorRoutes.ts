@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ObjectId } from 'mongodb';
 import { authMiddleware, requireAdmin } from '../auth';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import {
   VendorRecord,
   findVendorById,
@@ -36,12 +36,6 @@ async function computeVendorStats(vendorId: string) {
     } catch (e) {
       console.error('[AdminVendor] Error counting stats from MongoDB:', e);
     }
-  } else {
-    productCount = fallbackStore.products?.filter(p => (p as any).vendorId === vendorId).length || 0;
-    userCount = fallbackStore.users?.filter(u => (u as any).vendorId === vendorId).length || 0;
-    const orders = fallbackStore.orders?.filter(o => (o as any).vendorId === vendorId) || [];
-    orderCount = orders.length;
-    totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.totalAmount ?? o.total ?? 0)), 0);
   }
 
   return { productCount, orderCount, userCount, totalRevenue };
@@ -65,18 +59,21 @@ adminVendorRouter.get('/', requireAdmin, async (req: Request, res: Response) => 
       const q = search.toLowerCase().trim();
       filtered = filtered.filter(
         v =>
-          v.name.toLowerCase().includes(q) ||
-          v.id.toLowerCase().includes(q)
+          (v.name && v.name.toLowerCase().includes(q)) ||
+          (v.id && typeof v.id === 'string' && v.id.toLowerCase().includes(q))
       );
     }
 
     // Enrich with stats
     const enriched = await Promise.all(
       filtered.map(async v => {
-        const stats = await computeVendorStats(v.id);
-        const code = v.code || (v.id.startsWith('vnd_') ? v.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : v.id.slice(0, 6).toUpperCase()) || 'VND';
+        const stats = await computeVendorStats(v.id || '');
+        const code = v.code || (v.id && typeof v.id === 'string'
+          ? (v.id.startsWith('vnd_') ? v.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : v.id.slice(0, 6).toUpperCase())
+          : 'VND');
         return {
           ...v,
+          id: v.id || (v._id ? v._id.toString() : 'VND'),
           code,
           stats
         };
@@ -141,10 +138,6 @@ adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) =>
       ];
       await db.collection('categories').insertMany(initialCategories);
     }
-
-    // Keep fallback store in sync
-    if (!fallbackStore.vendors) fallbackStore.vendors = [];
-    fallbackStore.vendors.push({ ...newVendor });
 
     // Record activity log
     await recordActivityLog({
@@ -212,14 +205,6 @@ adminVendorRouter.put('/:id', requireAdmin, async (req: Request, res: Response) 
       await db.collection('vendors').updateOne({ id }, { $set: updates });
     }
 
-    // Update in-memory fallback
-    if (fallbackStore.vendors) {
-      const idx = fallbackStore.vendors.findIndex(v => v.id === id);
-      if (idx !== -1) {
-        fallbackStore.vendors[idx] = { ...fallbackStore.vendors[idx], ...updates };
-      }
-    }
-
     const updatedVendor = { ...vendor, ...updates };
 
     await recordActivityLog({
@@ -277,14 +262,6 @@ adminVendorRouter.patch('/:id/status', requireAdmin, async (req: Request, res: R
       await db.collection('vendors').updateOne({ id }, { $set: { status: newStatus, updatedAt: new Date() } });
     }
 
-    if (fallbackStore.vendors) {
-      const found = fallbackStore.vendors.find(v => v.id === id);
-      if (found) {
-        found.status = newStatus;
-        found.updatedAt = new Date();
-      }
-    }
-
     // If deactivated, revoke all active sessions for this vendor
     if (newStatus === 'DEACTIVATE') {
       await revokeAllSessionsForVendor(id, 'Vendor dinonaktifkan oleh Admin');
@@ -338,16 +315,6 @@ adminVendorRouter.delete('/:id', requireAdmin, async (req: Request, res: Respons
       // Optional: clean up products and categories for this vendor
       await db.collection('products').deleteMany({ vendorId: id });
       await db.collection('categories').deleteMany({ vendorId: id });
-    }
-
-    if (fallbackStore.vendors) {
-      fallbackStore.vendors = fallbackStore.vendors.filter(v => v.id !== id);
-    }
-    if (fallbackStore.products) {
-      fallbackStore.products = fallbackStore.products.filter(p => (p as any).vendorId !== id);
-    }
-    if (fallbackStore.categories) {
-      fallbackStore.categories = fallbackStore.categories.filter(c => (c as any).vendorId !== id);
     }
 
     await recordActivityLog({

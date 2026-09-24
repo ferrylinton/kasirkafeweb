@@ -7,7 +7,7 @@ import {
   evaluateDiscountsForOrder,
   calculateItemDiscountPrice
 } from '../discounts';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
@@ -164,7 +164,7 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
       } catch (e) {}
     }
     if (rules.length === 0) {
-      const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
+      const source = DEFAULT_RULES;
       if (isAllVendors) {
         rules = source;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
@@ -234,9 +234,6 @@ discountRouter.post('/rules', authMiddleware, requireDiscountWriteAccess, async 
         existingRule = await db.collection('discount_rules').findOne({ code: formattedCode });
       } catch (e) {}
     }
-    if (!existingRule) {
-      existingRule = fallbackStore.discount_rules.find(r => r.code === formattedCode);
-    }
 
     if (existingRule) {
       return res.status(400).json({
@@ -274,8 +271,6 @@ discountRouter.post('/rules', authMiddleware, requireDiscountWriteAccess, async 
       _id: insertedId,
       id: insertedId
     };
-
-    fallbackStore.discount_rules.push(createdRule);
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -331,10 +326,6 @@ discountRouter.get('/rules/:id', async (req: Request, res: Response) => {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         rule = await db.collection('discount_rules').findOne(query);
       } catch (e) {}
-    }
-
-    if (!rule) {
-      rule = fallbackStore.discount_rules.find(r => (r._id && r._id.toString() === id) || r.code === id);
     }
 
     if (!rule) {
@@ -395,15 +386,6 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
       } catch (e) {}
     }
 
-    const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
-    if (idx !== -1) {
-      if (!existingRule) existingRule = fallbackStore.discount_rules[idx];
-      if (existingRule && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
-        return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
-      }
-      fallbackStore.discount_rules[idx] = { ...fallbackStore.discount_rules[idx], ...updateData };
-    }
-
     const ruleLabel = existingRule?.name || updateData.name || id;
 
     // Record system-wide activity log
@@ -448,18 +430,6 @@ discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, 
         await db.collection('discount_rules').deleteOne(query);
       } catch (e) {}
     }
-
-    const idx = fallbackStore.discount_rules.findIndex(r => (r._id && r._id.toString() === id) || r.code === id);
-    if (idx !== -1) {
-      if (!targetRule) targetRule = fallbackStore.discount_rules[idx];
-      if (targetRule && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
-        return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
-      }
-    }
-
-    fallbackStore.discount_rules = fallbackStore.discount_rules.filter(
-      r => !(r._id && r._id.toString() === id) && r.code !== id
-    );
 
     const ruleLabel = targetRule?.name ? `${targetRule.name} [${targetRule.code}]` : id;
 

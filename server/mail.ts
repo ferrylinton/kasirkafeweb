@@ -1,6 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import dotenv from 'dotenv';
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { ObjectId } from 'mongodb';
 
 dotenv.config();
@@ -72,12 +72,6 @@ export async function getTemplateByCode(code: string, vendorId?: string): Promis
     } catch (e) {
       // Fallback
     }
-  }
-
-  const fallbackTmpl = fallbackStore.email_templates.find((t) => t.code === code && ((t as any).vendorId === activeVendorId || !(t as any).vendorId))
-    || fallbackStore.email_templates.find((t) => t.code === code);
-  if (fallbackTmpl) {
-    return { subject: fallbackTmpl.subject, bodyHtml: fallbackTmpl.bodyHtml };
   }
 
   return null;
@@ -175,11 +169,8 @@ export async function sendReceiptEmail(params: {
         }
       );
     } catch (dbErr) {
-      console.warn('[SMTP] Could not save email log to MongoDB, saving in local store');
-      fallbackStore.email_logs.unshift({ ...logData, _id: logId });
+      console.warn('[SMTP] Could not save email log to MongoDB:', dbErr);
     }
-  } else {
-    fallbackStore.email_logs.unshift({ ...logData, _id: logId });
   }
 
   return {
@@ -703,10 +694,8 @@ export async function sendVendorConfirmationEmail(params: {
     try {
       await db.collection('email_logs').insertOne(logData);
     } catch (e) {
-      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+      console.warn('[SMTP] Could not save vendor confirmation email log:', e);
     }
-  } else {
-    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
   }
 
   return {
@@ -831,10 +820,8 @@ export async function sendPasswordResetEmail(params: {
     try {
       await db.collection('email_logs').insertOne(logData);
     } catch (e) {
-      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+      console.warn('[SMTP] Could not save password reset email log:', e);
     }
-  } else {
-    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
   }
 
   return {
@@ -978,10 +965,8 @@ export async function sendAdminNewPasswordEmail(params: {
     try {
       await db.collection('email_logs').insertOne(logData);
     } catch (e) {
-      fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
+      console.warn('[SMTP] Could not save admin generated password email log:', e);
     }
-  } else {
-    fallbackStore.email_logs.unshift({ ...logData, _id: new ObjectId().toString() });
   }
 
   return {

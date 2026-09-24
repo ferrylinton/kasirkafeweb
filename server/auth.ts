@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 import { getSessionFromRedis, removeSessionFromRedis, getActiveTokenForUser, RedisSessionData } from './sessionStore';
 
 dotenv.config();
@@ -30,10 +30,6 @@ export const revokedSessionIds = new Set<string>();
 export async function isSessionRevoked(sessionId: string): Promise<boolean> {
   if (!sessionId) return false;
   if (revokedSessionIds.has(sessionId)) return true;
-  if (fallbackStore.revoked_sessions && fallbackStore.revoked_sessions.includes(sessionId)) {
-    revokedSessionIds.add(sessionId);
-    return true;
-  }
 
   const db = getDB();
   if (db) {
@@ -47,12 +43,6 @@ export async function isSessionRevoked(sessionId: string): Promise<boolean> {
         return true;
       }
     } catch (e) {}
-  } else {
-    const entry = fallbackStore.login_history.find(h => h.sessionId === sessionId);
-    if (entry && (entry.status === 'REVOKED' || entry.status === 'LOGGED_OUT' || entry.status === 'TIMED_OUT')) {
-      revokedSessionIds.add(sessionId);
-      return true;
-    }
   }
   return false;
 }
@@ -219,9 +209,6 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
         try {
           vendor = await db.collection('vendors').findOne({ id: decoded.vendorId });
         } catch (e) {}
-      }
-      if (!vendor) {
-        vendor = fallbackStore.vendors.find(v => v.id === decoded.vendorId);
       }
       if (vendor && (vendor.status === 'DEACTIVATE' || (vendor as any).status === 'DEACTIVATED')) {
         if (decoded.sessionId) {

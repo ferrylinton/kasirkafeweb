@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { getDB, fallbackStore } from '../db';
+import { getDB } from '../db';
 import { comparePassword, hashPassword, signToken, signRefreshToken, verifyRefreshToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken, isSessionRevoked } from '../auth';
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPasswordResetEmail, sendAdminNewPasswordEmail } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
-import { getAllVendors } from '../vendorMiddleware';
+import { getAllVendors, findVendorById } from '../vendorMiddleware';
 import { logLogin } from '../dailyRollingLogger';
 import {
   checkUserLockout,
@@ -47,12 +47,6 @@ export async function getActiveSessionsForUser(email: string) {
     } catch (e) {}
   }
 
-  if (!sessions || sessions.length === 0) {
-    sessions = fallbackStore.login_history.filter(
-      h => h.email.toLowerCase() === normalizedEmail && h.status === 'ACTIVE'
-    );
-  }
-
   // Filter out any sessions that are already recorded in revokedSessionIds
   const nonRevoked = sessions.filter(s => !revokedSessionIds.has(s.sessionId));
   
@@ -77,7 +71,7 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
   // 1. Invalidate in session store (Redis user mappings and in-memory caches)
   await invalidateUserSessionInStore(normalizedEmail);
 
-  // 2. Query all active sessions from DB & fallback store
+  // 2. Query all active sessions from DB
   let allActiveSessions: any[] = [];
   if (db) {
     try {
@@ -85,11 +79,6 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
         .find({ email: normalizedEmail, status: 'ACTIVE' })
         .toArray();
     } catch (e) {}
-  }
-  if (!allActiveSessions || allActiveSessions.length === 0) {
-    allActiveSessions = fallbackStore.login_history.filter(
-      h => h.email.toLowerCase() === normalizedEmail && h.status === 'ACTIVE'
-    );
   }
 
   const redisActive = await getActiveSessionsForUser(normalizedEmail);
@@ -100,9 +89,6 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
     if (s.sessionId && !uniqueSessionIds.has(s.sessionId)) {
       uniqueSessionIds.add(s.sessionId);
       revokedSessionIds.add(s.sessionId);
-      if (!fallbackStore.revoked_sessions.includes(s.sessionId)) {
-        fallbackStore.revoked_sessions.push(s.sessionId);
-      }
       removeSessionFromRedis(s.sessionId).catch(() => {});
     }
   }
@@ -123,12 +109,6 @@ export async function revokeAllActiveSessionsForUser(email: string, revokedBy: s
     } catch (e) {}
   }
 
-  for (const item of fallbackStore.login_history) {
-    if (item.email.toLowerCase() === normalizedEmail && item.status === 'ACTIVE') {
-      Object.assign(item, update);
-    }
-  }
-
   return uniqueSessionIds.size;
 }
 
@@ -140,9 +120,6 @@ export async function revokeAllSessionsForVendor(vendorId: string, reason: strin
     try {
       usersList = await db.collection('users').find({ vendorId }).toArray();
     } catch (e) {}
-  }
-  if (!usersList || usersList.length === 0) {
-    usersList = fallbackStore.users.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === vendorId);
   }
 
   let totalRevoked = 0;
@@ -166,12 +143,6 @@ export async function verifyManagerCredentials(email: string, password: string) 
         role: 'MANAGER'
       });
     } catch (e) {}
-  }
-
-  if (!manager) {
-    manager = fallbackStore.users.find(u => {
-      return u.email.toLowerCase().trim() === normalizedEmail && u.role === 'MANAGER';
-    });
   }
 
   if (!manager) return null;
@@ -368,12 +339,8 @@ authRouter.get('/selectable-users', async (req: Request, res: Response) => {
         const cursor = db.collection('users').find({}, { projection: { password: 0 } });
         usersList = await cursor.toArray();
       } catch (e) {
-        // Fallback
+        console.warn('[Auth] users cursor error:', e);
       }
-    }
-
-    if (!usersList || usersList.length === 0) {
-      usersList = fallbackStore.users.map(({ password, ...rest }) => rest);
     }
 
     const safeUsers = usersList.map(u => {
@@ -463,13 +430,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       try {
         user = await db.collection('users').findOne({ email: email.toLowerCase() });
       } catch (err) {
-        // Fallback to local
+        console.warn('[Auth] find user error:', err);
       }
-    }
-
-    // Check fallback store if not found in db
-    if (!user) {
-      user = fallbackStore.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     }
 
     if (!user) {
@@ -705,10 +667,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       try {
         await db.collection('login_history').insertOne(historyEntry);
       } catch (e) {
-        fallbackStore.login_history.unshift(historyEntry);
+        console.warn('Could not insert login history:', e);
       }
-    } else {
-      fallbackStore.login_history.unshift(historyEntry);
     }
 
     // Send login notification email with one-click remote logout link
@@ -801,12 +761,8 @@ authRouter.get('/me', authMiddleware, async (req: Request, res: Response) => {
           : { email: userPayload.email };
         user = await db.collection('users').findOne(query);
       } catch (e) {
-        // Fallback
+        console.warn('[Auth] /me find user error:', e);
       }
-    }
-
-    if (!user) {
-      user = fallbackStore.users.find(u => u.email === userPayload.email);
     }
 
     if (!user) {
@@ -861,11 +817,8 @@ authRouter.put('/profile', authMiddleware, async (req: Request, res: Response) =
           : { email: userPayload.email };
         user = await db.collection('users').findOne(query);
       } catch (e) {
-        // Fallback
+        console.warn('[Auth] profile find user error:', e);
       }
-    }
-    if (!user) {
-      user = fallbackStore.users.find(u => u.email === userPayload.email);
     }
 
     if (!user) {
@@ -907,14 +860,8 @@ authRouter.put('/profile', authMiddleware, async (req: Request, res: Response) =
           : { email: userPayload.email };
         await db.collection('users').updateOne(query, { $set: updates });
       } catch (e) {
-        // Fallback
+        console.warn('[Auth] profile update user error:', e);
       }
-    }
-
-    // Update in fallback store too
-    const fallbackIdx = fallbackStore.users.findIndex(u => u.email === userPayload.email);
-    if (fallbackIdx !== -1) {
-      fallbackStore.users[fallbackIdx] = { ...fallbackStore.users[fallbackIdx], ...updates };
     }
 
     // Record system-wide activity log
@@ -1051,10 +998,9 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
           ? { _id: new ObjectId(decoded.userId) }
           : { email: decoded.email };
         user = await db.collection('users').findOne(query);
-      } catch (e) {}
-    }
-    if (!user) {
-      user = fallbackStore.users.find(u => u.email.toLowerCase() === decoded.email.toLowerCase());
+      } catch (e) {
+        console.warn('[Auth] refresh token user find error:', e);
+      }
     }
 
     if (!user) {
@@ -1232,11 +1178,6 @@ authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) =
         );
       } catch (e) {}
     }
-    const local = fallbackStore.login_history.find(h => h.sessionId === sessionId);
-    if (local) {
-      local.status = 'LOGGED_OUT';
-      local.loggedOutAt = new Date();
-    }
   } else if (token) {
     await removeSessionFromRedis(token);
   }
@@ -1390,69 +1331,8 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
         const distinctEmails = await collection.distinct('email', mongoFilter);
         uniqueUsersCount = distinctEmails.length;
       } catch (e) {
-        // Fallback to local store
+        // DB query succeeded or failed
       }
-    }
-
-    if (!db || (history.length === 0 && total === 0)) {
-      // Filter in-memory from fallbackStore.login_history
-      let inMemoryList = fallbackStore.login_history.filter(item => {
-        // Vendor partition filter
-        if (!isAllVendors) {
-          if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
-            if ((item.vendorId || 'vnd_kasirkafe_central') !== vendorQuery) return false;
-          } else if ((item.vendorId || 'vnd_kasirkafe_central') !== activeVendorId) {
-            return false;
-          }
-        }
-
-        // Role / user filter
-        if (!isPrivileged || scope === 'me') {
-          if (item.userId !== currentUser.userId && item.email !== currentUser.email) return false;
-        } else if (userFilter && userFilter !== 'ALL') {
-          if (item.userId !== userFilter && item.email.toLowerCase() !== userFilter.toLowerCase()) return false;
-        }
-
-        // Search filter
-        if (search) {
-          const q = search.toLowerCase();
-          const matches =
-            (item.name && item.name.toLowerCase().includes(q)) ||
-            (item.email && item.email.toLowerCase().includes(q)) ||
-            (item.ipAddress && item.ipAddress.toLowerCase().includes(q)) ||
-            (item.device && item.device.toLowerCase().includes(q)) ||
-            (item.sessionId && item.sessionId.toLowerCase().includes(q)) ||
-            (item.loginMethod && item.loginMethod.toLowerCase().includes(q));
-          if (!matches) return false;
-        }
-
-        // Date filter
-        if (dateFilter) {
-          const itemDateStr = new Date(item.timestamp).toISOString().split('T')[0];
-          if (itemDateStr !== dateFilter) return false;
-        } else if (startDate || endDate) {
-          const itemTime = new Date(item.timestamp).getTime();
-          if (startDate && itemTime < new Date(`${startDate}T00:00:00.000Z`).getTime()) return false;
-          if (endDate && itemTime > new Date(`${endDate}T23:59:59.999Z`).getTime()) return false;
-        }
-
-        // Status filter
-        if (statusFilter && statusFilter !== 'ALL') {
-          if (item.status !== statusFilter) return false;
-        }
-
-        return true;
-      });
-
-      // Sort by newest
-      inMemoryList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      total = inMemoryList.length;
-      activeSessionsCount = inMemoryList.filter(i => i.status === 'ACTIVE').length;
-      revokedSessionsCount = inMemoryList.filter(i => i.status === 'REVOKED').length;
-      uniqueUsersCount = new Set(inMemoryList.map(i => i.email)).size;
-
-      history = inMemoryList.slice(skip, skip + limit);
     }
 
     const totalPages = Math.ceil(total / limit) || 1;
@@ -1535,9 +1415,7 @@ authRouter.post('/send-login-history', authMiddleware, async (req: Request, res:
     }
 
     if (!history || history.length === 0) {
-      history = fallbackStore.login_history
-        .filter(h => h.email === targetEmail && (h.vendorId || 'vnd_kasirkafe_central') === activeVendorId)
-        .slice(0, 20);
+      history = [];
     }
 
     const appUrl = (req.headers.origin as string) || (req.headers['x-forwarded-proto'] ? `${req.headers['x-forwarded-proto']}://${req.headers.host}` : `http://${req.headers.host}`);
@@ -1580,9 +1458,6 @@ authRouter.post('/revoke-session', authMiddleware, async (req: Request, res: Res
     }
 
     revokedSessionIds.add(sessionId);
-    if (!fallbackStore.revoked_sessions.includes(sessionId)) {
-      fallbackStore.revoked_sessions.push(sessionId);
-    }
     await removeSessionFromRedis(sessionId);
 
     const db = getDB();
@@ -1600,11 +1475,6 @@ authRouter.post('/revoke-session', authMiddleware, async (req: Request, res: Res
           { $set: update }
         );
       } catch (e) {}
-    }
-
-    const localEntry = fallbackStore.login_history.find(h => h.sessionId === sessionId);
-    if (localEntry) {
-      Object.assign(localEntry, update);
     }
 
     return res.json({
@@ -1678,9 +1548,6 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
     // If specific sessionId requested
     if (sessionId) {
       revokedSessionIds.add(sessionId);
-      if (!fallbackStore.revoked_sessions.includes(sessionId)) {
-        fallbackStore.revoked_sessions.push(sessionId);
-      }
       await removeSessionFromRedis(sessionId);
       const db = getDB();
       const update = {
@@ -1697,8 +1564,6 @@ authRouter.post('/force-logout', async (req: Request, res: Response) => {
           );
         } catch (e) {}
       }
-      const local = fallbackStore.login_history.find(h => h.sessionId === sessionId);
-      if (local) Object.assign(local, update);
 
       return res.json({
         success: true,
@@ -1748,10 +1613,6 @@ authRouter.get('/revoke-session', async (req: Request, res: Response) => {
   }
 
   if (!entry) {
-    entry = fallbackStore.login_history.find(h => h.sessionId === session);
-  }
-
-  if (!entry) {
     return res.status(404).send(renderRevokeHtml({
       status: 'not_found',
       title: 'Sesi Tidak Ditemukan',
@@ -1780,9 +1641,6 @@ authRouter.get('/revoke-session', async (req: Request, res: Response) => {
 
   // Revoke session
   revokedSessionIds.add(session);
-  if (!fallbackStore.revoked_sessions.includes(session)) {
-    fallbackStore.revoked_sessions.push(session);
-  }
 
   const update = {
     status: 'REVOKED',
@@ -1901,10 +1759,10 @@ async function findUserByEmail(email: string) {
       });
       if (user) return user;
     } catch (e) {
-      console.warn('DB error findUserByEmail, falling back to store:', e);
+      console.warn('DB error findUserByEmail:', e);
     }
   }
-  return fallbackStore.users.find(u => u.email && u.email.toLowerCase().trim() === normalizedEmail);
+  return null;
 }
 
 /**
@@ -1915,18 +1773,6 @@ async function updateUserPassword(userIdOrEmail: string, newPassword: string) {
   const normalized = userIdOrEmail.toLowerCase().trim();
   const hashedPassword = await hashPassword(newPassword);
 
-  // Update in fallback store
-  const fallbackIndex = fallbackStore.users.findIndex(
-    u => (u._id && u._id.toString() === userIdOrEmail) ||
-         (u.id && u.id === userIdOrEmail) ||
-         (u.email && u.email.toLowerCase().trim() === normalized)
-  );
-  if (fallbackIndex !== -1) {
-    fallbackStore.users[fallbackIndex].password = hashedPassword;
-    fallbackStore.users[fallbackIndex].updatedAt = new Date();
-  }
-
-  // Update in DB if available
   if (db) {
     try {
       let query: any = {
@@ -2002,10 +1848,8 @@ const handleForgotCredentials = async (req: Request, res: Response) => {
       try {
         await db.collection('password_reset_tokens').insertOne(tokenRecord);
       } catch (e) {
-        fallbackStore.password_reset_tokens.unshift(tokenRecord);
+        console.warn('Could not insert password_reset_token:', e);
       }
-    } else {
-      fallbackStore.password_reset_tokens.unshift(tokenRecord);
     }
 
     const host = req.get('host') || 'localhost:3000';
@@ -2076,10 +1920,8 @@ const handleResetVerify = async (req: Request, res: Response) => {
       try {
         tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
       } catch (e) {
-        tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
+        console.warn('DB error find password_reset_token:', e);
       }
-    } else {
-      tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
     }
 
     if (!tokenEntry) {
@@ -2097,7 +1939,7 @@ const handleResetVerify = async (req: Request, res: Response) => {
     }
 
     const user = await findUserByEmail(tokenEntry.email);
-    const vendor = user ? fallbackStore.vendors.find(v => v.id === user.vendorId) : null;
+    const vendor = user ? await findVendorById(user.vendorId) : null;
 
     return res.json({
       success: true,
@@ -2142,10 +1984,8 @@ const handleResetConfirm = async (req: Request, res: Response) => {
       try {
         tokenEntry = await db.collection('password_reset_tokens').findOne({ token, used: false });
       } catch (e) {
-        tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
+        console.warn('DB error find password_reset_token:', e);
       }
-    } else {
-      tokenEntry = fallbackStore.password_reset_tokens.find(t => t.token === token && !t.used);
     }
 
     if (!tokenEntry) {
@@ -2180,11 +2020,6 @@ const handleResetConfirm = async (req: Request, res: Response) => {
       try {
         await db.collection('password_reset_tokens').updateOne({ token }, { $set: { used: true, usedAt: new Date() } });
       } catch (e) { }
-    }
-    const tokenIdx = fallbackStore.password_reset_tokens.findIndex(t => t.token === token);
-    if (tokenIdx !== -1) {
-      fallbackStore.password_reset_tokens[tokenIdx].used = true;
-      fallbackStore.password_reset_tokens[tokenIdx].usedAt = new Date();
     }
 
     // Auto unlock user in Redis lockout if locked
@@ -2257,7 +2092,7 @@ const handlePasswordResetRequest = async (req: Request, res: Response) => {
       });
     }
 
-    const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
+    const vendor = await findVendorById(user.vendorId);
 
     const requestRecord = {
       id: 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
@@ -2278,10 +2113,8 @@ const handlePasswordResetRequest = async (req: Request, res: Response) => {
       try {
         await db.collection('password_reset_requests').insertOne(requestRecord);
       } catch (e) {
-        fallbackStore.password_reset_requests.unshift(requestRecord);
+        console.warn('Could not insert password reset request:', e);
       }
-    } else {
-      fallbackStore.password_reset_requests.unshift(requestRecord);
     }
 
     await recordActivityLog({
@@ -2331,10 +2164,8 @@ const handleAdminGetResetRequests = async (req: Request, res: Response) => {
       try {
         requests = await db.collection('password_reset_requests').find().sort({ requestedAt: -1 }).toArray();
       } catch (e) {
-        requests = [...fallbackStore.password_reset_requests];
+        console.warn('Could not fetch password reset requests:', e);
       }
-    } else {
-      requests = [...fallbackStore.password_reset_requests];
     }
 
     requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
@@ -2398,7 +2229,7 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
     clearUserLockout(normalizedEmail);
 
     // Get vendor info
-    const vendor = fallbackStore.vendors.find(v => v.id === user.vendorId) || null;
+    const vendor = await findVendorById(user.vendorId);
 
     // Send email to user with the new password
     const adminEmail = (req as any).user?.email || 'admin@kasirkafe.id';
@@ -2431,13 +2262,6 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
           );
         } catch (e) { }
       }
-      const reqIdx = fallbackStore.password_reset_requests.findIndex((r: any) => r.id === requestId);
-      if (reqIdx !== -1) {
-        fallbackStore.password_reset_requests[reqIdx].status = 'COMPLETED';
-        fallbackStore.password_reset_requests[reqIdx].processedAt = new Date();
-        fallbackStore.password_reset_requests[reqIdx].processedBy = adminEmail;
-        (fallbackStore.password_reset_requests[reqIdx] as any).newPasswordSent = true;
-      }
     } else {
       // Mark any pending request for this email as COMPLETED
       if (db) {
@@ -2455,14 +2279,6 @@ const handleAdminSendNewPassword = async (req: Request, res: Response) => {
           );
         } catch (e) { }
       }
-      fallbackStore.password_reset_requests.forEach((r: any) => {
-        if (r.email === normalizedEmail && r.status === 'PENDING') {
-          r.status = 'COMPLETED';
-          r.processedAt = new Date();
-          r.processedBy = adminEmail;
-          (r as any).newPasswordSent = true;
-        }
-      });
     }
 
     // Record activity log

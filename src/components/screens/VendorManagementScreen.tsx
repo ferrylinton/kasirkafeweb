@@ -183,7 +183,7 @@ export const VendorManagementScreen: React.FC = () => {
     setEditingVendorId(vendor.id);
     setFormData({
       name: vendor.name,
-      code: vendor.code || (vendor.id ? vendor.id.replace(/^vnd_/, '').slice(0, 6).toUpperCase() : ''),
+      code: vendor.code ? String(vendor.code) : (vendor.id ? String(vendor.id).replace(/^vnd_/, '').slice(0, 6).toUpperCase() : ''),
       email: vendor.email || '',
       phone: vendor.phone || '',
       address: vendor.address || '',
@@ -986,7 +986,7 @@ export const VendorManagementScreen: React.FC = () => {
                                 : 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
                             }`}
                           >
-                            {vendor.code ? vendor.code.slice(0, 3) : <Store className="w-5 h-5" />}
+                            {vendor.code ? String(vendor.code).slice(0, 3) : <Store className="w-5 h-5" />}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">

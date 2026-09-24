@@ -892,10 +892,6 @@ export async function seedDatabase() {
     }
   ];
 
-  if (!fallbackStore.saved_orders || fallbackStore.saved_orders.length === 0) {
-    fallbackStore.saved_orders = initialSavedOrders.map(s => ({ ...s }));
-  }
-
   // Seed MongoDB if connected
   const db = getDB();
   if (db) {

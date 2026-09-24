@@ -1,4 +1,4 @@
-import { getDB, fallbackStore } from './db';
+import { getDB } from './db';
 
 export interface DiscountRule {
   _id?: any;
@@ -271,7 +271,7 @@ export async function getActiveDiscountRules(vendorId?: string): Promise<Discoun
     }
   }
 
-  const source = fallbackStore.discount_rules.length > 0 ? fallbackStore.discount_rules : DEFAULT_RULES;
+  const source = DEFAULT_RULES;
   let rules = source.filter(r => {
     if (!r.isActive) return false;
     const rVendor = r.vendorId || 'vnd_kasirkafe_central';
