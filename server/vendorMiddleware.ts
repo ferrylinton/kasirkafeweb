@@ -89,8 +89,9 @@ export async function vendorMiddleware(req: Request, res: Response, next: NextFu
       // Default to user's assigned vendorId
       let chosenVendorId = decoded.vendorId || 'vnd_kasirkafe_central';
 
-      // Admins and Managers can switch active vendor via X-Vendor-Id header or query param
-      if ((decoded.role === 'ADMIN' || decoded.role === 'MANAGER') && vendorIdHeader) {
+      // Only Admins can switch active vendor via X-Vendor-Id header or query param.
+      // Managers and Cashiers are strictly isolated to their own vendorId.
+      if (decoded.role === 'ADMIN' && vendorIdHeader) {
         chosenVendorId = vendorIdHeader.trim();
       }
 

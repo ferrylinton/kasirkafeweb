@@ -34,6 +34,8 @@ export interface VendorStatusRequest {
 export interface User {
   id: string;
   vendorId?: string;
+  vendorName?: string;
+  vendorCode?: string;
   email: string;
   name: string;
   role: UserRole;

@@ -18,6 +18,7 @@ import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
 import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
 import { InventoryScreen } from './components/screens/InventoryScreen';
 import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
+import { ProductManagementScreen } from './components/screens/ProductManagementScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
 import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
@@ -91,6 +92,7 @@ const MainLayout: React.FC = () => {
     'top-products',
     'admin-dashboard',
     'admin-top-products',
+    'produk-manajemen',
     'inventaris',
     'kategori',
     'users',
@@ -109,6 +111,7 @@ const MainLayout: React.FC = () => {
     'log-viewer',
     'admin-orders',
     'admin-riwayat',
+    'admin-products',
     'admin-inventory',
     'admin-inventaris',
     'admin-users',
@@ -314,6 +317,7 @@ const MainLayout: React.FC = () => {
           {isManager && (activeView === 'manager-top-products' || activeView === 'top-products') && (
             <TopProductsScreen managerMode={true} />
           )}
+          {isManager && activeView === 'produk-manajemen' && <ProductManagementScreen />}
           {isManager && activeView === 'inventaris' && <InventoryScreen />}
           {isManager && activeView === 'kategori' && <CategoryManagementScreen />}
           {isManager && activeView === 'users' && <UserManagementScreen />}
@@ -332,6 +336,9 @@ const MainLayout: React.FC = () => {
           )}
           {isAdmin && (activeView === 'admin-orders' || activeView === 'admin-riwayat') && (
             <OrderHistoryScreen allVendorsMode={true} onNavigateTab={handleNavigateTab} />
+          )}
+          {isAdmin && activeView === 'admin-products' && (
+            <ProductManagementScreen allVendorsMode={true} />
           )}
           {isAdmin && (activeView === 'admin-inventory' || activeView === 'admin-inventaris') && (
             <InventoryScreen allVendorsMode={true} />

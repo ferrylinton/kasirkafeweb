@@ -50,8 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'inventaris', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
+  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'inventaris', 'kategori', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -307,6 +307,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </div>
                 </button>
 
+                {/* Manajemen Produk (Role Manager) */}
+                <button
+                  type="button"
+                  id="nav-product-management-btn"
+                  onClick={() => handleNavClick('produk-manajemen')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'produk-manajemen'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Coffee className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span className="truncate">Manajemen Produk</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-accent">
+                    Menu
+                  </span>
+                </button>
+
                 {/* Inventaris */}
                 <button
                   type="button"
@@ -522,7 +541,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       </span>
                     </button>
 
-                    {/* 2. Inventaris Semua Vendor */}
+                    {/* 2. Katalog Produk Semua Vendor */}
+                    <button
+                      type="button"
+                      id="nav-admin-products-btn"
+                      onClick={() => handleNavClick('admin-products')}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-products'
+                          ? 'bg-purple-600 text-white shadow-xs font-bold'
+                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Coffee className="w-4 h-4 shrink-0 text-purple-500" />
+                        <span className="truncate">Katalog Produk Semua Vendor</span>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        SEMUA
+                      </span>
+                    </button>
+
+                    {/* 3. Inventaris Semua Vendor */}
                     <button
                       type="button"
                       id="nav-admin-inventory-btn"

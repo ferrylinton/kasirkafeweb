@@ -43,7 +43,7 @@ export function getProductCacheKey(params: {
   search?: string;
   allVendors?: boolean;
 }): string {
-  const v = params.allVendors ? 'all' : (params.vendorId || 'current');
+  const v = params.allVendors ? 'all' : (params.vendorId || storage.getItem('kasirkafe_selected_vendor') || 'current');
   const c = (params.category || 'all').toLowerCase().trim();
   const s = (params.search || '').toLowerCase().trim();
   return `kasirkafe_cache_prods_${v}_${c}_${s}`;
@@ -53,7 +53,7 @@ export function getProductCacheKey(params: {
  * Generates consistent cache key for categories
  */
 export function getCategoryCacheKey(vendorId?: string): string {
-  const v = vendorId || 'current';
+  const v = vendorId || storage.getItem('kasirkafe_selected_vendor') || 'current';
   return `kasirkafe_cache_cats_${v}`;
 }
 

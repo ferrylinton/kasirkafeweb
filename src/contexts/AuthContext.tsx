@@ -494,6 +494,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json().catch(() => ({}));
       if (data.success && data.user) {
         setUser(data.user);
+        if (data.user.vendorId) {
+          try {
+            localStorage.setItem('kasirkafe_selected_vendor', data.user.vendorId);
+            document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(data.user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
+          } catch (e) {}
+        }
       } else {
         if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
           handleRemoteRevokedLogout();
@@ -553,6 +559,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('kasirkafe_last_active', String(now));
         setToken(data.token);
         setUser(data.user);
+        if (data.user?.vendorId) {
+          try {
+            localStorage.setItem('kasirkafe_selected_vendor', data.user.vendorId);
+            document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(data.user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
+          } catch (e) {}
+        }
         return { success: true, message: data.message, previousSessionsTerminated: data.previousSessionsTerminated };
       }
       return {

@@ -1024,6 +1024,19 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan' });
     }
 
+    const user = (req as any).user;
+    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
+    const prodVendorId = product.vendorId || 'vnd_kasirkafe_central';
+    const isOwner = prodVendorId === activeVendorId ||
+      (activeVendorId === 'vnd_kasirkafe_central' && (!product.vendorId || product.vendorId === 'vnd_kasirkafe_central'));
+
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        error: 'Akses Ditolak: Anda tidak berhak mengubah stok produk milik vendor lain.'
+      });
+    }
+
     const currentStock = typeof product.stock === 'number' ? product.stock : 0;
     let newStock = currentStock;
 
@@ -1128,7 +1141,8 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
     const newProd = {
       ...parsed.data,
       category: parsed.data.category.toLowerCase().trim(),
@@ -1208,7 +1222,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       updateData.lowStockThreshold = Math.max(0, Math.floor(Number(updateData.lowStockThreshold)));
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1301,7 +1316,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
 productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id || '');
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     if (!db) {
       return res.status(503).json({

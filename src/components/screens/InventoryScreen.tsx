@@ -43,8 +43,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  // Role Rule: Role ADMIN hanya bisa melihat Data Inventaris (Read-Only), tidak bisa menambah, mengubah, dan menghapus.
-  const isReadOnly = user?.role === 'ADMIN' || (allVendorsMode && user?.role !== 'MANAGER');
+  // Role Rule: Hanya role MANAGER yang berwenang menambah, mengubah, dan menghapus produk.
+  // Role ADMIN dan CASHIER hanya memiliki hak akses melihat (Read-Only).
+  const isReadOnly = user?.role !== 'MANAGER' || allVendorsMode;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<InventoryAlertSummary | null>(null);
@@ -627,14 +628,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         </div>
       </div>
 
-      {/* Read-Only Notice Banner for Role ADMIN */}
+      {/* Read-Only Notice Banner for Non-Manager / ADMIN */}
       {isReadOnly && (
         <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 p-3.5 flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
             <Eye className="w-4 h-4" />
           </div>
           <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-            <span className="font-bold text-stone-900 dark:text-stone-100">Hak Akses Role ADMIN: Mode Lihat (Read-Only)</span> — Administrator hanya berwenang memantau ketersediaan stok, ambang batas minimum, dan audit riwayat mutasi. Penambahan menu baru, restock/pengurangan stok, dan penghapusan produk dikelola secara eksklusif oleh role Manager.
+            <span className="font-bold text-stone-900 dark:text-stone-100">
+              {user?.role === 'ADMIN' ? 'Hak Akses Role ADMIN: Mode Pantau (Read-Only)' : 'Mode Lihat Saja (Read-Only)'}
+            </span> — Setiap vendor memiliki katalog produk yang terisolasi di database. Penambahan produk baru, pengubahan harga/stok, dan penghapusan produk khusus dikelola oleh role <strong className="text-amber-700 dark:text-amber-400">MANAGER</strong> pada masing-masing vendor.
           </div>
         </div>
       )}
@@ -1615,11 +1618,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
                   <Boxes className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base font-heading">
-                    {editingProduct ? `Ubah Produk: ${editingProduct.name}` : 'Tambah Produk Baru'}
+                  <h3 className="font-bold text-base font-heading flex items-center gap-2 flex-wrap">
+                    <span>{editingProduct ? `Ubah Produk: ${editingProduct.name}` : 'Tambah Produk Baru'}</span>
+                    {user?.vendorName && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-accent">
+                        {user.vendorName}
+                      </span>
+                    )}
                   </h3>
                   <p className="text-[11px] text-stone-400">
-                    Produk akan langsung tersimpan di database vendor dan sinkron ke kasir
+                    Produk tersimpan di database khusus vendor Anda ({user?.vendorName || user?.vendorId}) dan hanya dapat dikelola oleh role Manager
                   </p>
                 </div>
               </div>
