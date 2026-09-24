@@ -41,12 +41,31 @@ export interface User {
   createdAt?: string;
 }
 
+export interface VariationOption {
+  id: string;
+  name: string;
+  extraPrice: number;
+  isDefault?: boolean;
+}
+
+export interface CategoryVariation {
+  id: string;
+  name: string;
+  type?: 'SINGLE_SELECT' | 'MULTI_SELECT' | 'RADIO' | 'CHECKBOX';
+  required?: boolean;
+  options: VariationOption[];
+}
+
 export interface Category {
   id: string;
+  vendorId?: string;
   code: string;
   name: string;
   icon: string;
   description?: string;
+  variations?: CategoryVariation[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Product {

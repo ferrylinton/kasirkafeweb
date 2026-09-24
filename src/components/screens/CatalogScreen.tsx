@@ -346,6 +346,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
       <ProductModifierModal
         key={selectedProductForModal?.id || 'none'}
         product={selectedProductForModal}
+        categories={categories}
         onClose={() => setSelectedProductForModal(null)}
       />
     </div>

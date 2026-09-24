@@ -21,7 +21,8 @@ import {
   TrendingUp,
   Trophy,
   UserX,
-  X
+  X,
+  Layers
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
@@ -325,6 +326,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       <span>{alertCount}</span>
                     </span>
                   )}
+                </button>
+
+                {/* Kategori & Variasi */}
+                <button
+                  type="button"
+                  id="nav-kategori-btn"
+                  onClick={() => handleNavClick('kategori')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'kategori'
+                      ? 'bg-accent text-white shadow-xs font-bold'
+                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Layers className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Kategori & Variasi</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300">
+                    Menu
+                  </span>
                 </button>
 
                 {/* Manajemen User */}

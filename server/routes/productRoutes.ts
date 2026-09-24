@@ -142,7 +142,8 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
         code: c.code,
         name: c.name,
         icon: c.icon,
-        description: c.description
+        description: c.description,
+        variations: Array.isArray(c.variations) ? c.variations : []
       }))
     };
 
@@ -163,26 +164,69 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
  * POST /api/products/categories
  * Add category for the active vendor (Manager only)
  */
+const variationOptionSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nama opsi variasi tidak boleh kosong'),
+  extraPrice: z.number().min(0, 'Harga ekstra tidak boleh negatif').default(0),
+  isDefault: z.boolean().optional()
+});
+
+const categoryVariationSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nama variasi tidak boleh kosong'),
+  type: z.enum(['SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX']).default('SINGLE_SELECT'),
+  required: z.boolean().default(false),
+  options: z.array(variationOptionSchema).default([])
+});
+
 const categorySchema = z.object({
-  code: z.string().min(2),
-  name: z.string().min(2),
+  code: z.string().min(1, 'Kode kategori wajib diisi'),
+  name: z.string().min(1, 'Nama kategori wajib diisi'),
   icon: z.string().default('🏷️'),
-  description: z.string().optional()
+  description: z.string().optional(),
+  variations: z.array(categoryVariationSchema).default([])
+});
+
+const categoryUpdateSchema = z.object({
+  code: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  variations: z.array(categoryVariationSchema).optional()
 });
 
 productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const parsed = categorySchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Data kategori tidak valid' });
+      return res.status(400).json({
+        success: false,
+        error: 'Data kategori tidak valid',
+        details: parsed.error.issues
+      });
     }
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const formattedCode = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
 
+    // Format variations with guaranteed unique IDs
+    const formattedVariations = (parsed.data.variations || []).map((v, vIdx) => ({
+      id: v.id || `var_${Date.now()}_${vIdx}`,
+      name: v.name.trim(),
+      type: v.type || 'SINGLE_SELECT',
+      required: !!v.required,
+      options: (v.options || []).map((opt, oIdx) => ({
+        id: opt.id || `opt_${Date.now()}_${vIdx}_${oIdx}`,
+        name: opt.name.trim(),
+        extraPrice: Number(opt.extraPrice || 0),
+        isDefault: !!opt.isDefault
+      }))
+    }));
+
     const newCategory = {
       ...parsed.data,
       code: formattedCode,
+      variations: formattedVariations,
       vendorId: activeVendorId,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -194,6 +238,19 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
         success: false,
         error: 'can not connect to db',
         message: 'can not connect to db'
+      });
+    }
+
+    // Check if category code already exists for this vendor
+    const existing = await db.collection('categories').findOne({
+      code: formattedCode,
+      vendorId: activeVendorId
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: 'Kategori dengan kode ini sudah ada untuk vendor Anda.'
       });
     }
 
@@ -211,7 +268,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       entity: 'CATEGORY',
       entityId: insertedId,
       entityName: newCategory.name,
-      summary: `Menambahkan kategori baru '${newCategory.name}' [${newCategory.code}] untuk vendor`,
+      summary: `Menambahkan kategori baru '${newCategory.name}' [${newCategory.code}] dengan ${formattedVariations.length} variasi`,
       details: newCategory,
       req
     });
@@ -219,7 +276,165 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     return res.status(201).json({
       success: true,
       category: { id: insertedId, ...newCategory },
-      message: 'Kategori berhasil ditambahkan!'
+      message: 'Kategori dan variasi berhasil disimpan!'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * PUT /api/products/categories/:id
+ * Update category & variations (Manager only)
+ */
+productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const parsed = categoryUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Data pembaruan kategori tidak valid',
+        details: parsed.error.issues
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db'
+      });
+    }
+
+    // Find category strictly by ID/code AND vendorId
+    let query: any = { vendorId: activeVendorId };
+    if (ObjectId.isValid(id)) {
+      query._id = new ObjectId(id);
+    } else {
+      query.$or = [{ id }, { code: id }];
+    }
+
+    const category = await db.collection('categories').findOne(query);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: 'Kategori tidak ditemukan atau bukan milik vendor Anda.'
+      });
+    }
+
+    const updateFields: any = {
+      updatedAt: new Date()
+    };
+
+    if (parsed.data.name !== undefined) updateFields.name = parsed.data.name.trim();
+    if (parsed.data.icon !== undefined) updateFields.icon = parsed.data.icon;
+    if (parsed.data.description !== undefined) updateFields.description = parsed.data.description;
+    if (parsed.data.code !== undefined) {
+      updateFields.code = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
+    }
+
+    if (parsed.data.variations !== undefined) {
+      updateFields.variations = parsed.data.variations.map((v, vIdx) => ({
+        id: v.id || `var_${Date.now()}_${vIdx}`,
+        name: v.name.trim(),
+        type: v.type || 'SINGLE_SELECT',
+        required: !!v.required,
+        options: (v.options || []).map((opt, oIdx) => ({
+          id: opt.id || `opt_${Date.now()}_${vIdx}_${oIdx}`,
+          name: opt.name.trim(),
+          extraPrice: Number(opt.extraPrice || 0),
+          isDefault: !!opt.isDefault
+        }))
+      }));
+    }
+
+    await db.collection('categories').updateOne({ _id: category._id }, { $set: updateFields });
+
+    // Invalidate categories cache
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'CATEGORY',
+      entityId: category._id.toString(),
+      entityName: updateFields.name || category.name,
+      summary: `Memperbarui kategori '${updateFields.name || category.name}' dan variasinya`,
+      details: updateFields,
+      req
+    });
+
+    const updatedDoc = await db.collection('categories').findOne({ _id: category._id });
+
+    return res.json({
+      success: true,
+      category: {
+        id: updatedDoc?._id.toString() || id,
+        vendorId: updatedDoc?.vendorId,
+        code: updatedDoc?.code,
+        name: updatedDoc?.name,
+        icon: updatedDoc?.icon,
+        description: updatedDoc?.description,
+        variations: updatedDoc?.variations || []
+      },
+      message: 'Kategori dan variasi berhasil diperbarui!'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * DELETE /api/products/categories/:id
+ * Delete category & its variations (Manager only)
+ */
+productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db'
+      });
+    }
+
+    let query: any = { vendorId: activeVendorId };
+    if (ObjectId.isValid(id)) {
+      query._id = new ObjectId(id);
+    } else {
+      query.$or = [{ id }, { code: id }];
+    }
+
+    const category = await db.collection('categories').findOne(query);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: 'Kategori tidak ditemukan atau bukan milik vendor Anda.'
+      });
+    }
+
+    await db.collection('categories').deleteOne({ _id: category._id });
+
+    // Invalidate categories cache
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'CATEGORY',
+      entityId: category._id.toString(),
+      entityName: category.name,
+      summary: `Menghapus kategori '${category.name}' [${category.code}] beserta variasinya`,
+      details: { code: category.code, name: category.name },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: `Kategori '${category.name}' berhasil dihapus!`
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -913,9 +1128,10 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       });
     }
 
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const newProd = {
       ...parsed.data,
+      category: parsed.data.category.toLowerCase().trim(),
       vendorId: activeVendorId,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -951,7 +1167,8 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
         category: newProd.category,
         price: newProd.price,
         stock: newProd.stock,
-        lowStockThreshold: newProd.lowStockThreshold
+        lowStockThreshold: newProd.lowStockThreshold,
+        vendorId: activeVendorId
       },
       req
     });
@@ -975,10 +1192,23 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
  */
 productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params as unknown as IParam;
-    const updateData = { ...req.body, updatedAt: new Date() };
+    const id = String(req.params.id || '');
+    const updateData: any = { ...req.body, updatedAt: new Date() };
 
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    if (updateData.category) {
+      updateData.category = String(updateData.category).toLowerCase().trim();
+    }
+    if (updateData.price !== undefined) {
+      updateData.price = Math.max(0, Number(updateData.price));
+    }
+    if (updateData.stock !== undefined) {
+      updateData.stock = Math.max(0, Math.floor(Number(updateData.stock)));
+    }
+    if (updateData.lowStockThreshold !== undefined) {
+      updateData.lowStockThreshold = Math.max(0, Math.floor(Number(updateData.lowStockThreshold)));
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -989,8 +1219,11 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     }
 
     let existingProd: any = null;
+    let query: any = {};
     try {
-      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      query = ObjectId.isValid(id)
+        ? { $or: [{ _id: new ObjectId(id) }, { id }, { _id: id }] }
+        : { $or: [{ id }, { _id: id }] };
       existingProd = await db.collection('products').findOne(query);
     } catch (e) {}
 
@@ -999,19 +1232,26 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     }
 
     const prodVendorId = existingProd.vendorId || 'vnd_kasirkafe_central';
-    if (prodVendorId !== activeVendorId) {
+    const isOwner = prodVendorId === activeVendorId ||
+      (activeVendorId === 'vnd_kasirkafe_central' && (!existingProd.vendorId || existingProd.vendorId === 'vnd_kasirkafe_central'));
+
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak berhak mengubah produk milik vendor lain.'
       });
     }
 
+    // Do not overwrite vendorId or _id
+    delete updateData._id;
+    delete updateData.id;
+    delete updateData.vendorId;
+
     try {
-      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-      await db.collection('products').updateOne(query, { $set: updateData });
+      await db.collection('products').updateOne({ _id: existingProd._id }, { $set: updateData });
     } catch (e) {}
 
-    const prodName = existingProd?.name || updateData.name || id;
+    const prodName = updateData.name || existingProd.name || id;
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -1030,7 +1270,25 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     // Invalidate product cache for active vendor
     serverProductCache.invalidateProducts(activeVendorId);
 
-    return res.json({ success: true, message: 'Produk / Stok berhasil diperbarui!' });
+    const updatedProduct = await db.collection('products').findOne({ _id: existingProd._id });
+
+    return res.json({
+      success: true,
+      message: 'Produk berhasil diperbarui!',
+      product: {
+        id: updatedProduct?._id ? updatedProduct._id.toString() : id,
+        vendorId: updatedProduct?.vendorId,
+        name: updatedProduct?.name,
+        category: updatedProduct?.category,
+        price: updatedProduct?.price,
+        stock: updatedProduct?.stock,
+        lowStockThreshold: updatedProduct?.lowStockThreshold,
+        description: updatedProduct?.description,
+        tag: updatedProduct?.tag,
+        image: updatedProduct?.image,
+        isAvailable: updatedProduct?.isAvailable
+      }
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
@@ -1042,8 +1300,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
  */
 productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const id = String(req.params.id || '');
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1054,8 +1312,11 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     }
 
     let targetProd: any = null;
+    let query: any = {};
     try {
-      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+      query = ObjectId.isValid(id)
+        ? { $or: [{ _id: new ObjectId(id) }, { id }, { _id: id }] }
+        : { $or: [{ id }, { _id: id }] };
       targetProd = await db.collection('products').findOne(query);
     } catch (e) {}
 
@@ -1064,7 +1325,10 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     }
 
     const prodVendorId = targetProd.vendorId || 'vnd_kasirkafe_central';
-    if (prodVendorId !== activeVendorId) {
+    const isOwner = prodVendorId === activeVendorId ||
+      (activeVendorId === 'vnd_kasirkafe_central' && (!targetProd.vendorId || targetProd.vendorId === 'vnd_kasirkafe_central'));
+
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak berhak menghapus produk milik vendor lain.'
@@ -1072,8 +1336,7 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     }
 
     try {
-      const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-      await db.collection('products').deleteOne(query);
+      await db.collection('products').deleteOne({ _id: targetProd._id });
     } catch (e) {}
 
     const prodName = targetProd?.name || id;
@@ -1095,7 +1358,10 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     // Invalidate product cache for active vendor
     serverProductCache.invalidateProducts(activeVendorId);
 
-    return res.json({ success: true, message: 'Produk berhasil dihapus.' });
+    return res.json({
+      success: true,
+      message: `Produk '${prodName}' berhasil dihapus dari database.`
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }

@@ -121,15 +121,119 @@ export async function seedDatabase() {
     }
   ];
 
+  const standardDrinkSizeVariation = {
+    id: 'var_ukuran',
+    name: 'Ukuran Cup',
+    type: 'SINGLE_SELECT',
+    required: true,
+    options: [
+      { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
+      { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
+      { id: 'opt_jumbo', name: 'Jumbo 22oz', extraPrice: 9000 }
+    ]
+  };
+
+  const standardIceVariation = {
+    id: 'var_es',
+    name: 'Level Es',
+    type: 'SINGLE_SELECT',
+    required: false,
+    options: [
+      { id: 'opt_normal_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
+      { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
+      { id: 'opt_no_ice', name: 'No Ice', extraPrice: 0 }
+    ]
+  };
+
+  const standardSugarVariation = {
+    id: 'var_gula',
+    name: 'Tingkat Gula',
+    type: 'SINGLE_SELECT',
+    required: false,
+    options: [
+      { id: 'opt_normal_sugar', name: '100% Normal', extraPrice: 0, isDefault: true },
+      { id: 'opt_less_sugar', name: '50% Less Sugar', extraPrice: 0 },
+      { id: 'opt_no_sugar', name: '0% No Sugar', extraPrice: 0 }
+    ]
+  };
+
+  const standardShotVariation = {
+    id: 'var_shot',
+    name: 'Espresso Shot',
+    type: 'SINGLE_SELECT',
+    required: false,
+    options: [
+      { id: 'opt_normal_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
+      { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
+      { id: 'opt_extra2_shot', name: '+2 Extra Shot', extraPrice: 10000 }
+    ]
+  };
+
   const initialCategories = [
-    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Espresso, Latte, Cold Brew pilihan biji Arabika', vendorId: 'vnd_kasirkafe_central' },
-    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan', vendorId: 'vnd_kasirkafe_central' },
-    { code: 'jus', name: 'Jus', icon: '🍹', description: '100% Buah segar cold-pressed alami tanpa pemanis buatan', vendorId: 'vnd_kasirkafe_central' },
-    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry renyah, kue lezat, dan finger food pendamping', vendorId: 'vnd_kasirkafe_central' },
-    { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Signature Kulo Es Kopi Susu & Avocatto', vendorId: 'vnd_kopi_kulo_kemang' },
-    { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Cemilan roti bakar dan snack pendamping', vendorId: 'vnd_kopi_kulo_kemang' },
-    { code: 'teh', name: 'Teh', icon: '🍵', description: 'Teh Poci Melati Asli Seduh Tradisional', vendorId: 'vnd_tehpoci_nusantara' },
-    { code: 'cemilan', name: 'Cemilan', icon: '🥟', description: 'Dimsum kukus dan goreng spesial', vendorId: 'vnd_tehpoci_nusantara' }
+    {
+      code: 'kopi',
+      name: 'Kopi',
+      icon: '☕',
+      description: 'Espresso, Latte, Cold Brew pilihan biji Arabika',
+      vendorId: 'vnd_kasirkafe_central',
+      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+    },
+    {
+      code: 'teh',
+      name: 'Teh',
+      icon: '🍵',
+      description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan',
+      vendorId: 'vnd_kasirkafe_central',
+      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+    },
+    {
+      code: 'jus',
+      name: 'Jus',
+      icon: '🍹',
+      description: '100% Buah segar cold-pressed alami tanpa pemanis buatan',
+      vendorId: 'vnd_kasirkafe_central',
+      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+    },
+    {
+      code: 'cemilan',
+      name: 'Cemilan',
+      icon: '🥐',
+      description: 'Pastry renyah, kue lezat, dan finger food pendamping',
+      vendorId: 'vnd_kasirkafe_central',
+      variations: []
+    },
+    {
+      code: 'kopi',
+      name: 'Kopi',
+      icon: '☕',
+      description: 'Signature Kulo Es Kopi Susu & Avocatto',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+    },
+    {
+      code: 'cemilan',
+      name: 'Cemilan',
+      icon: '🥐',
+      description: 'Cemilan roti bakar dan snack pendamping',
+      vendorId: 'vnd_kopi_kulo_kemang',
+      variations: []
+    },
+    {
+      code: 'teh',
+      name: 'Teh',
+      icon: '🍵',
+      description: 'Teh Poci Melati Asli Seduh Tradisional',
+      vendorId: 'vnd_tehpoci_nusantara',
+      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+    },
+    {
+      code: 'cemilan',
+      name: 'Cemilan',
+      icon: '🥟',
+      description: 'Dimsum kukus dan goreng spesial',
+      vendorId: 'vnd_tehpoci_nusantara',
+      variations: []
+    }
   ];
 
   const initialProducts = [
@@ -931,21 +1035,40 @@ export async function seedDatabase() {
       // Ensure vendorId is set on legacy users
       console.log('[Seeder] Users verified and synced in MongoDB.');
 
-      // 2. Categories
-      const catCount = await db.collection('categories').countDocuments();
-      if (catCount === 0) {
-        await db.collection('categories').insertMany(initialCategories);
-        console.log('[Seeder] Categories seeded in MongoDB successfully.');
-      }
-
-      // 3. Products - ensure all vendor products are present
-      for (const p of initialProducts) {
-        await db.collection('products').updateOne(
-          { name: p.name, vendorId: p.vendorId },
-          { $setOnInsert: p },
+      // 2. Categories & Variations
+      for (const cat of initialCategories) {
+        await db.collection('categories').updateOne(
+          { code: cat.code, vendorId: cat.vendorId },
+          {
+            $set: {
+              variations: cat.variations,
+              name: cat.name,
+              icon: cat.icon,
+              description: cat.description,
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              code: cat.code,
+              vendorId: cat.vendorId,
+              createdAt: new Date()
+            }
+          },
           { upsert: true }
         );
       }
+      console.log('[Seeder] Categories and Variations synced in MongoDB successfully.');
+
+      // 3. Products - ensure all vendor products are present
+      for (const p of initialProducts) {
+        const vId = p.vendorId || 'vnd_kasirkafe_central';
+        await db.collection('products').updateOne(
+          { name: p.name, vendorId: vId },
+          { $setOnInsert: { ...p, vendorId: vId } },
+          { upsert: true }
+        );
+      }
+      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('products').updateMany({ vendorId: null }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] Products verified and synced in MongoDB.');
 
       // 4. Email Templates

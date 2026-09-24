@@ -22,9 +22,10 @@ import {
   FileSpreadsheet,
   ShieldAlert,
   Eye,
-  Lock
+  Lock,
+  Trash2
 } from 'lucide-react';
-import { Product, InventoryLog, InventoryAlertSummary } from '../../types';
+import { Product, InventoryLog, InventoryAlertSummary, Category } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
@@ -76,6 +77,27 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   // Quick Action Loading Tracker
   const [quickAdjustingId, setQuickAdjustingId] = useState<string | null>(null);
 
+  // Vendor Categories for Dropdown
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  // Product Add / Edit Modal (Manager only)
+  const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [prodName, setProdName] = useState<string>('');
+  const [prodCategory, setProdCategory] = useState<string>('kopi');
+  const [prodPrice, setProdPrice] = useState<number>(25000);
+  const [prodStock, setProdStock] = useState<number>(20);
+  const [prodThreshold, setProdThreshold] = useState<number>(10);
+  const [prodDescription, setProdDescription] = useState<string>('');
+  const [prodTag, setProdTag] = useState<string>('');
+  const [prodImage, setProdImage] = useState<string>('');
+  const [prodIsAvailable, setProdIsAvailable] = useState<boolean>(true);
+  const [isSavingProduct, setIsSavingProduct] = useState<boolean>(false);
+
+  // Delete Product Modal
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState<boolean>(false);
+
   const fetchInventoryData = async () => {
     setLoading(true);
     try {
@@ -83,7 +105,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         ? (selectedVendor === 'all' ? '?allVendors=true' : `?vendorId=${selectedVendor}`)
         : '';
 
-      const [alertsRes, prodsRes, logsRes] = await Promise.all([
+      const [alertsRes, prodsRes, logsRes, catsRes] = await Promise.all([
         fetch(`/api/products/inventory/alerts${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
@@ -92,12 +114,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
         }),
         fetch(`/api/products/inventory/logs${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
+        }),
+        fetch('/api/products/categories', {
+          headers: { Authorization: `Bearer ${token || ''}` }
         })
       ]);
 
       const alertsData = await alertsRes.json();
       const prodsData = await prodsRes.json();
       const logsData = await logsRes.json();
+      const catsData = await catsRes.json();
 
       if (alertsData.success && alertsData.summary) {
         setSummary(alertsData.summary);
@@ -107,6 +133,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
       }
       if (logsData.success && logsData.logs) {
         setLogs(logsData.logs);
+      }
+      if (catsData.success && Array.isArray(catsData.categories)) {
+        setCategories(catsData.categories);
       }
     } catch (err) {
       console.warn('Failed to load inventory data:', err);
@@ -119,6 +148,144 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
   useEffect(() => {
     fetchInventoryData();
   }, [token, allVendorsMode, selectedVendor]);
+
+  // Open modal to create a new product
+  const openCreateProductModal = () => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat (Read-Only).', 'warning');
+      return;
+    }
+    setEditingProduct(null);
+    setProdName('');
+    setProdCategory(categories.length > 0 ? categories[0].code : 'kopi');
+    setProdPrice(25000);
+    setProdStock(20);
+    setProdThreshold(10);
+    setProdDescription('');
+    setProdTag('');
+    setProdImage('');
+    setProdIsAvailable(true);
+    setIsProductModalOpen(true);
+  };
+
+  // Open modal to edit full product details
+  const openFullEditProductModal = (prod: Product) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Role ADMIN hanya memiliki hak akses melihat (Read-Only).', 'warning');
+      return;
+    }
+    setEditingProduct(prod);
+    setProdName(prod.name);
+    setProdCategory(prod.category || 'kopi');
+    setProdPrice(prod.price);
+    setProdStock(prod.stock);
+    setProdThreshold(typeof prod.lowStockThreshold === 'number' ? prod.lowStockThreshold : 10);
+    setProdDescription(prod.description || '');
+    setProdTag(prod.tag || '');
+    setProdImage(prod.image || '');
+    setProdIsAvailable(prod.isAvailable !== false);
+    setIsProductModalOpen(true);
+  };
+
+  // Save Product (Create or Update)
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isReadOnly) return;
+
+    if (!prodName.trim()) {
+      showToast('Nama produk wajib diisi', 'warning');
+      return;
+    }
+    if (prodPrice < 0) {
+      showToast('Harga produk tidak boleh negatif', 'warning');
+      return;
+    }
+
+    setIsSavingProduct(true);
+    try {
+      const payload = {
+        name: prodName.trim(),
+        category: prodCategory.toLowerCase().trim(),
+        price: Number(prodPrice),
+        stock: Math.max(0, Math.floor(Number(prodStock))),
+        lowStockThreshold: Math.max(0, Math.floor(Number(prodThreshold))),
+        description: prodDescription.trim(),
+        tag: prodTag.trim(),
+        image: prodImage.trim(),
+        isAvailable: prodIsAvailable
+      };
+
+      let res: Response;
+      if (editingProduct) {
+        // PUT /api/products/:id
+        res = await fetch(`/api/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token || ''}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        // POST /api/products
+        res = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token || ''}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          editingProduct ? `Produk '${prodName}' berhasil diperbarui!` : `Produk '${prodName}' berhasil ditambahkan ke katalog!`,
+          'success'
+        );
+        clearClientCatalogCache();
+        setIsProductModalOpen(false);
+        fetchInventoryData();
+      } else {
+        showToast(data.error || 'Gagal menyimpan produk', 'error');
+      }
+    } catch (err) {
+      console.error('Error saving product:', err);
+      showToast('Terjadi kesalahan jaringan saat menyimpan produk', 'error');
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
+  // Delete Product
+  const handleDeleteProduct = async () => {
+    if (isReadOnly || !productToDelete) return;
+
+    setIsDeletingProduct(true);
+    try {
+      const res = await fetch(`/api/products/${productToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token || ''}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Produk '${productToDelete.name}' berhasil dihapus dari database`, 'success');
+        clearClientCatalogCache();
+        setProductToDelete(null);
+        fetchInventoryData();
+      } else {
+        showToast(data.error || 'Gagal menghapus produk', 'error');
+      }
+    } catch (err) {
+      console.error('Error deleting product:', err);
+      showToast('Terjadi kesalahan saat menghapus produk', 'error');
+    } finally {
+      setIsDeletingProduct(false);
+    }
+  };
 
   // Quick delta adjustment (+/-)
   const handleQuickAdjust = async (product: Product, delta: number) => {
@@ -408,11 +575,24 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
             </button>
           )}
 
+          {/* Add Product Button (Hanya untuk Manager) */}
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={openCreateProductModal}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent/90 shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Tambah produk menu baru ke database vendor"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Produk</span>
+            </button>
+          )}
+
           {/* Import CSV Button (Hanya untuk Manager) */}
           {!isReadOnly && (
             <button
               onClick={() => setShowCsvImportModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent/90 shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 text-xs font-bold shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               title="Import CSV untuk perbarui stok & harga atau tambah produk baru"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -935,15 +1115,33 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
                             </button>
                           </div>
 
-                          {/* Open Full Edit Modal */}
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(product)}
-                            className="px-3 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1 shrink-0"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>Restock</span>
-                          </button>
+                          {/* Action Buttons for Manager: Restock, Ubah Produk, Hapus Produk */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => openFullEditProductModal(product)}
+                              className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-stone-600 dark:text-stone-300 hover:text-accent transition-colors cursor-pointer"
+                              title="Ubah detail produk (nama, harga, kategori, gambar)"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setProductToDelete(product)}
+                              className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-stone-500 dark:text-stone-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Hapus produk dari katalog"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(product)}
+                              className="px-2.5 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                              title="Restock cepat stok fisik"
+                            >
+                              <span>Restock</span>
+                            </button>
+                          </div>
                         </>
                       ) : (
                         /* Read-Only Status Indicator for ADMIN */
@@ -1397,6 +1595,279 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ allVendorsMode
             fetchInventoryData();
           }}
         />
+      )}
+
+      {/* Modal: Tambah / Ubah Produk Lengkap (Hanya Manager) */}
+      {!isReadOnly && isProductModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs"
+          style={{
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingLeft: 'env(safe-area-inset-left, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)'
+          }}
+        >
+          <div className="w-full sm:max-w-xl max-h-[92vh] flex flex-col bg-white dark:bg-[#251e1c] rounded-t-3xl sm:rounded-3xl shadow-2xl border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-heading">
+                    {editingProduct ? `Ubah Produk: ${editingProduct.name}` : 'Tambah Produk Baru'}
+                  </h3>
+                  <p className="text-[11px] text-stone-400">
+                    Produk akan langsung tersimpan di database vendor dan sinkron ke kasir
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProductModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+              {/* Nama Produk */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                  Nama Produk <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={prodName}
+                  onChange={e => setProdName(e.target.value)}
+                  placeholder="Contoh: Espresso Macchiato, Artisan Green Tea..."
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              {/* Kategori & Harga */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                    Kategori <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={prodCategory}
+                    onChange={e => setProdCategory(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-accent"
+                  >
+                    {categories.length > 0 ? (
+                      categories.map(c => (
+                        <option key={c.id || c.code} value={c.code}>
+                          {c.icon || '🏷️'} {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="kopi">☕ Kopi</option>
+                        <option value="teh">🍵 Teh</option>
+                        <option value="jus">🍹 Jus</option>
+                        <option value="cemilan">🥐 Cemilan</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                    Harga Jual (Rp) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    required
+                    value={prodPrice}
+                    onChange={e => setProdPrice(Math.max(0, Number(e.target.value)))}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold text-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              {/* Stok & Batas Threshold */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                    Stok Saat Ini (Unit)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={prodStock}
+                    onChange={e => setProdStock(Math.max(0, Math.floor(Number(e.target.value))))}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                    Batas Minimum (Threshold)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={prodThreshold}
+                    onChange={e => setProdThreshold(Math.max(1, Math.floor(Number(e.target.value))))}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              {/* Tag Promosi */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                    Tag / Label (Opsional)
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {['Best Seller', 'Favorit Barista', 'Signature', 'Promo', 'Baru'].map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setProdTag(t)}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                          prodTag === t
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={prodTag}
+                  onChange={e => setProdTag(e.target.value)}
+                  placeholder="Contoh: Best Seller, Favorit, Menu Baru..."
+                  className="w-full px-3.5 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              {/* URL Gambar */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                  URL Gambar Produk (Opsional)
+                </label>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700">
+                    <ProductImage
+                      src={prodImage}
+                      alt="Preview"
+                      category={prodCategory}
+                      className="w-full h-full object-cover"
+                      containerClassName="w-full h-full relative"
+                    />
+                  </div>
+                  <input
+                    type="url"
+                    value={prodImage}
+                    onChange={e => setProdImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="flex-1 px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              {/* Deskripsi */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
+                  Deskripsi Menu (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={prodDescription}
+                  onChange={e => setProdDescription(e.target.value)}
+                  placeholder="Keterangan komposisi atau kelezatan produk untuk pelanggan..."
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              {/* Status Ketersediaan */}
+              <div className="flex items-center gap-3 pt-2">
+                <input
+                  type="checkbox"
+                  id="prodIsAvailable"
+                  checked={prodIsAvailable}
+                  onChange={e => setProdIsAvailable(e.target.checked)}
+                  className="w-4 h-4 rounded text-accent focus:ring-accent accent-orange-500 cursor-pointer"
+                />
+                <label htmlFor="prodIsAvailable" className="text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
+                  Produk Tersedia untuk Dijual di Kasir
+                </label>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  disabled={isSavingProduct}
+                  className="px-4 py-2.5 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProduct}
+                  className="px-6 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-md hover:opacity-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  {isSavingProduct && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{editingProduct ? 'Simpan Perubahan' : 'Tambah ke Katalog'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Konfirmasi Hapus Produk (Hanya Manager) */}
+      {!isReadOnly && productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-sm bg-white dark:bg-[#251e1c] rounded-3xl p-6 border border-stone-200 dark:border-stone-800 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
+                Hapus Produk '{productToDelete.name}'?
+              </h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Produk ini akan dihapus dari database katalog vendor Anda. Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeletingProduct}
+                className="flex-1 py-2.5 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={handleDeleteProduct}
+                className="flex-1 py-2.5 rounded-2xl bg-rose-600 text-white text-xs font-bold shadow-md hover:bg-rose-700 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {isDeletingProduct && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>Ya, Hapus</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -17,6 +17,7 @@ import { UserManagementScreen } from './components/screens/UserManagementScreen'
 import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
 import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
 import { InventoryScreen } from './components/screens/InventoryScreen';
+import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
 import { ActivityLogScreen } from './components/screens/ActivityLogScreen';
@@ -91,6 +92,7 @@ const MainLayout: React.FC = () => {
     'admin-dashboard',
     'admin-top-products',
     'inventaris',
+    'kategori',
     'users',
     'diskon',
     'templates',
@@ -313,6 +315,7 @@ const MainLayout: React.FC = () => {
             <TopProductsScreen managerMode={true} />
           )}
           {isManager && activeView === 'inventaris' && <InventoryScreen />}
+          {isManager && activeView === 'kategori' && <CategoryManagementScreen />}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
           {isManager && activeView === 'templates' && <EmailTemplateScreen />}

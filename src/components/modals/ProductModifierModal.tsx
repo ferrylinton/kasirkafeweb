@@ -1,70 +1,181 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Minus, Check, Coffee, CupSoda, GlassWater, Cookie, Info } from 'lucide-react';
-import { Product, CartItemModifier } from '../../types';
+import { X, Plus, Minus, Check, Coffee, CupSoda, GlassWater, Cookie, Info, Sparkles } from 'lucide-react';
+import { Product, CartItemModifier, Category, CategoryVariation, VariationOption } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { ProductImage } from '../common/ProductImage';
+import { getCachedCategories } from '../../utils/productCache';
 
 export interface ProductModifierModalProps {
   product: Product | null;
+  categories?: Category[];
   onClose: () => void;
 }
 
-export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ product, onClose }) => {
+export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
+  product,
+  categories: propCategories,
+  onClose
+}) => {
   const { addItem } = useCart();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
-  // Variations states
-  const [size, setSize] = useState<'Regular' | 'Large' | 'Jumbo'>('Regular');
-  const [ice, setIce] = useState<'Normal Ice' | 'Less Ice' | 'No Ice'>('Normal Ice');
-  const [sugar, setSugar] = useState<'100% Normal' | '50% Less' | '0% No Sugar'>('100% Normal');
-  const [shot, setShot] = useState<'Normal Shot' | '+1 Extra Shot' | '+2 Extra Shot'>('Normal Shot');
+  const [categoriesList, setCategoriesList] = useState<Category[]>(() => {
+    if (propCategories && propCategories.length > 0) return propCategories;
+    const cached = getCachedCategories();
+    return cached?.categories || [];
+  });
+
+  // If categories weren't passed or cached, fetch them
+  useEffect(() => {
+    if (propCategories && propCategories.length > 0) {
+      setCategoriesList(propCategories);
+    } else if (categoriesList.length === 0) {
+      fetch('/api/products/categories')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.categories)) {
+            setCategoriesList(data.categories);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [propCategories]);
+
+  // Find matching category from database
+  const matchingCategory = useMemo(() => {
+    if (!product) return null;
+    const pCat = (product.category || '').toLowerCase().trim();
+    return categoriesList.find(
+      c => c.code.toLowerCase().trim() === pCat || c.name.toLowerCase().trim() === pCat
+    );
+  }, [product, categoriesList]);
+
+  // Determine if category has variations in DB
+  const categoryVariations: CategoryVariation[] = useMemo(() => {
+    if (!product) return [];
+    if (matchingCategory && Array.isArray(matchingCategory.variations)) {
+      return matchingCategory.variations;
+    }
+
+    // Fallback if category not found in DB list yet:
+    const pCat = (product.category || '').toLowerCase().trim();
+    const isKopi = pCat === 'kopi' || pCat.includes('kopi') || pCat.includes('coffee');
+    const isTeh = pCat === 'teh' || pCat.includes('teh') || pCat.includes('tea');
+    const isJus = pCat === 'jus' || pCat.includes('jus') || pCat.includes('juice');
+    const isCemilan = pCat === 'cemilan' || pCat.includes('cemilan') || pCat.includes('snack') || pCat.includes('pastry');
+
+    if (isCemilan) {
+      return []; // Cemilan tidak ada variasi
+    }
+
+    const standardSize: CategoryVariation = {
+      id: 'var_ukuran',
+      name: 'Ukuran Cup',
+      type: 'SINGLE_SELECT',
+      required: true,
+      options: [
+        { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
+        { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
+        { id: 'opt_jumbo', name: 'Jumbo 22oz', extraPrice: 9000 }
+      ]
+    };
+
+    const standardIce: CategoryVariation = {
+      id: 'var_es',
+      name: 'Level Es',
+      type: 'SINGLE_SELECT',
+      required: false,
+      options: [
+        { id: 'opt_norm_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
+        { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
+        { id: 'opt_no_ice', name: 'No Ice', extraPrice: 0 }
+      ]
+    };
+
+    const standardSugar: CategoryVariation = {
+      id: 'var_gula',
+      name: 'Tingkat Gula',
+      type: 'SINGLE_SELECT',
+      required: false,
+      options: [
+        { id: 'opt_norm_sug', name: '100% Normal', extraPrice: 0, isDefault: true },
+        { id: 'opt_less_sug', name: '50% Less Sugar', extraPrice: 0 },
+        { id: 'opt_no_sug', name: '0% No Sugar', extraPrice: 0 }
+      ]
+    };
+
+    const standardShot: CategoryVariation = {
+      id: 'var_shot',
+      name: 'Espresso Shot',
+      type: 'SINGLE_SELECT',
+      required: false,
+      options: [
+        { id: 'opt_norm_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
+        { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
+        { id: 'opt_extra2_shot', name: '+2 Extra Shot', extraPrice: 10000 }
+      ]
+    };
+
+    if (isKopi) return [standardSize, standardIce, standardSugar, standardShot];
+    if (isTeh || isJus) return [standardSize, standardIce, standardSugar];
+    return [];
+  }, [product, matchingCategory]);
+
+  // State: Selected option per variation id (mapping varId -> selected option)
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, VariationOption>>({});
   const [notes, setNotes] = useState<string>('');
-  
-  // Ensure product quantity always starts at 1
+
+  // Pastikan saat ProductModifierModal jumlah produk dimulai dari satu
   const [quantity, setQuantity] = useState<number>(1);
 
-  // Reset all state whenever a product is opened or changed
+  // Reset state when product changes
   useEffect(() => {
     if (product) {
       setQuantity(1);
-      setSize('Regular');
-      setIce('Normal Ice');
-      setSugar('100% Normal');
-      setShot('Normal Shot');
       setNotes('');
+
+      // Initialize default selections for variations
+      const initialSelections: Record<string, VariationOption> = {};
+      categoryVariations.forEach(v => {
+        if (v.options && v.options.length > 0) {
+          const defaultOpt = v.options.find(o => o.isDefault) || v.options[0];
+          initialSelections[v.id] = defaultOpt;
+        }
+      });
+      setSelectedOptions(initialSelections);
     }
-  }, [product?.id]);
+  }, [product?.id, categoryVariations]);
 
   if (!product) return null;
 
-  // Category determination (kopi, teh, jus, cemilan)
   const categoryLower = (product.category || '').toLowerCase().trim();
-  const isKopi = categoryLower === 'kopi' || categoryLower.includes('kopi') || categoryLower.includes('coffee');
-  const isTeh = categoryLower === 'teh' || categoryLower.includes('teh') || categoryLower.includes('tea');
-  const isJus = categoryLower === 'jus' || categoryLower.includes('jus') || categoryLower.includes('juice');
-  const isCemilan = categoryLower === 'cemilan' || categoryLower.includes('cemilan') || categoryLower.includes('snack') || categoryLower.includes('pastry');
+  const isCemilan =
+    categoryLower === 'cemilan' ||
+    categoryLower.includes('cemilan') ||
+    categoryLower.includes('snack') ||
+    categoryLower.includes('pastry');
 
-  // Variations configuration:
-  // - Kopi: ukuran, es, gula, shot
-  // - Teh: ukuran, es, gula
-  // - Jus: ukuran, es, gula
-  // - Cemilan: tidak ada variasi
-  const hasDrinkVariations = isKopi || isTeh || isJus || !isCemilan;
-  const hasShotVariation = isKopi;
+  const hasVariations = categoryVariations.length > 0;
 
-  // Price calculations
-  const sizeExtras: Record<string, number> = { Regular: 0, Large: 5000, Jumbo: 9000 };
-  const shotExtras: Record<string, number> = { 'Normal Shot': 0, '+1 Extra Shot': 5000, '+2 Extra Shot': 10000 };
+  // Calculate extra price from selected variation options
+  const totalVariationsExtra = Object.values(selectedOptions).reduce(
+    (sum, opt) => sum + (Number(opt?.extraPrice) || 0),
+    0
+  );
 
-  const currentSizeExtra = hasDrinkVariations ? (sizeExtras[size] || 0) : 0;
-  const currentShotExtra = hasShotVariation ? (shotExtras[shot] || 0) : 0;
-
-  const unitPrice = product.price + currentSizeExtra + currentShotExtra;
+  const unitPrice = product.price + totalVariationsExtra;
   const totalPrice = unitPrice * quantity;
+
+  const handleSelectOption = (variationId: string, option: VariationOption) => {
+    setSelectedOptions(prev => ({
+      ...prev,
+      [variationId]: option
+    }));
+  };
 
   const handleQuickNote = (noteText: string) => {
     if (notes.includes(noteText)) {
@@ -77,21 +188,43 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
   const handleAdd = () => {
     let modifier: CartItemModifier | undefined = undefined;
 
-    if (isCemilan) {
-      // Cemilan: tidak ada variasi ukuran, es, gula, atau shot
+    if (!hasVariations) {
+      // Cemilan / Kategori tanpa variasi
       if (notes.trim()) {
-        modifier = {
-          notes: notes.trim()
-        };
+        modifier = { notes: notes.trim() };
       }
     } else {
-      // Minuman (kopi, teh, jus)
+      // Extract standard fields if present in variations for compatibility
+      let sizeVal: any = undefined;
+      let sizeExtraVal = 0;
+      let iceVal: any = undefined;
+      let sugarVal: any = undefined;
+      let shotVal: any = undefined;
+      let shotExtraVal = 0;
+
+      Object.entries(selectedOptions).forEach(([varId, opt]) => {
+        const v = categoryVariations.find(item => item.id === varId);
+        const vName = (v?.name || '').toLowerCase();
+        if (vName.includes('ukuran') || vName.includes('size')) {
+          sizeVal = opt.name;
+          sizeExtraVal = opt.extraPrice;
+        } else if (vName.includes('es') || vName.includes('ice')) {
+          iceVal = opt.name;
+        } else if (vName.includes('gula') || vName.includes('sugar')) {
+          sugarVal = opt.name;
+        } else if (vName.includes('shot')) {
+          shotVal = opt.name;
+          shotExtraVal = opt.extraPrice;
+        }
+      });
+
       modifier = {
-        size,
-        sizeExtra: currentSizeExtra,
-        ice,
-        sugar,
-        ...(hasShotVariation ? { shot, shotExtra: currentShotExtra } : {}),
+        size: sizeVal,
+        sizeExtra: sizeExtraVal,
+        ice: iceVal,
+        sugar: sugarVal,
+        shot: shotVal,
+        shotExtra: shotExtraVal,
         notes: notes.trim()
       };
     }
@@ -102,19 +235,16 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
   };
 
   const getCategoryIcon = () => {
-    if (isKopi) return <Coffee className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />;
-    if (isTeh) return <CupSoda className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
-    if (isJus) return <GlassWater className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />;
+    if (matchingCategory?.icon) {
+      return <span className="text-sm">{matchingCategory.icon}</span>;
+    }
+    if (categoryLower.includes('kopi')) return <Coffee className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />;
+    if (categoryLower.includes('teh')) return <CupSoda className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
+    if (categoryLower.includes('jus')) return <GlassWater className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />;
     return <Cookie className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
   };
 
-  const getCategoryBadgeLabel = () => {
-    if (isKopi) return 'Kategori Kopi';
-    if (isTeh) return 'Kategori Teh';
-    if (isJus) return 'Kategori Jus';
-    if (isCemilan) return 'Kategori Cemilan';
-    return `Kategori ${product.category}`;
-  };
+  const categoryDisplayName = matchingCategory?.name || product.category;
 
   return (
     <AnimatePresence>
@@ -143,7 +273,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
                 {getCategoryIcon()}
               </span>
               <span className="text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300">
-                {isCemilan ? 'Detail Produk Cemilan' : t('productModifier')}
+                {!hasVariations ? `Detail Produk ${categoryDisplayName}` : `Kustomisasi ${categoryDisplayName}`}
               </span>
             </div>
             <button
@@ -173,7 +303,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
                 <div className="flex flex-wrap items-center gap-1.5">
                   <h3 className="text-base sm:text-lg font-bold font-heading truncate">{product.name}</h3>
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                    {getCategoryBadgeLabel()}
+                    {matchingCategory?.icon || '🏷️'} {categoryDisplayName}
                   </span>
                   {product.tag && (
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-accent">
@@ -182,7 +312,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
                   )}
                 </div>
                 <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-1">
-                  {product.description || (isCemilan ? 'Cemilan lezat dan renyah pelengkap hidangan.' : 'Pilihan minuman segar racikan terbaik.')}
+                  {product.description || (isCemilan ? 'Cemilan lezat dan renyah pelengkap hidangan.' : 'Pilihan racikan terbaik barista toko.')}
                 </p>
                 <div className="text-sm font-bold text-accent mt-1">
                   Rp {product.price.toLocaleString('id-ID')}
@@ -190,15 +320,9 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
               </div>
             </div>
 
-            {/* VARIATIONS ACCORDING TO CATEGORY:
-                - Kopi: Ukuran, Es, Gula, Shot
-                - Teh: Ukuran, Es, Gula
-                - Jus: Ukuran, Es, Gula
-                - Cemilan: Tidak ada variasi
-            */}
-
-            {isCemilan ? (
-              /* Cemilan: Tidak ada variasi */
+            {/* DYNAMIC VARIATIONS FROM DATABASE */}
+            {!hasVariations ? (
+              /* Cemilan / Tanpa Variasi */
               <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 flex items-start gap-3">
                 <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 shrink-0">
                   <Info className="w-5 h-5" />
@@ -208,133 +332,59 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({ prod
                     {t('noSnackVariationTitle')}
                   </h4>
                   <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-0.5">
-                    {t('noSnackVariationDesc')}
+                    {isCemilan
+                      ? t('noSnackVariationDesc')
+                      : 'Kategori produk ini tidak memiliki opsi variasi tambahan di database toko.'}
                   </p>
                 </div>
               </div>
             ) : (
-              <>
-                {/* 1. Variasi Ukuran (Kopi, Teh, Jus) */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
-                      1. {t('cupSize')}
-                    </label>
-                    <span className="text-[10px] text-accent font-semibold">{t('requiredSelect1')}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'Regular', name: 'Regular 12oz', extra: '+Rp 0' },
-                      { id: 'Large', name: 'Large 16oz', extra: '+Rp 5.000' },
-                      { id: 'Jumbo', name: 'Jumbo 22oz', extra: '+Rp 9.000' }
-                    ].map(s => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSize(s.id as any)}
-                        className={`p-3 rounded-2xl border text-left flex flex-col transition-all cursor-pointer ${
-                          size === s.id
-                            ? 'border-accent bg-orange-50/70 dark:bg-orange-950/40 text-accent font-bold ring-1 ring-accent'
-                            : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-semibold">{s.name}</span>
-                          {size === s.id && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
-                        </div>
-                        <span className="text-[10px] opacity-80 mt-1">{s.extra}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div className="space-y-5">
+                {categoryVariations.map((v, vIdx) => {
+                  const currentSelected = selectedOptions[v.id];
+                  return (
+                    <div key={v.id || vIdx}>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                          <span>
+                            {vIdx + 1}. {v.name}
+                          </span>
+                          {v.required && (
+                            <span className="text-[10px] text-accent font-semibold">{t('requiredSelect1')}</span>
+                          )}
+                        </label>
+                        <span className="text-[10px] text-stone-400">Pilih 1</span>
+                      </div>
 
-                {/* 2. Variasi Level Es (Kopi, Teh, Jus) */}
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-2">
-                    2. {t('iceLevel')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Normal Ice', 'Less Ice', 'No Ice'].map(i => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setIce(i as any)}
-                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          ice === i
-                            ? 'border-accent bg-orange-50/70 dark:bg-orange-950/40 text-accent ring-1 ring-accent font-bold'
-                            : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
-                        }`}
-                      >
-                        {ice === i && <Check className="w-3.5 h-3.5 text-accent" />}
-                        <span>{i}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 3. Variasi Tingkat Gula (Kopi, Teh, Jus) */}
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-2">
-                    3. {t('sugarLevel')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['100% Normal', '50% Less', '0% No Sugar'].map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSugar(s as any)}
-                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          sugar === s
-                            ? 'border-accent bg-orange-50/70 dark:bg-orange-950/40 text-accent ring-1 ring-accent font-bold'
-                            : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
-                        }`}
-                      >
-                        {sugar === s && <Check className="w-3.5 h-3.5 text-accent" />}
-                        <span>{s}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Variasi Espresso Shot (KHUSUS Kategori Kopi) */}
-                {hasShotVariation && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
-                        <span>4. {t('shotEspresso')}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-semibold normal-case">
-                          Khusus Kopi
-                        </span>
-                      </label>
-                      <span className="text-[10px] text-stone-400">Pilihan ekstra rasa kopi</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {v.options.map(opt => {
+                          const isSelected = currentSelected?.id === opt.id || currentSelected?.name === opt.name;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleSelectOption(v.id, opt)}
+                              className={`p-2.5 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'border-accent bg-orange-50/70 dark:bg-orange-950/40 text-accent font-bold ring-1 ring-accent'
+                                  : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-semibold">{opt.name}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+                              </div>
+                              <span className="text-[10px] opacity-80 mt-1">
+                                {opt.extraPrice > 0 ? `+Rp ${opt.extraPrice.toLocaleString('id-ID')}` : '+Rp 0'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'Normal Shot', label: 'Normal (1 Shot)', extra: '+Rp 0' },
-                        { id: '+1 Extra Shot', label: '+1 Extra Shot', extra: '+Rp 5.000' },
-                        { id: '+2 Extra Shot', label: '+2 Extra Shot', extra: '+Rp 10.000' }
-                      ].map(st => (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setShot(st.id as any)}
-                          className={`p-2.5 rounded-2xl border text-left flex flex-col transition-all cursor-pointer ${
-                            shot === st.id
-                              ? 'border-accent bg-orange-50/70 dark:bg-orange-950/40 text-accent ring-1 ring-accent font-bold'
-                              : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <span className="text-xs font-semibold">{st.label}</span>
-                            {shot === st.id && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
-                          </div>
-                          <span className="text-[10px] opacity-80 mt-1">{st.extra}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                  );
+                })}
+              </div>
             )}
 
             {/* Catatan Khusus */}
