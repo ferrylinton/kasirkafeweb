@@ -2,6 +2,7 @@ import { getDB } from './db';
 import { hashPassword } from './auth';
 import { DEFAULT_RULES } from './discounts';
 import { generateHistoricalOrders } from './orderGenerator';
+import { ObjectId } from 'mongodb';
 
 export async function seedDatabase() {
   console.log('[Seeder] Starting automated database seeding...');
@@ -238,131 +239,142 @@ export async function seedDatabase() {
 
   const initialProducts = [
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb899'),
       name: 'Espresso Latte',
       category: 'kopi',
       price: 28000,
-      stock: 28,
       description: 'Arabika Gayo, Fresh Milk',
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtNMfSOkPEgLdVc2vKwY45wCgzwwn4srarfAclzt4f_z1t2GCXiXjKzKyLTw4Qb8HF_DbCT7aVAnSQEmWwHcfzRoFT7jXlEGDi9-Syypy9Jfw4AYn5_pfnyO7wbmT7XnhAnvqvJK8cZzK5Vv7IGXNv6tuat4pduj-j3JDy_TgWxA1oG-n8JqvJJGHe8FFYHRmRoIuEyWYwXNfISAcW7eYXrJwGpLW2jC44VdVHli4si8Q_iL9P2f3tLg',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89a'),
       name: 'Aren Cold Brew',
       category: 'kopi',
       price: 26000,
-      stock: 19,
       description: 'Steep 16 Jam, Gula Aren Murni',
       tag: 'Favorit Barista',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCvJdh749nH1gR2JunVywYMQZwKd2m2nffiuj2Mvs2KMwqC9BBJ49yOGr_9_JunjgM9BxcD5KR_nAPO1VF42jGfY5qhEuGwJ-gqaQi1vwD8pJlZvZIq9eBfOaUmi26UhKFA9phssHpmNM6n-B0JgNOtDATqeCk3I9xvzv0PVXhp0xgpiC68lFuRhz08JtMKVwm0mgVxahNDoLqkP0RVYozDd8OtNWaJeeeAdnrDckAcMSSOjFMVUACykA',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89b'),
       name: 'Caramel Macchiato Latte',
       category: 'kopi',
       price: 29000,
-      stock: 20,
       description: 'Double espresso shot, madagascar vanilla, salted caramel drizzles',
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA3nRgdjGnqjynsqzx5F2To8GoeiFzh-DW-eLq11HogGzQtZ2WKL6j2VrNlG8FGeztHN07Lunlrzb0tVO3hD2Wa0Ogc2n15NQmlOwBrUWdFGOYvR28xkISb08HbMXkYYMqiKH5Q3KwV0GSodGTQpdTzimlb7_J9qpWyHVf9hm14yI6zgyOiC5lKUWtOFSq78X7baLmSyw-13RQBCqVHMeIFTgwfI84p6knVpLuhkLG1tGIzn5dHiJHauw',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89c'),
       name: 'Matcha Jasmine Tea',
       category: 'teh',
       price: 30000,
-      stock: 34,
       description: 'Wangi Melati, Pure Matcha Uji Asli',
       tag: 'Matcha Uji',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyUf2Pv_hsauF8bNxe7DbZfgv8KjnRNMji6pTuhzjaaKuZQJJ8goHYZ1vwnWe7W0qb2PfiNWEpMbADXDOn6FkTmlVOnf5ijPtDH3tUl_MDNWySfMhcrwvDjWK7Qvd9ZEQ4w6OeerwlFMEvmpe9Am8t57ie6yPyFRckYlRx7Av9IjDKBIxYkpjqLzqSOIcehmbGogUhaf9E0XGBlkrOsAGpD0GbzX18XoH4v5gDtjW-5U4ZrUfu8mciBw',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89d'),
       name: 'Earl Grey Milk Tea',
       category: 'teh',
       price: 25000,
-      stock: 15,
       description: 'Bergamot Note, Fresh Cream, Boba Lembut',
       tag: 'Populer',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDRLFgKetXqgXN7L2j8MWsu9Q1Eb9yHwzyH6-ASIfUwawAa9Enj3XMOj3yT86b_LEmCuXDTFvluCM0F10enTo2U0OLeQqJdWeFTImS0m-nw__5a8Kmthg-b5xhuPnnPAVecNG8akkmHvu1HieuycWai8C2Zowe1OYFo5Xgu3Riec6vW3kaRaS_yvZxwYE4x3PGxUXGKVuLk3FdzMBRvjKWTPYXCwhbmsDJE-tXXL4nh8a9666-msWD1JA',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89e'),
       name: 'Jasmine Green Tea',
       category: 'teh',
       price: 22000,
-      stock: 25,
       description: 'Daun teh hijau melati dingin segar aroma alami',
       tag: 'Segar Alami',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEDdNAgqpFDYomBUwebjH1cUlD6u-s6RdfV_B3Zb2sErpLrfWBAlI-B4p9ghPK0MgP7u-BExqyPi0O6Fy5nc1a9JyE3lDkxO1GyavPWK6Rmk67W9jItT13snorCP72I1AEUd4jAYXNMKn2Lz44DGZ6HM9_iOY7NSczXkEJzmmMyq-3b2vxTM-puw_0iCpUshE4u_GwKW-TTggh5T670zI2UA3bRKmSkfrEPZWMX1SqFzQj0F5diM9zYQ',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb89f'),
       name: 'Tropical Mango',
       category: 'jus',
       price: 32000,
-      stock: 22,
       description: 'Mangga Harum Manis, Nata de Coco, Chia Seed',
       tag: '100% Buah Asli',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA214agMyoRUOTHtl6f0KAbXn_zJMECP7woU_OtmC93inU5O1qM5MclDciInpj44f0qLM8WWK1B2JHsIvFLMvLRjvrAKYlmGsw_pe959wyisWjhJbgzB4-lo35bufA_rJi8FENB_IGS5fQ8aOVuYFjCzaoBdfq9NsX0if5hyAJbwywBpXL1xb3bVw7al16zdBhF8c5Gc6KxnOlBV2-7YkAuapgkybmUh9vVVzOKUx8chHfxhEiTOpYh0A',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb8a0'),
       name: 'Dragonfruit Berry',
       category: 'jus',
       price: 35000,
-      stock: 11,
       description: 'Buah Naga Merah, Strawberry Segar, Sparkling Soda',
       tag: 'Segar & Asam',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBOVXfWtFg9LCiGW5J0ud5qjQ0jGXJMeAczCs-pbDuX3RAR6hCtNrdxaMfeEUbGqkxEsXZa2mL9kEU1UBgCQ71XrzS1oVfn0Bk9BEYOItPZZ1otsDaOWYZdTqYnbo89dHJwf8WiOMUqDDcupTXFTxIc1Vl86Ei2gMwcKXBPtYrHTGShQCjjcVeYI_4OWcFWVAr5Rx8duqgdwCpRbMOvKIpAO6bKkiQBPFI5C_XOTBE9wab0Nj86w21Y9Q',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb8a1'),
       name: 'Mango Berry Breeze',
       category: 'jus',
       price: 28000,
-      stock: 18,
       description: 'Perpaduan puree mangga dan beri tropis segar',
       tag: 'Segar Favorit',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsJDrQVcuTN15ytH6JXl2Sy1VxvsGMvJXf-uUvj-Cb8PrNhnnWViYvbqt5iYdo5tOkmdoUOoAGQyzqygOJaIomUHbcGWh68FXlZAm7maoXw8duNaOEuU40MckVywC0bynGatT1MLvbjyce6fsgcqhT0XmnqgVCRgC3XFamT00-1Y5E2HMq6ccb5Rn4pZFXHPpPQ2D-tpTrlrRWvLghCVS3qLc3PjAKjk2kh_Vli28UF9GS_LwWvg61Zw',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb8a2'),
       name: 'Croissant Butter Gold',
       category: 'cemilan',
       price: 22000,
-      stock: 15,
       description: 'Pastry Prancis lapis butter renyah dan gurih wangi',
       tag: 'Fresh Baked',
       image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a3'),
       name: 'Choco Danish Pastry',
       category: 'cemilan',
       price: 24000,
-      stock: 12,
       description: 'Pastry cokelat lumer premium khas artisan bakery',
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&auto=format&fit=crop&q=80',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a4'),
       name: 'French Fries Truffle',
       category: 'cemilan',
       price: 25000,
-      stock: 30,
       description: 'Kentang goreng garing dibalut minyak truffle & taburan oregano',
       tag: 'Cemilan Asin',
       image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?w=400&auto=format&fit=crop&q=80',
-      isAvailable: true
+      isAvailable: true,
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a5'),
       name: 'Singkong Keju Gurih',
       category: 'cemilan',
       price: 18000,
-      stock: 20,
-      lowStockThreshold: 15,
       description: 'Singkong goreng merekah lembut dengan taburan keju cheddar melimpah',
       tag: 'Tradisional',
       image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&auto=format&fit=crop&q=80',
@@ -370,11 +382,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_kasirkafe_central'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a6'),
       name: 'Red Velvet Pastry',
       category: 'cemilan',
       price: 26000,
-      stock: 0,
-      lowStockThreshold: 10,
       description: 'Pastry red velvet lembut dengan cream cheese leleh khas artisan',
       tag: 'Habis / Out of Stock',
       image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&auto=format&fit=crop&q=80',
@@ -383,11 +394,10 @@ export async function seedDatabase() {
     },
     // Vendor 2: Kopi Kulo (Kemang)
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a7'),
       name: 'Kulo Avocatto Chocolate',
       category: 'kopi',
       price: 32000,
-      stock: 35,
-      lowStockThreshold: 10,
       description: 'Signature Jus alpukat murni berpadu espresso mantap dengan topping es krim cokelat lezat',
       tag: 'Best Seller',
       image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80',
@@ -395,11 +405,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a8'),
       name: 'Kulo Baileys Cream Latte',
       category: 'kopi',
       price: 30000,
-      stock: 25,
-      lowStockThreshold: 8,
       description: 'Espresso double shot harum berpadu sirup Baileys non-alkohol dan krim susu gurih',
       tag: 'Artisan',
       image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=400&auto=format&fit=crop&q=80',
@@ -407,11 +416,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8a9'),
       name: 'Kopi Kulo Gula Aren',
       category: 'kopi',
       price: 24000,
-      stock: 45,
-      lowStockThreshold: 12,
       description: 'Perpaduan biji kopi pilihan, susu segar creamy dan gula aren organik murni',
       tag: 'Favorit Pelanggan',
       image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=400&auto=format&fit=crop&q=80',
@@ -419,11 +427,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8aa'),
       name: 'Toast Keju Melted Spesial',
       category: 'cemilan',
       price: 26000,
-      stock: 20,
-      lowStockThreshold: 5,
       description: 'Roti bakar tebal panggang renyah dengan lelehan keju mozarella & cheddar gurih',
       tag: 'Cemilan Hangat',
       image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80',
@@ -431,11 +438,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8ab'),
       name: 'Croffle Gula Palem Karamel',
       category: 'cemilan',
       price: 28000,
-      stock: 18,
-      lowStockThreshold: 5,
       description: 'Croissant waffle renyah di luar lembut di dalam dengan taburan karamel wangi',
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1588685912170-07e0c7e2b7e5?w=400&auto=format&fit=crop&q=80',
@@ -444,11 +450,10 @@ export async function seedDatabase() {
     },
     // Vendor 3: Teh Poci & Dimsum (Bekasi)
     {
+      id: new ObjectId('6ab5838cb2a71518d2beb8ac'),
       name: 'Teh Poci Seduh Gula Batu Asli',
       category: 'teh',
       price: 15000,
-      stock: 50,
-      lowStockThreshold: 15,
       description: 'Teh melati wangi sepat legit khas seduh tanah liat dengan bongkahan gula batu asli',
       tag: 'Khas Poci',
       image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80',
@@ -456,11 +461,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_tehpoci_nusantara'
     },
     {
+      id: new ObjectId('6ab5838db2a71518d2beb8ad'),
       name: 'Es Teh Melati Jumbo Segar',
       category: 'teh',
       price: 10000,
-      stock: 80,
-      lowStockThreshold: 20,
       description: 'Es teh melati jumbo 22oz segar pelepas dahaga harum alami',
       tag: 'Super Segar',
       image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop&q=80',
@@ -468,11 +472,10 @@ export async function seedDatabase() {
       vendorId: 'vnd_tehpoci_nusantara'
     },
     {
+      id: new ObjectId('6ab5838db2a71518d2beb8ae'),
       name: 'Dimsum Hakau Udang Kukus (4 Pcs)',
       category: 'cemilan',
       price: 25000,
-      stock: 30,
-      lowStockThreshold: 8,
       description: 'Dimsum kulit transparan dengan isian udang utuh segar kenyal manis gurih',
       tag: 'Chef Choice',
       image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400&auto=format&fit=crop&q=80',
@@ -480,16 +483,203 @@ export async function seedDatabase() {
       vendorId: 'vnd_tehpoci_nusantara'
     },
     {
+      id: new ObjectId('6ab5838db2a71518d2beb8af'),
       name: 'Siomay Dimsum Ayam Udang (4 Pcs)',
       category: 'cemilan',
       price: 22000,
-      stock: 40,
-      lowStockThreshold: 10,
       description: 'Siomay daging ayam dan udang padat dengan saus cocolan cabai merah gurih pedas',
       tag: 'Terlaris',
       image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
       vendorId: 'vnd_tehpoci_nusantara'
+    }
+  ];
+
+  // Product Stock references the Product id (on table use '_id', on node js code use 'id')
+  const initialProductStocks = [
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec662'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb899'), // reference Espresso Latte id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 28,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec663'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89a'), // reference Aren Cold Brew id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 19,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec664'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89b'), // reference Caramel Macchiato Latte id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 20,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec665'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89c'), // reference Matcha Jasmine Tea id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 34,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec666'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89d'), // reference Earl Grey Milk Tea id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 15,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec667'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89e'), // reference Jasmine Green Tea id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 25,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2beb89f'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb89f'), // reference Tropical Mango id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 22,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3eb2a71518d2bec669'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb8a0'), // reference Dragonfruit Berry id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 11,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66a'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb8a1'), // reference Mango Berry Breeze id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 18,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66b'),
+      productId: new ObjectId('6ab5838bb2a71518d2beb8a2'), // reference Croissant Butter Gold id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 15,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66c'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a3'), // reference Choco Danish Pastry id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 12,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66d'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a4'), // reference French Fries Truffle id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 30,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66e'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a5'), // reference Singkong Keju Gurih id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 20,
+      lowStockThreshold: 15,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec66f'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a6'), // reference Red Velvet Pastry id
+      vendorId: 'vnd_kasirkafe_central',
+      stock: 0,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec670'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a7'), // reference Kulo Avocatto Chocolate id
+      vendorId: 'vnd_kopi_kulo_kemang',
+      stock: 35,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec671'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a8'), // reference Kulo Baileys Cream Latte id
+      vendorId: 'vnd_kopi_kulo_kemang',
+      stock: 25,
+      lowStockThreshold: 8,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec672'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8a9'), // reference Kopi Kulo Gula Aren id
+      vendorId: 'vnd_kopi_kulo_kemang',
+      stock: 45,
+      lowStockThreshold: 12,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec673'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8aa'), // reference Toast Keju Melted Spesial id
+      vendorId: 'vnd_kopi_kulo_kemang',
+      stock: 20,
+      lowStockThreshold: 5,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec674'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8ab'), // reference Croffle Gula Palem Karamel id
+      vendorId: 'vnd_kopi_kulo_kemang',
+      stock: 18,
+      lowStockThreshold: 5,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec675'),
+      productId: new ObjectId('6ab5838cb2a71518d2beb8ac'), // reference Teh Poci Seduh Gula Batu Asli id
+      vendorId: 'vnd_tehpoci_nusantara',
+      stock: 50,
+      lowStockThreshold: 15,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f3fb2a71518d2bec676'),
+      productId: new ObjectId('6ab5838db2a71518d2beb8ad'), // reference Es Teh Melati Jumbo Segar id
+      vendorId: 'vnd_tehpoci_nusantara',
+      stock: 80,
+      lowStockThreshold: 20,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f40b2a71518d2bec677'),
+      productId: new ObjectId('6ab5838db2a71518d2beb8ae'), // reference Dimsum Hakau Udang Kukus (4 Pcs) id
+      vendorId: 'vnd_tehpoci_nusantara',
+      stock: 30,
+      lowStockThreshold: 8,
+      updatedAt: new Date()
+    },
+    {
+      id: new ObjectId('6ab64f40b2a71518d2bec678'),
+      productId: new ObjectId('6ab5838db2a71518d2beb8af'), // reference Siomay Dimsum Ayam Udang (4 Pcs) id
+      vendorId: 'vnd_tehpoci_nusantara',
+      stock: 40,
+      lowStockThreshold: 10,
+      updatedAt: new Date()
     }
   ];
 
@@ -1058,40 +1248,51 @@ export async function seedDatabase() {
       }
       console.log('[Seeder] Categories and Variations synced in MongoDB successfully.');
 
-      // 3. Products & Product Stocks (isolated tables)
+      // 3. Products (on table use '_id', on node js code use 'id')
       for (const p of initialProducts) {
         const vId = p.vendorId || 'vnd_kasirkafe_central';
-        const { stock: initialStockVal, lowStockThreshold: initialThresholdVal, ...prodCleanData } = p as any;
+        const { id, ...prodCleanData } = p;
         await db.collection('products').updateOne(
-          { name: p.name, vendorId: vId },
-          { $setOnInsert: { ...prodCleanData, vendorId: vId } },
+          { _id: id },
+          {
+            $set: {
+              ...prodCleanData,
+              vendorId: vId,
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              _id: id,
+              createdAt: new Date()
+            }
+          },
           { upsert: true }
         );
-
-        // Fetch inserted / existing product ID
-        const existingProd = await db.collection('products').findOne({ name: p.name, vendorId: vId });
-        if (existingProd) {
-          const prodId = existingProd._id ? existingProd._id.toString() : existingProd.id;
-          await db.collection('product_stocks').updateOne(
-            { productId: prodId },
-            {
-              $setOnInsert: {
-                productId: prodId,
-                vendorId: vId,
-                stock: typeof initialStockVal === 'number' ? initialStockVal : 20,
-                lowStockThreshold: typeof initialThresholdVal === 'number' ? initialThresholdVal : 10,
-                updatedAt: new Date()
-              }
-            },
-            { upsert: true }
-          );
-        }
       }
       await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('products').updateMany({ vendorId: null }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       // Ensure stock is removed from product table, stored in new product_stocks table
       await db.collection('products').updateMany({}, { $unset: { stock: '', lowStockThreshold: '' } });
-      console.log('[Seeder] Products verified and stocks synced into separate product_stocks table.');
+      console.log('[Seeder] Products verified and synced in MongoDB (table uses _id, node code uses id).');
+
+      // 4. Product Stocks (on table use '_id', on node js code use 'id', referencing Product id)
+      for (const s of initialProductStocks) {
+        const { id, productId, ...stockData } = s;
+        await db.collection('product_stocks').updateOne(
+          { _id: id },
+          {
+            $set: {
+              productId: productId.toString(),
+              ...stockData,
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              _id: id
+            }
+          },
+          { upsert: true }
+        );
+      }
+      console.log('[Seeder] Product stocks synced referencing Product id (table uses _id, node code uses id).');
 
       // 4. Email Templates
       const tmplCount = await db.collection('email_templates').countDocuments();

@@ -508,10 +508,14 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
     // Join with isolated product_stocks table
     const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
+    const productObjIds = productIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
     const stockMap = new Map<string, any>();
     try {
       const stockDocs = await db.collection('product_stocks').find({
-        productId: { $in: productIds }
+        $or: [
+          { productId: { $in: productIds } },
+          { productId: { $in: productObjIds } }
+        ]
       }).toArray();
       stockDocs.forEach(s => stockMap.set(String(s.productId), s));
     } catch (e) {}
@@ -586,9 +590,13 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
 
     const products = await db.collection('products').find(filter).toArray();
     const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
+    const productObjIds = productIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
 
     const stockDocs = await db.collection('product_stocks').find({
-      productId: { $in: productIds }
+      $or: [
+        { productId: { $in: productIds } },
+        { productId: { $in: productObjIds } }
+      ]
     }).toArray();
     const stockMap = new Map<string, any>();
     stockDocs.forEach(s => stockMap.set(String(s.productId), s));
@@ -661,7 +669,13 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
     } catch (e) {}
 
     const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
-    const stockDocs = await db.collection('product_stocks').find({ productId: { $in: productIds } }).toArray();
+    const productObjIds = productIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+    const stockDocs = await db.collection('product_stocks').find({
+      $or: [
+        { productId: { $in: productIds } },
+        { productId: { $in: productObjIds } }
+      ]
+    }).toArray();
     const stockMap = new Map<string, any>();
     stockDocs.forEach(s => stockMap.set(String(s.productId), s));
 
