@@ -33,6 +33,7 @@ export const CategoryManagementScreen: React.FC = () => {
   const isManager = user?.role === 'MANAGER';
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [masterVariations, setMasterVariations] = useState<CategoryVariation[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -54,14 +55,25 @@ export const CategoryManagementScreen: React.FC = () => {
     if (showLoadingState) setLoading(true);
     setIsRefreshing(true);
     try {
-      const res = await fetch('/api/products/categories?bypassCache=true', {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      const data = await res.json();
+      const [catRes, varRes] = await Promise.all([
+        fetch('/api/products/categories?bypassCache=true', {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        }),
+        fetch('/api/products/category-variations', {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        })
+      ]);
+
+      const data = await catRes.json();
       if (data.success && Array.isArray(data.categories)) {
         setCategories(data.categories);
       } else {
         showToast('Gagal memuat kategori vendor', 'error');
+      }
+
+      const varData = await varRes.json();
+      if (varData.success && Array.isArray(varData.variations)) {
+        setMasterVariations(varData.variations);
       }
     } catch (err) {
       console.error('Error fetching categories:', err);
@@ -306,6 +318,8 @@ export const CategoryManagementScreen: React.FC = () => {
       const payload = {
         name: formName.trim(),
         description: formDescription.trim(),
+        categoryVariationIds: formVariations.map(v => v.id).filter(Boolean),
+        variationIds: formVariations.map(v => v.id).filter(Boolean),
         variations: formVariations
       };
 
@@ -670,8 +684,8 @@ export const CategoryManagementScreen: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Preset Buttons */}
-                  <div className="flex flex-wrap gap-1.5">
+                  {/* Preset & Master Variations Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={applyKopiTemplate}
@@ -694,6 +708,38 @@ export const CategoryManagementScreen: React.FC = () => {
                       🥐 Cemilan (Tanpa Variasi)
                     </button>
                   </div>
+
+                  {masterVariations.length > 0 && (
+                    <div className="pt-2 border-t border-stone-200/60 dark:border-stone-800">
+                      <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 block mb-1.5">
+                        Pilih dari Master Variasi Database:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {masterVariations.map(mv => {
+                          const isAlreadyAdded = formVariations.some(fv => fv.id === mv.id || fv.name.toLowerCase() === mv.name.toLowerCase());
+                          return (
+                            <button
+                              key={mv.id}
+                              type="button"
+                              disabled={isAlreadyAdded}
+                              onClick={() => {
+                                setFormVariations(prev => [...prev, JSON.parse(JSON.stringify(mv))]);
+                                showToast(`Variasi '${mv.name}' ditambahkan ke kategori`, 'info');
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                                isAlreadyAdded
+                                  ? 'bg-stone-100 dark:bg-stone-800 text-stone-400 cursor-not-allowed border border-stone-200/50 dark:border-stone-700/50'
+                                  : 'bg-white dark:bg-stone-800 border border-orange-200 dark:border-orange-900/60 text-stone-700 dark:text-stone-200 hover:border-orange-500 cursor-pointer shadow-xs'
+                              }`}
+                            >
+                              <span>+ {mv.name}</span>
+                              {isAlreadyAdded && <Check className="w-3 h-3 text-emerald-500" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {formVariations.length === 0 ? (

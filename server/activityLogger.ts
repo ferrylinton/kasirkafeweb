@@ -20,6 +20,7 @@ export type ActivityEntity =
   | 'ORDER'
   | 'EMAIL_TEMPLATE'
   | 'CATEGORY'
+  | 'CATEGORY_VARIATION'
   | 'VENDOR';
 
 export interface PerformedByUser {

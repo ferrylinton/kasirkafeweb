@@ -18,6 +18,7 @@ import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
 import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
 import { ProductStockScreen } from './components/screens/ProductStockScreen';
 import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
+import { CategoryVariationManagementScreen } from './components/screens/CategoryVariationManagementScreen';
 import { ProductManagementScreen } from './components/screens/ProductManagementScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { LoginHistoryScreen } from './components/screens/LoginHistoryScreen';
@@ -96,6 +97,8 @@ const MainLayout: React.FC = () => {
     'stok-produk',
     'inventaris',
     'kategori',
+    'variasi-kategori',
+    'category-variations',
     'users',
     'diskon',
     'templates',
@@ -116,6 +119,9 @@ const MainLayout: React.FC = () => {
     'admin-stock',
     'admin-inventory',
     'admin-inventaris',
+    'kategori',
+    'variasi-kategori',
+    'category-variations',
     'admin-users',
     'admin-discounts',
     'admin-diskon',
@@ -322,6 +328,9 @@ const MainLayout: React.FC = () => {
           {isManager && activeView === 'produk-manajemen' && <ProductManagementScreen />}
           {isManager && (activeView === 'stok-produk' || activeView === 'inventaris') && <ProductStockScreen />}
           {isManager && activeView === 'kategori' && <CategoryManagementScreen />}
+          {(isManager || isAdmin) && (activeView === 'variasi-kategori' || activeView === 'category-variations') && (
+            <CategoryVariationManagementScreen />
+          )}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
           {isManager && activeView === 'templates' && <EmailTemplateScreen />}

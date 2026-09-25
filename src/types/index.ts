@@ -51,10 +51,15 @@ export interface VariationOption {
 
 export interface CategoryVariation {
   id: string;
+  vendorId?: string;
   name: string;
   type?: 'SINGLE_SELECT' | 'MULTI_SELECT' | 'RADIO' | 'CHECKBOX';
   required?: boolean;
   options: VariationOption[];
+  usedInCategoriesCount?: number;
+  categoryNames?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -62,6 +67,9 @@ export interface Category {
   vendorId?: string;
   name: string;
   description?: string;
+  categoryVariationIds?: string[];
+  variationIds?: string[];
+  categoryVariationId?: string;
   variations?: CategoryVariation[];
   createdAt?: string;
   updatedAt?: string;

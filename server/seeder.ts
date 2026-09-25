@@ -119,10 +119,11 @@ export async function seedDatabase() {
   ];
 
   const standardDrinkSizeVariation = {
-    id: 'var_ukuran',
+    id: new ObjectId('6ab5838bb2a71518d2beb871'),
     name: 'Ukuran Cup',
     type: 'SINGLE_SELECT',
     required: true,
+    vendorId: 'vnd_kasirkafe_central',
     options: [
       { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
       { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
@@ -131,10 +132,11 @@ export async function seedDatabase() {
   };
 
   const standardIceVariation = {
-    id: 'var_es',
+    id: new ObjectId('6ab5838bb2a71518d2beb872'),
     name: 'Level Es',
     type: 'SINGLE_SELECT',
     required: false,
+    vendorId: 'vnd_kasirkafe_central',
     options: [
       { id: 'opt_normal_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
       { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
@@ -143,10 +145,11 @@ export async function seedDatabase() {
   };
 
   const standardSugarVariation = {
-    id: 'var_gula',
+    id: new ObjectId('6ab5838bb2a71518d2beb873'),
     name: 'Tingkat Gula',
     type: 'SINGLE_SELECT',
     required: false,
+    vendorId: 'vnd_kasirkafe_central',
     options: [
       { id: 'opt_normal_sugar', name: '100% Normal', extraPrice: 0, isDefault: true },
       { id: 'opt_less_sugar', name: '50% Less Sugar', extraPrice: 0 },
@@ -155,10 +158,11 @@ export async function seedDatabase() {
   };
 
   const standardShotVariation = {
-    id: 'var_shot',
+    id: new ObjectId('6ab5838bb2a71518d2beb874'),
     name: 'Espresso Shot',
     type: 'SINGLE_SELECT',
     required: false,
+    vendorId: 'vnd_kasirkafe_central',
     options: [
       { id: 'opt_normal_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
       { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
@@ -166,54 +170,222 @@ export async function seedDatabase() {
     ]
   };
 
+  const kuloDrinkSizeVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb875'),
+    name: 'Ukuran Cup',
+    type: 'SINGLE_SELECT',
+    required: true,
+    vendorId: 'vnd_kopi_kulo_kemang',
+    options: [
+      { id: 'opt_kulo_reg', name: 'Regular Cup', extraPrice: 0, isDefault: true },
+      { id: 'opt_kulo_large', name: 'Large Cup', extraPrice: 5000 }
+    ]
+  };
+
+  const kuloIceVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb876'),
+    name: 'Level Es',
+    type: 'SINGLE_SELECT',
+    required: false,
+    vendorId: 'vnd_kopi_kulo_kemang',
+    options: [
+      { id: 'opt_kulo_norm_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
+      { id: 'opt_kulo_less_ice', name: 'Less Ice', extraPrice: 0 }
+    ]
+  };
+
+  const kuloSugarVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb877'),
+    name: 'Tingkat Gula',
+    type: 'SINGLE_SELECT',
+    required: false,
+    vendorId: 'vnd_kopi_kulo_kemang',
+    options: [
+      { id: 'opt_kulo_norm_sug', name: 'Normal Aren', extraPrice: 0, isDefault: true },
+      { id: 'opt_kulo_less_sug', name: 'Less Aren', extraPrice: 0 }
+    ]
+  };
+
+  const kuloShotVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb878'),
+    name: 'Espresso Shot',
+    type: 'SINGLE_SELECT',
+    required: false,
+    vendorId: 'vnd_kopi_kulo_kemang',
+    options: [
+      { id: 'opt_kulo_norm_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
+      { id: 'opt_kulo_extra_shot', name: '+1 Extra Shot', extraPrice: 5000 }
+    ]
+  };
+
+  const tehPociDrinkSizeVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb879'),
+    name: 'Ukuran Gelas',
+    type: 'SINGLE_SELECT',
+    required: true,
+    vendorId: 'vnd_tehpoci_nusantara',
+    options: [
+      { id: 'opt_poci_cup_m', name: 'Cup Sedang (16oz)', extraPrice: 0, isDefault: true },
+      { id: 'opt_poci_cup_l', name: 'Cup Jumbo (22oz)', extraPrice: 3000 }
+    ]
+  };
+
+  const tehPociIceVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb87a'),
+    name: 'Penyajian Es',
+    type: 'SINGLE_SELECT',
+    required: false,
+    vendorId: 'vnd_tehpoci_nusantara',
+    options: [
+      { id: 'opt_poci_ice_norm', name: 'Dingin Es Segar', extraPrice: 0, isDefault: true },
+      { id: 'opt_poci_ice_less', name: 'Sedikit Es', extraPrice: 0 },
+      { id: 'opt_poci_warm', name: 'Hangat', extraPrice: 0 }
+    ]
+  };
+
+  const tehPociSugarVariation = {
+    id: new ObjectId('6ab5838bb2a71518d2beb87b'),
+    name: 'Tingkat Manis',
+    type: 'SINGLE_SELECT',
+    required: false,
+    vendorId: 'vnd_tehpoci_nusantara',
+    options: [
+      { id: 'opt_poci_sug_norm', name: 'Manis Pas', extraPrice: 0, isDefault: true },
+      { id: 'opt_poci_sug_less', name: 'Kurang Manis', extraPrice: 0 },
+      { id: 'opt_poci_tawar', name: 'Tawar (Tanpa Gula)', extraPrice: 0 }
+    ]
+  };
+
+  const initialCategoryVariations = [
+    standardDrinkSizeVariation,
+    standardIceVariation,
+    standardSugarVariation,
+    standardShotVariation,
+    kuloDrinkSizeVariation,
+    kuloIceVariation,
+    kuloSugarVariation,
+    kuloShotVariation,
+    tehPociDrinkSizeVariation,
+    tehPociIceVariation,
+    tehPociSugarVariation
+  ];
+
   const initialCategories = [
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb881'),
       name: 'Kopi',
       description: 'Espresso, Latte, Cold Brew pilihan biji Arabika',
       vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+      categoryVariationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id,
+        standardShotVariation.id
+      ],
+      variationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id,
+        standardShotVariation.id
+      ],
+      categoryVariationId: standardDrinkSizeVariation.id
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb882'),
       name: 'Teh',
       description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan',
       vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      categoryVariationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id
+      ],
+      variationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id
+      ],
+      categoryVariationId: standardDrinkSizeVariation.id
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb883'),
       name: 'Jus',
       description: '100% Buah segar cold-pressed alami tanpa pemanis buatan',
       vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      categoryVariationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id
+      ],
+      variationIds: [
+        standardDrinkSizeVariation.id,
+        standardIceVariation.id,
+        standardSugarVariation.id
+      ],
+      categoryVariationId: standardDrinkSizeVariation.id
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb884'),
       name: 'Cemilan',
       description: 'Pastry renyah, kue lezat, dan finger food pendamping',
       vendorId: 'vnd_kasirkafe_central',
-      variations: []
+      categoryVariationIds: [],
+      variationIds: [],
+      categoryVariationId: null
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb885'),
       name: 'Kopi',
       description: 'Signature Kulo Es Kopi Susu & Avocatto',
       vendorId: 'vnd_kopi_kulo_kemang',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+      categoryVariationIds: [
+        kuloDrinkSizeVariation.id,
+        kuloIceVariation.id,
+        kuloSugarVariation.id,
+        kuloShotVariation.id
+      ],
+      variationIds: [
+        kuloDrinkSizeVariation.id,
+        kuloIceVariation.id,
+        kuloSugarVariation.id,
+        kuloShotVariation.id
+      ],
+      categoryVariationId: kuloDrinkSizeVariation.id
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb886'),
       name: 'Cemilan',
       description: 'Cemilan roti bakar dan snack pendamping',
       vendorId: 'vnd_kopi_kulo_kemang',
-      variations: []
+      categoryVariationIds: [],
+      variationIds: [],
+      categoryVariationId: null
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb887'),
       name: 'Teh',
       description: 'Teh Poci Melati Asli Seduh Tradisional',
       vendorId: 'vnd_tehpoci_nusantara',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      categoryVariationIds: [
+        tehPociDrinkSizeVariation.id,
+        tehPociIceVariation.id,
+        tehPociSugarVariation.id
+      ],
+      variationIds: [
+        tehPociDrinkSizeVariation.id,
+        tehPociIceVariation.id,
+        tehPociSugarVariation.id
+      ],
+      categoryVariationId: tehPociDrinkSizeVariation.id
     },
     {
+      id: new ObjectId('6ab5838bb2a71518d2beb888'),
       name: 'Cemilan',
       description: 'Dimsum kukus dan goreng spesial',
       vendorId: 'vnd_tehpoci_nusantara',
-      variations: []
+      categoryVariationIds: [],
+      variationIds: [],
+      categoryVariationId: null
     }
   ];
 
@@ -1209,28 +1381,88 @@ export async function seedDatabase() {
       // Ensure vendorId is set on legacy users
       console.log('[Seeder] Users verified and synced in MongoDB.');
 
-      // 2. Categories & Variations
-      for (const cat of initialCategories) {
-        await db.collection('categories').updateOne(
-          { name: cat.name, vendorId: cat.vendorId },
+      // 2a. Category Variations (on table use '_id', on node js code use 'id')
+      for (const v of initialCategoryVariations) {
+        const { id, ...cleanVar } = v;
+        await db.collection('category_variations').updateOne(
+          { _id: id },
           {
             $set: {
-              variations: cat.variations,
-              name: cat.name,
-              description: cat.description,
+              ...cleanVar,
               updatedAt: new Date()
             },
             $setOnInsert: {
-              vendorId: cat.vendorId,
+              _id: id,
               createdAt: new Date()
             }
           },
           { upsert: true }
         );
       }
-      // Remove legacy code and icon fields from categories collection
-      await db.collection('categories').updateMany({}, { $unset: { code: '', icon: '' } });
-      console.log('[Seeder] Categories and Variations synced in MongoDB successfully (code & icon removed).');
+      console.log('[Seeder] Category Variations synced in category_variations table successfully.');
+
+      // 2b. Categories (on table use '_id', on node js code use 'id' and reference Category Variation id)
+      for (const cat of initialCategories) {
+        const { id, ...cleanCat } = cat;
+        await db.collection('categories').updateOne(
+          { _id: id },
+          {
+            $set: {
+              ...cleanCat,
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              _id: id,
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+      // Migrate any legacy categories in MongoDB that have embedded variations or missing variationIds
+      const legacyCats = await db.collection('categories').find({}).toArray();
+      for (const lc of legacyCats) {
+        if (!lc.categoryVariationIds || lc.categoryVariationIds.length === 0) {
+          if (Array.isArray(lc.variations) && lc.variations.length > 0) {
+            const varIds: ObjectId[] = [];
+            for (const v of lc.variations) {
+              const varOid = ObjectId.isValid(v.id) ? new ObjectId(v.id) : new ObjectId();
+              await db.collection('category_variations').updateOne(
+                { _id: varOid },
+                {
+                  $set: {
+                    name: v.name,
+                    type: v.type || 'SINGLE_SELECT',
+                    required: !!v.required,
+                    options: v.options || [],
+                    vendorId: lc.vendorId || 'vnd_kasirkafe_central',
+                    updatedAt: new Date()
+                  },
+                  $setOnInsert: {
+                    _id: varOid,
+                    createdAt: new Date()
+                  }
+                },
+                { upsert: true }
+              );
+              varIds.push(varOid);
+            }
+            await db.collection('categories').updateOne(
+              { _id: lc._id },
+              {
+                $set: {
+                  categoryVariationIds: varIds,
+                  variationIds: varIds,
+                  categoryVariationId: varIds[0] || null
+                }
+              }
+            );
+          }
+        }
+      }
+      // Clean up legacy fields: code, icon, and embedded variations from categories
+      await db.collection('categories').updateMany({}, { $unset: { code: '', icon: '', variations: '' } });
+      console.log('[Seeder] Categories synced and referencing Category Variations in MongoDB successfully.');
 
       // 3. Products (on table use '_id', on node js code use 'id')
       for (const p of initialProducts) {

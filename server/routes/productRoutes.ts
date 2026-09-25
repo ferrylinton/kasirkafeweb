@@ -6,6 +6,29 @@ import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
 import { serverProductCache } from '../cache/productCache';
+import { resolveVendorId } from '../vendorMiddleware';
+
+function buildVendorQuery(vendorId?: string) {
+  const vId = vendorId || 'vnd_kasirkafe_central';
+  const isCentral = vId === 'vnd_kasirkafe_central' || vId === '6ab58389b2a71518d2beb887';
+  if (isCentral) {
+    return {
+      $or: [
+        { vendorId: 'vnd_kasirkafe_central' },
+        { vendorId: '6ab58389b2a71518d2beb887' },
+        { vendorId: { $exists: false } },
+        { vendorId: null }
+      ]
+    };
+  }
+  const resolved = resolveVendorId(vId);
+  return {
+    $or: [
+      { vendorId: vId },
+      { vendorId: resolved }
+    ]
+  };
+}
 
 export const productRouter = Router();
 
@@ -92,8 +115,421 @@ productRouter.post('/cache/clear', (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/products/category-variations
+ * Returns list of category variations for the active vendor
+ * Table: category_variations (on table use '_id', on node js code use 'id')
+ */
+const variationOptionSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nama opsi variasi tidak boleh kosong'),
+  extraPrice: z.number().min(0, 'Harga ekstra tidak boleh negatif').default(0),
+  isDefault: z.boolean().optional()
+});
+
+const categoryVariationSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nama variasi tidak boleh kosong'),
+  type: z.enum(['SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX']).default('SINGLE_SELECT'),
+  required: z.boolean().default(false),
+  options: z.array(variationOptionSchema).default([])
+});
+
+const categoryVariationInputSchema = z.object({
+  name: z.string().min(1, 'Nama variasi wajib diisi'),
+  type: z.enum(['SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX']).default('SINGLE_SELECT'),
+  required: z.boolean().default(false),
+  options: z.array(variationOptionSchema).default([]),
+  categoryIds: z.array(z.string()).optional()
+});
+
+const categoryVariationUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.enum(['SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX']).optional(),
+  required: z.boolean().optional(),
+  options: z.array(variationOptionSchema).optional(),
+  categoryIds: z.array(z.string()).optional()
+});
+
+productRouter.get('/category-variations', async (req: Request, res: Response) => {
+  try {
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
+    const varQuery = buildVendorQuery(activeVendorId);
+    const variationsRaw = await db.collection('category_variations').find(varQuery).sort({ createdAt: -1 }).toArray();
+
+    // Query categories for this vendor to find where each variation is referenced
+    const catQuery = buildVendorQuery(activeVendorId);
+    const categories = await db.collection('categories').find(catQuery).toArray();
+
+    const variations = variationsRaw.map(v => {
+      const vIdStr = v._id.toString();
+      // Find categories referencing this variation
+      const referencingCats = categories.filter(c => {
+        const catVarIds: any[] = [
+          ...(Array.isArray(c.categoryVariationIds) ? c.categoryVariationIds : []),
+          ...(Array.isArray(c.variationIds) ? c.variationIds : []),
+          c.categoryVariationId
+        ].filter(Boolean);
+        return catVarIds.some(refId => refId && (refId.toString() === vIdStr || refId === vIdStr));
+      });
+
+      return {
+        id: v._id.toString(), // on node js code use 'id', on table use '_id'
+        vendorId: v.vendorId || activeVendorId,
+        name: v.name,
+        type: v.type || 'SINGLE_SELECT',
+        required: !!v.required,
+        options: Array.isArray(v.options) ? v.options : [],
+        usedInCategoriesCount: referencingCats.length,
+        categoryNames: referencingCats.map(c => c.name),
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt
+      };
+    });
+
+    return res.json({
+      success: true,
+      vendorId: activeVendorId,
+      variations
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * GET /api/products/category-variations/:id
+ */
+productRouter.get('/category-variations/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    let query: any = { vendorId: activeVendorId };
+    if (ObjectId.isValid(id)) {
+      query._id = new ObjectId(id);
+    } else {
+      query.name = id;
+    }
+
+    const variation = await db.collection('category_variations').findOne(query);
+    if (!variation) {
+      return res.status(404).json({ success: false, error: 'Variasi kategori tidak ditemukan.' });
+    }
+
+    return res.json({
+      success: true,
+      variation: {
+        id: variation._id.toString(),
+        vendorId: variation.vendorId,
+        name: variation.name,
+        type: variation.type,
+        required: variation.required,
+        options: variation.options,
+        createdAt: variation.createdAt,
+        updatedAt: variation.updatedAt
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * POST /api/products/category-variations
+ * Create Category Variation in new table (Manager only)
+ * on table use '_id', on node js code use 'id'
+ */
+productRouter.post('/category-variations', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const parsed = categoryVariationInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Data variasi kategori tidak valid',
+        details: parsed.error.issues
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    // Format options with IDs
+    const formattedOptions = (parsed.data.options || []).map((opt, oIdx) => ({
+      id: opt.id || `opt_${Date.now()}_${oIdx}`,
+      name: opt.name.trim(),
+      extraPrice: Number(opt.extraPrice || 0),
+      isDefault: !!opt.isDefault
+    }));
+
+    // New ObjectId for table (on table use '_id', on node js code use 'id')
+    const newId = new ObjectId();
+    const newVariationDoc = {
+      _id: newId,
+      name: parsed.data.name.trim(),
+      type: parsed.data.type || 'SINGLE_SELECT',
+      required: !!parsed.data.required,
+      options: formattedOptions,
+      vendorId: activeVendorId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('category_variations').insertOne(newVariationDoc);
+
+    // If categoryIds were supplied to link this variation immediately:
+    if (Array.isArray(parsed.data.categoryIds) && parsed.data.categoryIds.length > 0) {
+      const catObjectIds = parsed.data.categoryIds
+        .filter(cId => ObjectId.isValid(cId))
+        .map(cId => new ObjectId(cId));
+
+      if (catObjectIds.length > 0) {
+        await db.collection('categories').updateMany(
+          { _id: { $in: catObjectIds }, vendorId: activeVendorId },
+          {
+            $addToSet: {
+              categoryVariationIds: newId,
+              variationIds: newId
+            } as any
+          }
+        );
+      }
+    }
+
+    // Invalidate categories cache
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    await recordActivityLog({
+      action: 'CREATE',
+      entity: 'CATEGORY_VARIATION',
+      entityId: newId.toString(),
+      entityName: newVariationDoc.name,
+      summary: `Menambahkan variasi kategori baru '${newVariationDoc.name}' dengan ${formattedOptions.length} opsi`,
+      details: newVariationDoc,
+      req
+    });
+
+    return res.status(201).json({
+      success: true,
+      variation: {
+        id: newId.toString(), // on node js code use 'id'
+        vendorId: activeVendorId,
+        name: newVariationDoc.name,
+        type: newVariationDoc.type,
+        required: newVariationDoc.required,
+        options: newVariationDoc.options,
+        createdAt: newVariationDoc.createdAt,
+        updatedAt: newVariationDoc.updatedAt
+      },
+      message: 'Variasi kategori berhasil dibuat!'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * PUT /api/products/category-variations/:id
+ * Update Category Variation (Manager only)
+ */
+productRouter.put('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const parsed = categoryVariationUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Data pembaruan variasi tidak valid',
+        details: parsed.error.issues
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    let query: any = { vendorId: activeVendorId };
+    if (ObjectId.isValid(id)) {
+      query._id = new ObjectId(id);
+    } else {
+      query.$or = [{ id }, { name: id }];
+    }
+
+    const existingVar = await db.collection('category_variations').findOne(query);
+    if (!existingVar) {
+      return res.status(404).json({ success: false, error: 'Variasi kategori tidak ditemukan atau bukan milik vendor Anda.' });
+    }
+
+    const updateFields: any = {
+      updatedAt: new Date()
+    };
+
+    if (parsed.data.name !== undefined) updateFields.name = parsed.data.name.trim();
+    if (parsed.data.type !== undefined) updateFields.type = parsed.data.type;
+    if (parsed.data.required !== undefined) updateFields.required = !!parsed.data.required;
+    if (parsed.data.options !== undefined) {
+      updateFields.options = parsed.data.options.map((opt, oIdx) => ({
+        id: opt.id || `opt_${Date.now()}_${oIdx}`,
+        name: opt.name.trim(),
+        extraPrice: Number(opt.extraPrice || 0),
+        isDefault: !!opt.isDefault
+      }));
+    }
+
+    await db.collection('category_variations').updateOne({ _id: existingVar._id }, { $set: updateFields });
+
+    // If categoryIds is specified, sync categories referencing this variation
+    if (Array.isArray(parsed.data.categoryIds)) {
+      const targetCatObjectIds = parsed.data.categoryIds
+        .filter(cId => ObjectId.isValid(cId))
+        .map(cId => new ObjectId(cId));
+
+      // Remove from categories not in target list
+      await db.collection('categories').updateMany(
+        { _id: { $nin: targetCatObjectIds }, vendorId: activeVendorId },
+        {
+          $pull: {
+            categoryVariationIds: existingVar._id,
+            variationIds: existingVar._id
+          } as any
+        }
+      );
+
+      // Add to categories in target list
+      if (targetCatObjectIds.length > 0) {
+        await db.collection('categories').updateMany(
+          { _id: { $in: targetCatObjectIds }, vendorId: activeVendorId },
+          {
+            $addToSet: {
+              categoryVariationIds: existingVar._id,
+              variationIds: existingVar._id
+            } as any
+          }
+        );
+      }
+    }
+
+    // Invalidate categories cache
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'CATEGORY_VARIATION',
+      entityId: existingVar._id.toString(),
+      entityName: updateFields.name || existingVar.name,
+      summary: `Memperbarui variasi kategori '${updateFields.name || existingVar.name}'`,
+      details: updateFields,
+      req
+    });
+
+    const updatedDoc = await db.collection('category_variations').findOne({ _id: existingVar._id });
+
+    return res.json({
+      success: true,
+      variation: {
+        id: updatedDoc?._id.toString() || id,
+        vendorId: updatedDoc?.vendorId,
+        name: updatedDoc?.name,
+        type: updatedDoc?.type,
+        required: updatedDoc?.required,
+        options: updatedDoc?.options || [],
+        updatedAt: updatedDoc?.updatedAt
+      },
+      message: 'Variasi kategori berhasil diperbarui!'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * DELETE /api/products/category-variations/:id
+ * Delete Category Variation & remove its reference from categories (Manager only)
+ */
+productRouter.delete('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    let query: any = { vendorId: activeVendorId };
+    if (ObjectId.isValid(id)) {
+      query._id = new ObjectId(id);
+    } else {
+      query.$or = [{ id }, { name: id }];
+    }
+
+    const variation = await db.collection('category_variations').findOne(query);
+    if (!variation) {
+      return res.status(404).json({ success: false, error: 'Variasi kategori tidak ditemukan atau bukan milik vendor Anda.' });
+    }
+
+    // Delete from category_variations table
+    await db.collection('category_variations').deleteOne({ _id: variation._id });
+
+    // Pull reference from all categories
+    await db.collection('categories').updateMany(
+      { vendorId: activeVendorId },
+      {
+        $pull: {
+          categoryVariationIds: variation._id,
+          variationIds: variation._id
+        } as any
+      }
+    );
+
+    // Also handle categoryVariationId unset if matched
+    await db.collection('categories').updateMany(
+      { vendorId: activeVendorId, categoryVariationId: variation._id },
+      { $unset: { categoryVariationId: '' } }
+    );
+
+    // Invalidate categories cache
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    await recordActivityLog({
+      action: 'DELETE',
+      entity: 'CATEGORY_VARIATION',
+      entityId: variation._id.toString(),
+      entityName: variation.name,
+      summary: `Menghapus variasi kategori '${variation.name}'`,
+      details: { name: variation.name },
+      req
+    });
+
+    return res.json({
+      success: true,
+      message: `Variasi kategori '${variation.name}' berhasil dihapus!`
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
  * GET /api/products/categories
  * Returns categories strictly partitioned by active vendor (with Server In-Memory Cache)
+ * Category references the Category Variation id (on table use '_id', on node js code use 'id')
  */
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
@@ -126,23 +562,78 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
 
     let categories: any[] = [];
     try {
-      const query = (activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId });
+      const query = buildVendorQuery(activeVendorId);
       categories = await db.collection('categories').find(query).toArray();
     } catch (e) {}
+
+    // Collect all referenced Category Variation ObjectIds
+    const allVarObjectIds: ObjectId[] = [];
+    for (const c of categories) {
+      const rawRefs = [
+        ...(Array.isArray(c.categoryVariationIds) ? c.categoryVariationIds : []),
+        ...(Array.isArray(c.variationIds) ? c.variationIds : []),
+        c.categoryVariationId
+      ].filter(Boolean);
+
+      for (const r of rawRefs) {
+        if (r instanceof ObjectId) {
+          allVarObjectIds.push(r);
+        } else if (typeof r === 'string' && ObjectId.isValid(r)) {
+          allVarObjectIds.push(new ObjectId(r));
+        }
+      }
+    }
+
+    // Load referenced category_variations from table
+    const varMap = new Map<string, any>();
+    if (allVarObjectIds.length > 0) {
+      try {
+        const foundVars = await db.collection('category_variations').find({
+          _id: { $in: allVarObjectIds }
+        }).toArray();
+
+        for (const fv of foundVars) {
+          varMap.set(fv._id.toString(), {
+            id: fv._id.toString(), // on node js code use 'id', on table use '_id'
+            vendorId: fv.vendorId,
+            name: fv.name,
+            type: fv.type || 'SINGLE_SELECT',
+            required: !!fv.required,
+            options: fv.options || []
+          });
+        }
+      } catch (e) {}
+    }
 
     const payload = {
       success: true,
       vendorId: activeVendorId,
       cached: false,
-      categories: categories.map(c => ({
-        id: c._id ? c._id.toString() : (c.id || c.name),
-        vendorId: c.vendorId || activeVendorId,
-        name: c.name,
-        description: c.description,
-        variations: Array.isArray(c.variations) ? c.variations : []
-      }))
+      categories: categories.map(c => {
+        const rawRefs = [
+          ...(Array.isArray(c.categoryVariationIds) ? c.categoryVariationIds : []),
+          ...(Array.isArray(c.variationIds) ? c.variationIds : []),
+          c.categoryVariationId
+        ].filter(Boolean);
+
+        const refIdStrings = Array.from(new Set(rawRefs.map((r: any) => r ? r.toString() : ''))).filter(Boolean);
+        const populatedVariations = refIdStrings
+          .map(idStr => varMap.get(idStr))
+          .filter(Boolean);
+
+        return {
+          id: c._id ? c._id.toString() : (c.id || c.name), // on node js code use 'id'
+          vendorId: c.vendorId || activeVendorId,
+          name: c.name,
+          description: c.description,
+          categoryVariationIds: refIdStrings, // reference Category Variation id on node js code use 'id'
+          variationIds: refIdStrings,
+          categoryVariationId: c.categoryVariationId ? c.categoryVariationId.toString() : (refIdStrings[0] || undefined),
+          variations: populatedVariations.length > 0
+            ? populatedVariations
+            : (Array.isArray(c.variations) ? c.variations : [])
+        };
+      })
     };
 
     // Store in cache (5 minutes TTL)
@@ -161,31 +652,23 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
 /**
  * POST /api/products/categories
  * Add category for the active vendor (Manager only)
+ * Category references the Category Variation id (on table use '_id', on node js code use 'id')
  */
-const variationOptionSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'Nama opsi variasi tidak boleh kosong'),
-  extraPrice: z.number().min(0, 'Harga ekstra tidak boleh negatif').default(0),
-  isDefault: z.boolean().optional()
-});
-
-const categoryVariationSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'Nama variasi tidak boleh kosong'),
-  type: z.enum(['SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX']).default('SINGLE_SELECT'),
-  required: z.boolean().default(false),
-  options: z.array(variationOptionSchema).default([])
-});
-
 const categorySchema = z.object({
   name: z.string().min(1, 'Nama kategori wajib diisi'),
   description: z.string().optional(),
-  variations: z.array(categoryVariationSchema).default([])
+  categoryVariationIds: z.array(z.string()).optional(),
+  variationIds: z.array(z.string()).optional(),
+  categoryVariationId: z.string().optional(),
+  variations: z.array(categoryVariationSchema).optional()
 });
 
 const categoryUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  categoryVariationIds: z.array(z.string()).optional(),
+  variationIds: z.array(z.string()).optional(),
+  categoryVariationId: z.string().optional(),
   variations: z.array(categoryVariationSchema).optional()
 });
 
@@ -201,30 +684,6 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     }
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
-
-    // Format variations with guaranteed unique IDs
-    const formattedVariations = (parsed.data.variations || []).map((v, vIdx) => ({
-      id: v.id || `var_${Date.now()}_${vIdx}`,
-      name: v.name.trim(),
-      type: v.type || 'SINGLE_SELECT',
-      required: !!v.required,
-      options: (v.options || []).map((opt, oIdx) => ({
-        id: opt.id || `opt_${Date.now()}_${vIdx}_${oIdx}`,
-        name: opt.name.trim(),
-        extraPrice: Number(opt.extraPrice || 0),
-        isDefault: !!opt.isDefault
-      }))
-    }));
-
-    const newCategory = {
-      name: parsed.data.name.trim(),
-      description: parsed.data.description?.trim() || '',
-      variations: formattedVariations,
-      vendorId: activeVendorId,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -247,11 +706,71 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       });
     }
 
-    let insertedId = `cat_${Date.now()}`;
-    try {
-      const result = await db.collection('categories').insertOne(newCategory);
-      insertedId = result.insertedId.toString();
-    } catch (e) {}
+    // Collect Category Variation ObjectIds
+    const variationObjectIds: ObjectId[] = [];
+
+    // 1. If explicit categoryVariationIds / variationIds provided
+    const explicitIds = [
+      ...(parsed.data.categoryVariationIds || []),
+      ...(parsed.data.variationIds || []),
+      ...(parsed.data.categoryVariationId ? [parsed.data.categoryVariationId] : [])
+    ];
+
+    for (const vId of explicitIds) {
+      if (ObjectId.isValid(vId)) {
+        const oid = new ObjectId(vId);
+        if (!variationObjectIds.some(existingOid => existingOid.equals(oid))) {
+          variationObjectIds.push(oid);
+        }
+      }
+    }
+
+    // 2. If inline variations were supplied, save them to category_variations table if not already present
+    if (Array.isArray(parsed.data.variations) && parsed.data.variations.length > 0) {
+      for (const v of parsed.data.variations) {
+        if (v.id && ObjectId.isValid(v.id)) {
+          const oid = new ObjectId(v.id);
+          if (!variationObjectIds.some(existingOid => existingOid.equals(oid))) {
+            variationObjectIds.push(oid);
+          }
+        } else {
+          // Create new Category Variation document in category_variations table
+          const newVarId = new ObjectId();
+          const newVarDoc = {
+            _id: newVarId, // on table use '_id'
+            name: v.name.trim(),
+            type: v.type || 'SINGLE_SELECT',
+            required: !!v.required,
+            options: (v.options || []).map((opt, oIdx) => ({
+              id: opt.id || `opt_${Date.now()}_${oIdx}`,
+              name: opt.name.trim(),
+              extraPrice: Number(opt.extraPrice || 0),
+              isDefault: !!opt.isDefault
+            })),
+            vendorId: activeVendorId,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          await db.collection('category_variations').insertOne(newVarDoc);
+          variationObjectIds.push(newVarId);
+        }
+      }
+    }
+
+    const newCategoryId = new ObjectId();
+    const newCategoryDoc = {
+      _id: newCategoryId, // on table use '_id', on node js code use 'id'
+      name: parsed.data.name.trim(),
+      description: parsed.data.description?.trim() || '',
+      categoryVariationIds: variationObjectIds, // reference Category Variation id on table use '_id'
+      variationIds: variationObjectIds,
+      categoryVariationId: variationObjectIds[0] || null,
+      vendorId: activeVendorId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('categories').insertOne(newCategoryDoc);
 
     // Invalidate categories cache for active vendor
     serverProductCache.invalidateCategories(activeVendorId);
@@ -259,17 +778,37 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     await recordActivityLog({
       action: 'CREATE',
       entity: 'CATEGORY',
-      entityId: insertedId,
-      entityName: newCategory.name,
-      summary: `Menambahkan kategori baru '${newCategory.name}' dengan ${formattedVariations.length} variasi`,
-      details: newCategory,
+      entityId: newCategoryId.toString(),
+      entityName: newCategoryDoc.name,
+      summary: `Menambahkan kategori baru '${newCategoryDoc.name}' dengan ${variationObjectIds.length} variasi`,
+      details: newCategoryDoc,
       req
     });
 
+    // Populate variations for response
+    const populatedVars = await db.collection('category_variations').find({
+      _id: { $in: variationObjectIds }
+    }).toArray();
+
     return res.status(201).json({
       success: true,
-      category: { id: insertedId, ...newCategory },
-      message: 'Kategori dan variasi berhasil disimpan!'
+      category: {
+        id: newCategoryId.toString(), // on node js code use 'id'
+        vendorId: activeVendorId,
+        name: newCategoryDoc.name,
+        description: newCategoryDoc.description,
+        categoryVariationIds: variationObjectIds.map(oid => oid.toString()), // on node js code use 'id'
+        variationIds: variationObjectIds.map(oid => oid.toString()),
+        categoryVariationId: variationObjectIds[0]?.toString(),
+        variations: populatedVars.map(pv => ({
+          id: pv._id.toString(), // on node js code use 'id'
+          name: pv.name,
+          type: pv.type,
+          required: pv.required,
+          options: pv.options
+        }))
+      },
+      message: 'Kategori berhasil disimpan!'
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -279,6 +818,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
 /**
  * PUT /api/products/categories/:id
  * Update category & variations (Manager only)
+ * Category references the Category Variation id (on table use '_id', on node js code use 'id')
  */
 productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
@@ -324,19 +864,65 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
     if (parsed.data.name !== undefined) updateFields.name = parsed.data.name.trim();
     if (parsed.data.description !== undefined) updateFields.description = parsed.data.description.trim();
 
-    if (parsed.data.variations !== undefined) {
-      updateFields.variations = parsed.data.variations.map((v, vIdx) => ({
-        id: v.id || `var_${Date.now()}_${vIdx}`,
-        name: v.name.trim(),
-        type: v.type || 'SINGLE_SELECT',
-        required: !!v.required,
-        options: (v.options || []).map((opt, oIdx) => ({
-          id: opt.id || `opt_${Date.now()}_${vIdx}_${oIdx}`,
-          name: opt.name.trim(),
-          extraPrice: Number(opt.extraPrice || 0),
-          isDefault: !!opt.isDefault
-        }))
-      }));
+    // Check if variations or variation IDs are provided
+    const hasVarUpdate = parsed.data.categoryVariationIds !== undefined ||
+      parsed.data.variationIds !== undefined ||
+      parsed.data.categoryVariationId !== undefined ||
+      parsed.data.variations !== undefined;
+
+    if (hasVarUpdate) {
+      const variationObjectIds: ObjectId[] = [];
+
+      const explicitIds = [
+        ...(parsed.data.categoryVariationIds || []),
+        ...(parsed.data.variationIds || []),
+        ...(parsed.data.categoryVariationId ? [parsed.data.categoryVariationId] : [])
+      ];
+
+      for (const vId of explicitIds) {
+        if (ObjectId.isValid(vId)) {
+          const oid = new ObjectId(vId);
+          if (!variationObjectIds.some(existingOid => existingOid.equals(oid))) {
+            variationObjectIds.push(oid);
+          }
+        }
+      }
+
+      if (Array.isArray(parsed.data.variations)) {
+        for (const v of parsed.data.variations) {
+          if (v.id && ObjectId.isValid(v.id)) {
+            const oid = new ObjectId(v.id);
+            if (!variationObjectIds.some(existingOid => existingOid.equals(oid))) {
+              variationObjectIds.push(oid);
+            }
+          } else {
+            // Create new Category Variation document
+            const newVarId = new ObjectId();
+            const newVarDoc = {
+              _id: newVarId,
+              name: v.name.trim(),
+              type: v.type || 'SINGLE_SELECT',
+              required: !!v.required,
+              options: (v.options || []).map((opt, oIdx) => ({
+                id: opt.id || `opt_${Date.now()}_${oIdx}`,
+                name: opt.name.trim(),
+                extraPrice: Number(opt.extraPrice || 0),
+                isDefault: !!opt.isDefault
+              })),
+              vendorId: activeVendorId,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            await db.collection('category_variations').insertOne(newVarDoc);
+            variationObjectIds.push(newVarId);
+          }
+        }
+      }
+
+      // Store references on table as ObjectId (on table use '_id')
+      updateFields.categoryVariationIds = variationObjectIds;
+      updateFields.variationIds = variationObjectIds;
+      updateFields.categoryVariationId = variationObjectIds[0] || null;
     }
 
     await db.collection('categories').updateOne({ _id: category._id }, { $set: updateFields });
@@ -355,15 +941,29 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
     });
 
     const updatedDoc = await db.collection('categories').findOne({ _id: category._id });
+    const finalVarObjectIds: ObjectId[] = (updatedDoc?.categoryVariationIds || []).filter((v: any) => v instanceof ObjectId || ObjectId.isValid(v)).map((v: any) => v instanceof ObjectId ? v : new ObjectId(v));
+
+    const populatedVars = finalVarObjectIds.length > 0
+      ? await db.collection('category_variations').find({ _id: { $in: finalVarObjectIds } }).toArray()
+      : [];
 
     return res.json({
       success: true,
       category: {
-        id: updatedDoc?._id.toString() || id,
+        id: updatedDoc?._id.toString() || id, // on node js code use 'id'
         vendorId: updatedDoc?.vendorId,
         name: updatedDoc?.name,
         description: updatedDoc?.description,
-        variations: updatedDoc?.variations || []
+        categoryVariationIds: finalVarObjectIds.map(oid => oid.toString()), // on node js code use 'id'
+        variationIds: finalVarObjectIds.map(oid => oid.toString()),
+        categoryVariationId: finalVarObjectIds[0]?.toString(),
+        variations: populatedVars.map(pv => ({
+          id: pv._id.toString(), // on node js code use 'id'
+          name: pv.name,
+          type: pv.type,
+          required: pv.required,
+          options: pv.options
+        }))
       },
       message: 'Kategori dan variasi berhasil diperbarui!'
     });
@@ -374,7 +974,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
 
 /**
  * DELETE /api/products/categories/:id
- * Delete category & its variations (Manager only)
+ * Delete category (Manager only)
  */
 productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
@@ -414,7 +1014,7 @@ productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAcc
       entity: 'CATEGORY',
       entityId: category._id.toString(),
       entityName: category.name,
-      summary: `Menghapus kategori '${category.name}' beserta variasinya`,
+      summary: `Menghapus kategori '${category.name}'`,
       details: { name: category.name },
       req
     });
