@@ -27,13 +27,11 @@ export interface SelectableUser {
   avatar?: string;
   vendorId?: string;
   vendorName?: string;
-  vendorCode?: string;
 }
 
 export interface ModalVendor {
   id: string;
   name: string;
-  code: string;
   status?: string;
 }
 
@@ -47,10 +45,10 @@ interface SelectUserModalProps {
 }
 
 const FALLBACK_VENDORS: ModalVendor[] = [
-  { id: 'vnd_admin', name: 'Admin', code: 'ADMIN', status: 'ACTIVE' },
-  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee & Boba (Pusat)', code: 'SIPSPOT', status: 'ACTIVE' },
-  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO', status: 'ACTIVE' },
-  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI', status: 'ACTIVE' }
+  { id: 'vnd_admin', name: 'Admin', status: 'ACTIVE' },
+  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee & Boba (Pusat)', status: 'ACTIVE' },
+  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', status: 'ACTIVE' },
+  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', status: 'ACTIVE' }
 ];
 
 const FALLBACK_USERS: SelectableUser[] = [
@@ -61,8 +59,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_admin',
-    vendorName: 'Admin',
-    vendorCode: 'ADMIN'
+    vendorName: 'Admin'
   },
   {
     id: 'manager_1',
@@ -71,8 +68,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_kasirkafe_central',
-    vendorName: 'KasirKafe Coffee & Boba (Pusat)',
-    vendorCode: 'SIPSPOT'
+    vendorName: 'KasirKafe Coffee & Boba (Pusat)'
   },
   {
     id: 'cashier_1',
@@ -81,8 +77,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'CASHIER',
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
     vendorId: 'vnd_kasirkafe_central',
-    vendorName: 'KasirKafe Coffee & Boba (Pusat)',
-    vendorCode: 'SIPSPOT'
+    vendorName: 'KasirKafe Coffee & Boba (Pusat)'
   },
   {
     id: 'manager_2',
@@ -91,8 +86,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_kopi_kulo_kemang',
-    vendorName: 'Kopi Kulo & Toast (Kemang)',
-    vendorCode: 'KULO'
+    vendorName: 'Kopi Kulo & Toast (Kemang)'
   },
   {
     id: 'cashier_2',
@@ -101,8 +95,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'CASHIER',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_kopi_kulo_kemang',
-    vendorName: 'Kopi Kulo & Toast (Kemang)',
-    vendorCode: 'KULO'
+    vendorName: 'Kopi Kulo & Toast (Kemang)'
   },
   {
     id: 'manager_3',
@@ -111,8 +104,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'MANAGER',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_tehpoci_nusantara',
-    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
-    vendorCode: 'TEHPOCI'
+    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)'
   },
   {
     id: 'cashier_3',
@@ -121,8 +113,7 @@ const FALLBACK_USERS: SelectableUser[] = [
     role: 'CASHIER',
     avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
     vendorId: 'vnd_tehpoci_nusantara',
-    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)',
-    vendorCode: 'TEHPOCI'
+    vendorName: 'Teh Poci & Dimsum Nusantara (Bekasi)'
   }
 ];
 
@@ -204,8 +195,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.vendorName && user.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (user.vendorCode && user.vendorCode.toLowerCase().includes(searchQuery.toLowerCase()));
+      (user.vendorName && user.vendorName.toLowerCase().includes(searchQuery.toLowerCase()));
 
     // 3. Role filter
     if (filterRole === 'ALL') return matchQuery;
@@ -227,9 +217,7 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
       return {
         value: v.id,
         label: v.name,
-        sublabel: `${v.code} • ${staffCount} staf terdaftar`,
-        badge: v.code,
-        badgeColor: 'bg-orange-100 dark:bg-orange-950/60 text-accent',
+        sublabel: `${staffCount} staf terdaftar`,
         icon: <Store className="w-4 h-4 text-accent" />
       };
     })
@@ -300,11 +288,6 @@ export const SelectUserModal: React.FC<SelectUserModalProps> = ({
                 <Store className="w-3.5 h-3.5 text-accent" />
                 <span>{t('selectVendorLabel')}</span>
               </label>
-              {currentVendorData && selectedVendor !== 'ALL' && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200 dark:border-orange-800/60">
-                  {currentVendorData.code}
-                </span>
-              )}
             </div>
 
             <RadixSelect

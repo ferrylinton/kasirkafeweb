@@ -36,7 +36,6 @@ import { AdminReviewVendorRequestModal } from '../modals/AdminReviewVendorReques
 interface AdminVendorItem {
   id: string;
   name: string;
-  code?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
   currency: string;
   email?: string;
@@ -88,7 +87,6 @@ export const VendorManagementScreen: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    code: '',
     email: '',
     phone: '',
     address: '',
@@ -166,7 +164,6 @@ export const VendorManagementScreen: React.FC = () => {
     setEditingVendorId(null);
     setFormData({
       name: '',
-      code: '',
       email: '',
       phone: '',
       address: '',
@@ -183,7 +180,6 @@ export const VendorManagementScreen: React.FC = () => {
     setEditingVendorId(vendor.id);
     setFormData({
       name: vendor.name,
-      code: vendor.code ? String(vendor.code) : (vendor.id ? String(vendor.id).replace(/^vnd_/, '').slice(0, 6).toUpperCase() : ''),
       email: vendor.email || '',
       phone: vendor.phone || '',
       address: vendor.address || '',
@@ -204,10 +200,6 @@ export const VendorManagementScreen: React.FC = () => {
 
     const errors: Record<string, string> = {};
     if (!formData.name.trim()) errors.name = 'Nama vendor wajib diisi.';
-    if (!formData.code.trim()) errors.code = 'Kode vendor wajib diisi.';
-    else if (!/^[A-Za-z0-9]+$/.test(formData.code.trim())) {
-      errors.code = 'Kode harus berupa huruf dan angka (tanpa spasi).';
-    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -234,9 +226,6 @@ export const VendorManagementScreen: React.FC = () => {
           fetchVendors();
         } else {
           showToast(data.message || 'Gagal menambahkan vendor', 'error');
-          if (data.message.includes('Kode')) {
-            setFormErrors({ code: data.message });
-          }
         }
       } else {
         const res = await fetch(`/api/admin/vendors/${editingVendorId}`, {
@@ -335,7 +324,6 @@ export const VendorManagementScreen: React.FC = () => {
     return (vendors || []).filter(
       v =>
         (v.name || '').toLowerCase().includes(q) ||
-        (v.code || '').toLowerCase().includes(q) ||
         (v.email && v.email.toLowerCase().includes(q)) ||
         (v.id || '').toLowerCase().includes(q)
     );
@@ -986,7 +974,7 @@ export const VendorManagementScreen: React.FC = () => {
                                 : 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
                             }`}
                           >
-                            {vendor.code ? String(vendor.code).slice(0, 3) : <Store className="w-5 h-5" />}
+                            <Store className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1001,8 +989,8 @@ export const VendorManagementScreen: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-stone-100 dark:bg-stone-850 text-stone-600 dark:text-stone-300">
-                                {vendor.code || 'NO-CODE'}
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-850">
+                                ID: {vendor.id}
                               </span>
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -1176,43 +1164,6 @@ export const VendorManagementScreen: React.FC = () => {
                 {formErrors.name && (
                   <span className="text-[11px] text-rose-500 font-medium mt-1 block">
                     {formErrors.name}
-                  </span>
-                )}
-              </div>
-
-              {/* Kode Singkatan Vendor */}
-              <div>
-                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  Kode Singkatan Vendor (Alfanumerik) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: JJIWA (Maks 10 karakter)"
-                  value={formData.code}
-                  maxLength={10}
-                  disabled={!isAdmin && modalMode === 'EDIT'}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
-                    })
-                  }
-                  className={`w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border text-xs sm:text-sm font-mono uppercase text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 ${
-                    !isAdmin && modalMode === 'EDIT' ? 'opacity-60 cursor-not-allowed' : ''
-                  } ${
-                    formErrors.code
-                      ? 'border-rose-500 focus:ring-rose-500/25'
-                      : 'border-stone-200 dark:border-stone-800 focus:ring-accent/25 focus:border-accent'
-                  }`}
-                />
-                <span className="text-[10px] text-stone-400 mt-1 block">
-                  {!isAdmin && modalMode === 'EDIT'
-                    ? 'Kode gerai dikunci oleh sistem administrator.'
-                    : 'Digunakan untuk identifikasi unik kode cabang vendor.'}
-                </span>
-                {formErrors.code && (
-                  <span className="text-[11px] text-rose-500 font-medium mt-1 block">
-                    {formErrors.code}
                   </span>
                 )}
               </div>

@@ -239,8 +239,8 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        const vendorCode = (data?.vendor?.code || 'vendor').toLowerCase();
-        link.download = `transaksi_${vendorCode}_3bulan_${targetPeriod}_${new Date().toISOString().slice(0, 10)}.json`;
+        const vendorSlug = (data?.vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        link.download = `transaksi_${vendorSlug}_3bulan_${targetPeriod}_${new Date().toISOString().slice(0, 10)}.json`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -250,8 +250,8 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        const vendorCode = (data?.vendor?.code || 'vendor').toLowerCase();
-        link.download = `transaksi_${vendorCode}_3bulan_${targetPeriod}_${new Date().toISOString().slice(0, 10)}.csv`;
+        const vendorSlug = (data?.vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        link.download = `transaksi_${vendorSlug}_3bulan_${targetPeriod}_${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -275,8 +275,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
     }
 
     try {
-      const vendorName = data?.vendor?.name || 'Vendor';
-      const vendorCode = (data?.vendor?.code || 'vendor').toLowerCase();
+      const vendorSlug = (data?.vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
       const nowStr = new Date().toISOString().slice(0, 10);
 
       if (format === 'json') {
@@ -291,7 +290,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `rekap_${period}_${vendorCode}_${nowStr}.json`;
+        a.download = `rekap_${period}_${vendorSlug}_${nowStr}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -310,7 +309,7 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `rekap_${period}_${vendorCode}_${nowStr}.csv`;
+        a.download = `rekap_${period}_${vendorSlug}_${nowStr}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -449,9 +448,6 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/80 shadow-2xs">
                 <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span>{data.vendor.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 bg-white dark:bg-amber-900/60 rounded font-black">
-                  {data.vendor.code}
-                </span>
               </span>
             )}
           </div>

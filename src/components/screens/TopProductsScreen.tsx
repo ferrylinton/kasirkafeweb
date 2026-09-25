@@ -51,7 +51,6 @@ interface TopProductItem {
   category: string;
   vendorId: string;
   vendorName: string;
-  vendorCode: string;
   quantitySold: number;
   totalRevenue: number;
   averagePrice: number;
@@ -86,8 +85,8 @@ interface TopProductsApiResponse {
     cutoffDate: string;
   };
   requestedVendorId?: string;
-  vendors?: Array<{ id: string; name: string; code: string; color: string }>;
-  vendor?: { id: string; name: string; code: string; address?: string };
+  vendors?: Array<{ id: string; name: string; color: string }>;
+  vendor?: { id: string; name: string; address?: string };
   topProducts: TopProductItem[];
   allProductsCount: number;
   summary: {
@@ -209,7 +208,7 @@ export const TopProductsScreen: React.FC<TopProductsScreenProps> = ({ managerMod
       const a = document.createElement('a');
       a.href = downloadUrl;
       const vendorTag = isManager
-        ? (data?.vendor?.code?.toLowerCase() || 'vendor')
+        ? ((data?.vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_'))
         : selectedVendor;
       a.download = `top10_produk_${vendorTag}_${period}_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
@@ -247,7 +246,7 @@ export const TopProductsScreen: React.FC<TopProductsScreenProps> = ({ managerMod
       const a = document.createElement('a');
       a.href = dataStr;
       const vendorTag = isManager
-        ? (data?.vendor?.code?.toLowerCase() || 'vendor')
+        ? ((data?.vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_'))
         : selectedVendor;
       a.download = `top10_produk_${vendorTag}_${period}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
@@ -501,9 +500,6 @@ export const TopProductsScreen: React.FC<TopProductsScreenProps> = ({ managerMod
               <Store className="w-4 h-4 text-accent shrink-0" />
               <div className="flex items-center gap-1.5">
                 <span className="font-bold">{data?.vendor?.name || (user as any)?.vendorName || getVendorName(user?.vendorId) || 'Cabang Vendor Anda'}</span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase bg-accent text-white">
-                  {data?.vendor?.code || 'CABANG'}
-                </span>
               </div>
             </div>
           ) : (

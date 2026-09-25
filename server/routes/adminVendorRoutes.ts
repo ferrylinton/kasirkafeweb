@@ -96,6 +96,13 @@ adminVendorRouter.get('/', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
+function getVendorFilter(id: string): any {
+  if (ObjectId.isValid(id) && id.length === 24) {
+    return { _id: new ObjectId(id) };
+  }
+  return { _id: id };
+}
+
 /**
  * POST /api/admin/vendors
  * Create a new vendor (Admin only)
@@ -109,10 +116,32 @@ adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) =>
     }
 
     const cleanName = name.trim();
-    const idSuffix = Date.now().toString(36).slice(-4);
-    const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'vnd';
-    const newVendorId = `vnd_${slug}_${idSuffix}`;
+    const _id = new ObjectId();
+    const newVendorId = _id.toString();
 
+    const db = getDB();
+    if (db) {
+      // Table uses _id as ObjectId without code or id
+      await db.collection('vendors').insertOne({
+        _id,
+        name: cleanName,
+        status: status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
+        currency: currency ? currency.trim() : 'IDR',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      // Initialize default categories for the new vendor so staff can immediately add menu items
+      const initialCategories = [
+        { name: 'Kopi', description: 'Menu racikan kopi khas vendor', vendorId: newVendorId },
+        { name: 'Teh', description: 'Artisan teh segar dan seduhan', vendorId: newVendorId },
+        { name: 'Jus & Segar', description: 'Minuman buah dan sparkling segar', vendorId: newVendorId },
+        { name: 'Cemilan', description: 'Pastry, snack, dan makanan pendamping', vendorId: newVendorId }
+      ];
+      await db.collection('categories').insertMany(initialCategories);
+    }
+
+    // In Node.js code, use id
     const newVendor: VendorRecord = {
       id: newVendorId,
       name: cleanName,
@@ -121,19 +150,6 @@ adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) =>
       createdAt: new Date(),
       updatedAt: new Date()
     };
-
-    const db = getDB();
-    if (db) {
-      await db.collection('vendors').insertOne({ ...newVendor });
-      // Initialize default categories for the new vendor so staff can immediately add menu items
-      const initialCategories = [
-        { code: 'kopi', name: 'Kopi', icon: '☕', description: 'Menu racikan kopi khas vendor', vendorId: newVendorId },
-        { code: 'teh', name: 'Teh', icon: '🍵', description: 'Artisan teh segar dan seduhan', vendorId: newVendorId },
-        { code: 'jus', name: 'Jus & Segar', icon: '🍹', description: 'Minuman buah dan sparkling segar', vendorId: newVendorId },
-        { code: 'cemilan', name: 'Cemilan', icon: '🥐', description: 'Pastry, snack, dan makanan pendamping', vendorId: newVendorId }
-      ];
-      await db.collection('categories').insertMany(initialCategories);
-    }
 
     // Record activity log
     await recordActivityLog({
@@ -187,7 +203,7 @@ adminVendorRouter.put('/:id', requireAdmin, async (req: Request, res: Response) 
     
     // Only ADMIN can change vendor operational status (ACTIVE/SUSPENDED)
     if (userRole === 'ADMIN' && (status === 'ACTIVE' || status === 'SUSPENDED')) {
-      if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin') && status === 'SUSPENDED') {
+      if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin' || id === vendor.id && vendor.name === 'Admin') && status === 'SUSPENDED') {
         return res.status(400).json({
           success: false,
           message: 'Vendor Utama / Admin Sistem tidak dapat disuspend.'
@@ -198,20 +214,20 @@ adminVendorRouter.put('/:id', requireAdmin, async (req: Request, res: Response) 
 
     const db = getDB();
     if (db) {
-      await db.collection('vendors').updateOne({ id }, { $set: updates });
+      await db.collection('vendors').updateOne(getVendorFilter(id), { $set: updates, $unset: { code: '' } });
     }
 
-    const updatedVendor = { ...vendor, ...updates };
+    const updatedVendor = { ...vendor, ...updates, id: vendor.id };
 
     await recordActivityLog({
       action: 'UPDATE',
       entity: 'VENDOR',
-      entityId: id,
+      entityId: vendor.id,
       entityName: updatedVendor.name,
       summary: `${userRole} memperbarui data profil vendor '${updatedVendor.name}'`,
       details: updates,
       req,
-      vendorId: id
+      vendorId: vendor.id
     });
 
     return res.json({
@@ -234,16 +250,16 @@ adminVendorRouter.patch('/:id/status', requireAdmin, async (req: Request, res: R
     const { id } = req.params as unknown as IParam;
     const { status } = req.body;
 
-    if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin') && (status === 'SUSPENDED' || !status)) {
+    const vendor = await findVendorById(id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
+    }
+
+    if ((id === 'vnd_kasirkafe_central' || id === 'vnd_admin' || vendor.name === 'Admin') && (status === 'SUSPENDED' || !status)) {
       return res.status(400).json({
         success: false,
         message: 'Vendor Utama / Admin Sistem tidak dapat dinonaktifkan.'
       });
-    }
-
-    const vendor = await findVendorById(id);
-    if (!vendor) {
-      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
     }
 
     const newStatus: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE' =
@@ -255,23 +271,23 @@ adminVendorRouter.patch('/:id/status', requireAdmin, async (req: Request, res: R
 
     const db = getDB();
     if (db) {
-      await db.collection('vendors').updateOne({ id }, { $set: { status: newStatus, updatedAt: new Date() } });
+      await db.collection('vendors').updateOne(getVendorFilter(id), { $set: { status: newStatus, updatedAt: new Date() } });
     }
 
     // If deactivated, revoke all active sessions for this vendor
     if (newStatus === 'DEACTIVATE') {
-      await revokeAllSessionsForVendor(id, 'Vendor dinonaktifkan oleh Admin');
+      await revokeAllSessionsForVendor(vendor.id, 'Vendor dinonaktifkan oleh Admin');
     }
 
     await recordActivityLog({
       action: 'UPDATE',
       entity: 'VENDOR',
-      entityId: id,
+      entityId: vendor.id,
       entityName: vendor.name,
       summary: `Admin mengubah status vendor '${vendor.name}' menjadi ${newStatus}`,
       details: { previousStatus: vendor.status, newStatus },
       req,
-      vendorId: id
+      vendorId: vendor.id
     });
 
     return res.json({
@@ -293,35 +309,35 @@ adminVendorRouter.delete('/:id', requireAdmin, async (req: Request, res: Respons
   try {
     const { id } = req.params as unknown as IParam;
 
-    if (id === 'vnd_kasirkafe_central' || id === 'vnd_admin') {
+    const vendor = await findVendorById(id);
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
+    }
+
+    if (id === 'vnd_kasirkafe_central' || id === 'vnd_admin' || vendor.name === 'Admin') {
       return res.status(400).json({
         success: false,
         message: 'Vendor Utama / Admin Sistem tidak dapat dihapus.'
       });
     }
 
-    const vendor = await findVendorById(id);
-    if (!vendor) {
-      return res.status(404).json({ success: false, message: 'Vendor tidak ditemukan.' });
-    }
-
     const db = getDB();
     if (db) {
-      await db.collection('vendors').deleteOne({ id });
+      await db.collection('vendors').deleteOne(getVendorFilter(id));
       // Optional: clean up products and categories for this vendor
-      await db.collection('products').deleteMany({ vendorId: id });
-      await db.collection('categories').deleteMany({ vendorId: id });
+      await db.collection('products').deleteMany({ vendorId: { $in: [id, vendor.id] } });
+      await db.collection('categories').deleteMany({ vendorId: { $in: [id, vendor.id] } });
     }
 
     await recordActivityLog({
       action: 'DELETE',
       entity: 'VENDOR',
-      entityId: id,
+      entityId: vendor.id,
       entityName: vendor.name,
-      summary: `Admin menghapus vendor '${vendor.name}' (${id})`,
-      details: { deletedVendorId: id },
+      summary: `Admin menghapus vendor '${vendor.name}' (${vendor.id})`,
+      details: { deletedVendorId: vendor.id },
       req,
-      vendorId: id
+      vendorId: vendor.id
     });
 
     return res.json({

@@ -17,6 +17,13 @@ import { IParam } from '@/src/types';
 
 export const vendorRouter = Router();
 
+function getVendorQuery(id: string): any {
+  if (ObjectId.isValid(id) && id.length === 24) {
+    return { _id: new ObjectId(id) };
+  }
+  return { _id: id };
+}
+
 const vendorCreateSchema = z.object({
   name: z.string().min(2, 'Nama vendor minimal 2 karakter'),
   currency: z.string().default('IDR'),
@@ -161,18 +168,30 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
     }
 
     const { name, currency, status } = parsed.data;
-    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'vnd';
-    const vendorId = `vnd_${slug}_${Date.now().toString(36)}`;
+    const cleanName = name.trim();
+    const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'vnd';
+    const _id = new ObjectId();
+    const vendorId = _id.toString();
+
+    // Table stores _id as ObjectId without code or id
+    await db.collection('vendors').insertOne({
+      _id,
+      name: cleanName,
+      status: status || 'ACTIVE',
+      currency: currency || 'IDR',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    // Node.js code uses id
     const newVendor: VendorRecord = {
       id: vendorId,
-      name: name.trim(),
+      name: cleanName,
       status: status || 'ACTIVE',
       currency: currency || 'IDR',
       createdAt: new Date(),
       updatedAt: new Date()
     };
-
-    await db.collection('vendors').insertOne(newVendor);
 
     // Seed 1 default Manager and 1 default Cashier for this vendor
     const defaultManager = {
@@ -259,7 +278,7 @@ vendorRouter.put('/:id', authMiddleware, requireManager, async (req: Request, re
       updatedAt: new Date()
     };
 
-    await db.collection('vendors').updateOne({ id }, { $set: updateData });
+    await db.collection('vendors').updateOne(getVendorQuery(id), { $set: updateData, $unset: { code: '' } });
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -499,13 +518,9 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Generate unique vendor identifier
-    const slug = vendorName
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-      .slice(0, 10) || 'vnd';
-    const randomSuffix = crypto.randomBytes(3).toString('hex');
-    const vendorId = `vnd_${slug}_${randomSuffix}`;
+    // 2. Generate unique ObjectId for Vendor
+    const _id = new ObjectId();
+    const vendorId = _id.toString();
 
     // 3. Create Vendor document
     const newVendor: VendorRecord = {
@@ -558,7 +573,15 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    await db.collection('vendors').insertOne(newVendor);
+    // Table stores _id as ObjectId without code or id
+    await db.collection('vendors').insertOne({
+      _id,
+      name: vendorName.trim(),
+      status: 'ACTIVE',
+      currency: currency || 'IDR',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
     await db.collection('users').insertOne(newManagerUser);
     await db.collection('vendor_confirmations').insertOne(confirmationDoc);
 
@@ -706,8 +729,8 @@ vendorRouter.get('/confirm', async (req: Request, res: Response) => {
       { $set: { used: true, confirmedAt: now } }
     );
     await db.collection('vendors').updateOne(
-      { id: confirmation.vendorId },
-      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
+      getVendorQuery(confirmation.vendorId),
+      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now }, $unset: { code: '' } }
     );
     await db.collection('users').updateOne(
       { id: confirmation.userId },
@@ -806,8 +829,8 @@ vendorRouter.post('/confirm', async (req: Request, res: Response) => {
       { $set: { used: true, confirmedAt: now } }
     );
     await db.collection('vendors').updateOne(
-      { id: confirmation.vendorId },
-      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now } }
+      getVendorQuery(confirmation.vendorId),
+      { $set: { isEmailConfirmed: true, status: 'ACTIVE', updatedAt: now }, $unset: { code: '' } }
     );
     await db.collection('users').updateOne(
       { id: confirmation.userId },
@@ -1216,7 +1239,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
 
       if (requestItem.type === 'DEACTIVATE') {
         const vendorStatusUpdate = { status: 'DEACTIVATE', updatedAt: new Date() };
-        await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
+        await db.collection('vendors').updateOne(getVendorQuery(targetVendorId), { $set: vendorStatusUpdate, $unset: { code: '' } });
 
         // Kick all users in that vendor immediately
         const revokedCount = await revokeAllSessionsForVendor(targetVendorId, 'Akun vendor dinonaktifkan oleh Admin');
@@ -1239,7 +1262,7 @@ vendorRouter.post('/status-requests/:id/review', authMiddleware, requireAdmin, a
         });
       } else if (requestItem.type === 'REACTIVATE') {
         const vendorStatusUpdate = { status: 'ACTIVE', updatedAt: new Date() };
-        await db.collection('vendors').updateOne({ id: targetVendorId }, { $set: vendorStatusUpdate });
+        await db.collection('vendors').updateOne(getVendorQuery(targetVendorId), { $set: vendorStatusUpdate, $unset: { code: '' } });
 
         await recordActivityLog({
           action: 'UPDATE',

@@ -358,11 +358,10 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount ?? o.total ?? 0), 0);
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = (vendor as any)?.code || vendorId;
+    const safeVendorFileName = (vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     // JSON Format Export
     if (format === 'json') {
-      const safeVendorFileName = (vendor?.name || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="transaksi_${safeVendorFileName}_3bulan_${period}_${formatDateYMD(now)}.json"`);
 
@@ -410,7 +409,6 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
       'No. Antrean',
       'Waktu Transaksi (WIB)',
       'Vendor / Cabang',
-      'Kode Vendor',
       'Kasir',
       'Metode Bayar',
       'Rincian Menu Produk',
@@ -439,7 +437,6 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
         `"${(o.queueNumber || '-').replace(/"/g, '""')}"`,
         `"${dateStr}"`,
         `"${vendorName.replace(/"/g, '""')}"`,
-        `"${vendorCode.replace(/"/g, '""')}"`,
         `"${(o.cashier?.name || 'Kasir').replace(/"/g, '""')}"`,
         `"${(o.paymentMethod || 'QRIS').replace(/"/g, '""')}"`,
         `"${itemDesc.replace(/"/g, '""')}"`,
@@ -459,7 +456,6 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
       `""`,
       `"Diekspor: ${formatDateYMD(now)}"`,
       `"${vendorName.replace(/"/g, '""')}"`,
-      `"${vendorCode}"`,
       `""`,
       `""`,
       `"Total: ${orders.length} Transaksi"`,
@@ -475,7 +471,7 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
     const csvContent = '\uFEFF' + [csvHeader.join(','), summaryRow, ...csvRows].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="transaksi_${vendorCode.toLowerCase()}_3bulan_${period}_${formatDateYMD(now)}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="transaksi_${safeVendorFileName}_3bulan_${period}_${formatDateYMD(now)}.csv"`);
     return res.status(200).send(csvContent);
   } catch (err: any) {
     console.error('[ManagerAnalytics] Export transactions error:', err);
@@ -534,7 +530,6 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
     const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '10', 10), 1), 50);
 
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = (vendor as any)?.code || vendorId;
 
     // Reference now: 2026-09-20 (or current runtime date)
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
@@ -589,7 +584,6 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
       category: string;
       vendorId: string;
       vendorName: string;
-      vendorCode: string;
       quantitySold: number;
       totalRevenue: number;
       orderCount: number;
@@ -621,7 +615,6 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
             category,
             vendorId,
             vendorName,
-            vendorCode,
             quantitySold: 0,
             totalRevenue: 0,
             orderCount: 0
@@ -747,7 +740,7 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     const format = ((req.query.format as string) || 'csv').toLowerCase();
 
     const vendorName = vendor?.name || 'Vendor Toko';
-    const vendorCode = (vendor as any)?.code || vendorId;
+    const safeVendorFileName = (vendorName || 'vendor').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     const now = new Date().getFullYear() >= 2026 ? new Date() : new Date('2026-09-20T14:30:00.000Z');
     const cutoffDate = getCutoffDate();
@@ -897,7 +890,7 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     const csvContent = '\uFEFF' + [header.join(','), ...rows.map(r => r.join(','))].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${vendorCode.toLowerCase()}_${period}_${formatDateYMD(now)}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="top10_produk_${safeVendorFileName}_${period}_${formatDateYMD(now)}.csv"`);
     return res.status(200).send(csvContent);
   } catch (err: any) {
     console.error('[ManagerAnalytics] Export top-products error:', err);

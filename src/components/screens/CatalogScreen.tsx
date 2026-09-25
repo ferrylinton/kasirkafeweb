@@ -184,20 +184,21 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
           </button>
 
           {categories.map(cat => {
-            const active = selectedCategory === cat.code;
+            const catKey = cat.name.toLowerCase();
+            const active = selectedCategory.toLowerCase() === catKey;
             return (
               <button
-                key={cat.code}
+                key={cat.id || cat.name}
                 type="button"
-                onClick={() => handleCategorySelect(cat.code)}
+                onClick={() => handleCategorySelect(catKey)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                   active
                     ? 'bg-accent text-white shadow-xs scale-102'
                     : 'bg-white dark:bg-[#251e1c] border border-stone-200/70 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
                 }`}
               >
-                {getCategoryIcon(cat.code)}
-                <span>{getCategoryLabel(cat.code, language) || cat.name}</span>
+                {getCategoryIcon(cat.name)}
+                <span>{getCategoryLabel(cat.name, language) || cat.name}</span>
               </button>
             );
           })}

@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
+import { ObjectId } from 'mongodb';
 import { getDB } from './db';
 import { getSessionFromRedis, removeSessionFromRedis, getActiveTokenForUser, RedisSessionData } from './sessionStore';
 
@@ -207,7 +208,11 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       const db = getDB();
       if (db) {
         try {
-          vendor = await db.collection('vendors').findOne({ id: decoded.vendorId });
+          const vId = decoded.vendorId;
+          const query: any = ObjectId.isValid(vId) && vId.length === 24
+            ? { _id: new ObjectId(vId) }
+            : { _id: vId };
+          vendor = await db.collection('vendors').findOne(query);
         } catch (e) {}
       }
       if (vendor && (vendor.status === 'DEACTIVATE' || (vendor as any).status === 'DEACTIVATED')) {

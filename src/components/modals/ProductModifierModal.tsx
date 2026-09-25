@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Minus, Check, Coffee, CupSoda, GlassWater, Cookie, Info, Sparkles } from 'lucide-react';
+import { X, Plus, Minus, Check, Coffee, CupSoda, GlassWater, Cookie, Info, Sparkles, Tag } from 'lucide-react';
 import { Product, CartItemModifier, Category, CategoryVariation, VariationOption } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -50,7 +50,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     if (!product) return null;
     const pCat = (product.category || '').toLowerCase().trim();
     return categoriesList.find(
-      c => c.code.toLowerCase().trim() === pCat || c.name.toLowerCase().trim() === pCat
+      c => c.name.toLowerCase().trim() === pCat
     );
   }, [product, categoriesList]);
 
@@ -235,9 +235,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
   };
 
   const getCategoryIcon = () => {
-    if (matchingCategory?.icon) {
-      return <span className="text-sm">{matchingCategory.icon}</span>;
-    }
     if (categoryLower.includes('kopi')) return <Coffee className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />;
     if (categoryLower.includes('teh')) return <CupSoda className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
     if (categoryLower.includes('jus')) return <GlassWater className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />;
@@ -303,7 +300,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <h3 className="text-base sm:text-lg font-bold font-heading truncate">{product.name}</h3>
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                    {matchingCategory?.icon || '🏷️'} {categoryDisplayName}
+                    <Tag className="w-3 h-3 text-stone-500" /> {categoryDisplayName}
                   </span>
                   {product.tag && (
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-accent">

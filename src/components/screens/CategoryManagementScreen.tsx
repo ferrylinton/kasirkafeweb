@@ -43,8 +43,6 @@ export const CategoryManagementScreen: React.FC = () => {
 
   // Form Fields
   const [formName, setFormName] = useState<string>('');
-  const [formCode, setFormCode] = useState<string>('');
-  const [formIcon, setFormIcon] = useState<string>('☕');
   const [formDescription, setFormDescription] = useState<string>('');
   const [formVariations, setFormVariations] = useState<CategoryVariation[]>([]);
 
@@ -81,8 +79,6 @@ export const CategoryManagementScreen: React.FC = () => {
   const openCreateModal = () => {
     setEditingCategory(null);
     setFormName('');
-    setFormCode('');
-    setFormIcon('☕');
     setFormDescription('');
     // Default drink variations
     setFormVariations([
@@ -126,8 +122,6 @@ export const CategoryManagementScreen: React.FC = () => {
   const openEditModal = (cat: Category) => {
     setEditingCategory(cat);
     setFormName(cat.name);
-    setFormCode(cat.code);
-    setFormIcon(cat.icon || '☕');
     setFormDescription(cat.description || '');
     setFormVariations(cat.variations ? JSON.parse(JSON.stringify(cat.variations)) : []);
     setIsModalOpen(true);
@@ -307,16 +301,10 @@ export const CategoryManagementScreen: React.FC = () => {
       return;
     }
 
-    const categoryCode = formCode.trim()
-      ? formCode.trim().toLowerCase().replace(/\s+/g, '_')
-      : formName.trim().toLowerCase().replace(/\s+/g, '_');
-
     setIsSaving(true);
     try {
       const payload = {
         name: formName.trim(),
-        code: categoryCode,
-        icon: formIcon || '🏷️',
         description: formDescription.trim(),
         variations: formVariations
       };
@@ -324,7 +312,7 @@ export const CategoryManagementScreen: React.FC = () => {
       let res: Response;
       if (editingCategory) {
         // PUT update
-        res = await fetch(`/api/products/categories/${editingCategory.id || editingCategory.code}`, {
+        res = await fetch(`/api/products/categories/${editingCategory.id || editingCategory.name}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -368,7 +356,7 @@ export const CategoryManagementScreen: React.FC = () => {
     if (!categoryToDelete) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/products/categories/${categoryToDelete.id || categoryToDelete.code}`, {
+      const res = await fetch(`/api/products/categories/${categoryToDelete.id || categoryToDelete.name}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token || ''}`
@@ -408,8 +396,6 @@ export const CategoryManagementScreen: React.FC = () => {
       </div>
     );
   }
-
-  const iconOptions = ['☕', '🍵', '🍹', '🥐', '🧋', '🥤', '🍰', '🥪', '🥟', '🍔', '🍟', '🏷️'];
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
@@ -484,25 +470,20 @@ export const CategoryManagementScreen: React.FC = () => {
             const hasVars = Array.isArray(cat.variations) && cat.variations.length > 0;
             return (
               <div
-                key={cat.id || cat.code}
+                key={cat.id || cat.name}
                 className="bg-white dark:bg-[#251e1c] p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs flex flex-col justify-between transition-all hover:border-orange-300 dark:hover:border-orange-800/60"
               >
                 <div>
                   {/* Category Header */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
-                        {cat.icon || '🏷️'}
+                      <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0 shadow-2xs">
+                        <Layers className="w-5 h-5" />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold font-heading truncate text-stone-900 dark:text-stone-100">
-                            {cat.name}
-                          </h3>
-                          <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-[10px] font-mono font-bold text-stone-600 dark:text-stone-300">
-                            {cat.code}
-                          </span>
-                        </div>
+                        <h3 className="text-base font-bold font-heading truncate text-stone-900 dark:text-stone-100">
+                          {cat.name}
+                        </h3>
                         <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-1 mt-0.5">
                           {cat.description || 'Tidak ada deskripsi'}
                         </p>
@@ -596,7 +577,7 @@ export const CategoryManagementScreen: React.FC = () => {
 
                 {/* Footer Quick Info */}
                 <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800/60 flex items-center justify-between text-[11px] text-stone-400">
-                  <span>ID: {cat.id || cat.code}</span>
+                  <span>ID: {cat.id}</span>
                   <button
                     type="button"
                     onClick={() => openEditModal(cat)}
@@ -633,7 +614,7 @@ export const CategoryManagementScreen: React.FC = () => {
                     {editingCategory ? `Ubah Kategori & Variasi: ${editingCategory.name}` : 'Tambah Kategori & Variasi Baru'}
                   </h3>
                   <p className="text-[11px] text-stone-400">
-                    Atur nama kategori, emoji ikon, dan opsi variasi yang bisa dipilih pelanggan.
+                    Atur nama kategori dan opsi variasi yang bisa dipilih pelanggan.
                   </p>
                 </div>
               </div>
@@ -649,71 +630,18 @@ export const CategoryManagementScreen: React.FC = () => {
             {/* Modal Scrollable Form Body */}
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
               {/* Category Core Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
-                    Nama Kategori <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formName}
-                    onChange={e => {
-                      setFormName(e.target.value);
-                      if (!editingCategory) {
-                        setFormCode(e.target.value.toLowerCase().replace(/\s+/g, '_'));
-                      }
-                    }}
-                    placeholder="Contoh: Kopi, Teh, Jus, Cemilan..."
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
-                    Kode Unik <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formCode}
-                    onChange={e => setFormCode(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
-                    placeholder="kopi, teh, jus..."
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
-                </div>
-              </div>
-
-              {/* Icon Emoji Selection */}
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
-                  Ikon Emoji
+                  Nama Kategori <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {iconOptions.map(ico => (
-                    <button
-                      key={ico}
-                      type="button"
-                      onClick={() => setFormIcon(ico)}
-                      className={`w-10 h-10 rounded-2xl border text-xl flex items-center justify-center transition-all cursor-pointer ${
-                        formIcon === ico
-                          ? 'border-accent bg-orange-50/80 dark:bg-orange-950/50 ring-2 ring-accent scale-105'
-                          : 'border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800'
-                      }`}
-                    >
-                      {ico}
-                    </button>
-                  ))}
-                  <input
-                    type="text"
-                    maxLength={3}
-                    value={formIcon}
-                    onChange={e => setFormIcon(e.target.value)}
-                    placeholder="Custom"
-                    className="w-16 px-2 py-2 text-center text-sm rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
-                    title="Emoji kustom"
-                  />
-                </div>
+                <input
+                  type="text"
+                  required
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  placeholder="Contoh: Kopi, Teh, Jus, Cemilan..."
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                />
               </div>
 
               {/* Description */}

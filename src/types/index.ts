@@ -35,7 +35,6 @@ export interface User {
   id: string;
   vendorId?: string;
   vendorName?: string;
-  vendorCode?: string;
   email: string;
   name: string;
   role: UserRole;
@@ -61,9 +60,7 @@ export interface CategoryVariation {
 export interface Category {
   id: string;
   vendorId?: string;
-  code: string;
   name: string;
-  icon: string;
   description?: string;
   variations?: CategoryVariation[];
   createdAt?: string;

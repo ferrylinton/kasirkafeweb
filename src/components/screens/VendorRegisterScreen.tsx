@@ -63,7 +63,6 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
     vendorName: string;
     managerName: string;
     email: string;
-    vendorCode: string;
     confirmationUrl: string;
     confirmationToken: string;
   } | null>(null);
@@ -243,7 +242,6 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
         vendorName: data.vendor?.name || cleanVendorName,
         managerName: data.manager?.name || cleanManagerName,
         email: cleanEmail,
-        vendorCode: data.vendor?.code || 'SPS',
         confirmationUrl: data.confirmationUrl || '',
         confirmationToken: data.confirmationToken || ''
       });
@@ -399,10 +397,6 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
             <div className="flex justify-between items-center py-1 border-b border-stone-200/50 dark:border-stone-800/60">
               <span className="text-stone-500 dark:text-stone-400">Nama Vendor:</span>
               <span className="font-bold text-stone-900 dark:text-white">{registrationResult.vendorName}</span>
-            </div>
-            <div className="flex justify-between items-center py-1 border-b border-stone-200/50 dark:border-stone-800/60">
-              <span className="text-stone-500 dark:text-stone-400">Kode Vendor:</span>
-              <span className="font-mono font-bold text-orange-600 dark:text-orange-400">{registrationResult.vendorCode}</span>
             </div>
             <div className="flex justify-between items-center py-1 border-b border-stone-200/50 dark:border-stone-800/60">
               <span className="text-stone-500 dark:text-stone-400">Nama Manager:</span>

@@ -181,7 +181,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     setEditingProduct(null);
     setIsDuplicating(false);
     setProdName('');
-    setProdCategory(categories.length > 0 ? categories[0].code : 'kopi');
+    setProdCategory(categories.length > 0 ? categories[0].name.toLowerCase() : 'kopi');
     setProdPrice(25000);
     setProdStock(25);
     setProdThreshold(10);
@@ -894,20 +894,20 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
             Semua ({products.length})
           </button>
           {categories.map(c => {
-            const count = products.filter(p => (p.category || '').toLowerCase() === c.code.toLowerCase()).length;
-            const isSelected = categoryFilter.toLowerCase() === c.code.toLowerCase();
+            const catKey = c.name.toLowerCase();
+            const count = products.filter(p => (p.category || '').toLowerCase() === catKey).length;
+            const isSelected = categoryFilter.toLowerCase() === catKey;
             return (
               <button
-                key={c.id || c.code}
+                key={c.id || c.name}
                 type="button"
-                onClick={() => setCategoryFilter(c.code)}
+                onClick={() => setCategoryFilter(c.name)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   isSelected
                     ? 'bg-accent text-white shadow-xs'
                     : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200'
                 }`}
               >
-                <span>{c.icon || '🏷️'}</span>
                 <span>{c.name}</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-stone-200 dark:bg-stone-700 text-stone-500'}`}>
                   {count}
@@ -1570,8 +1570,8 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                   >
                     {categories.length > 0 ? (
                       categories.map(c => (
-                        <option key={c.id || c.code} value={c.code}>
-                          {c.icon || '🏷️'} {c.name}
+                        <option key={c.id || c.name} value={c.name.toLowerCase()}>
+                          {c.name}
                         </option>
                       ))
                     ) : (

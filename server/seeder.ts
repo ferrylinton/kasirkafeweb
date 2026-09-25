@@ -12,36 +12,32 @@ export async function seedDatabase() {
 
   const initialVendors = [
     {
-      id: 'vnd_admin',
+      _id: new ObjectId('6ab58389b2a71518d2beb886'),
       name: 'Admin',
-      code: 'ADMIN',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date()
     },
     {
-      id: 'vnd_kasirkafe_central',
+      _id: new ObjectId('6ab58389b2a71518d2beb887'),
       name: 'KasirKafe Coffee & Boba (Pusat)',
-      code: 'PUSAT',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date()
     },
     {
-      id: 'vnd_kopi_kulo_kemang',
+      _id: new ObjectId('6ab58389b2a71518d2beb888'),
       name: 'Kopi Kulo & Toast (Kemang)',
-      code: 'KULO',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-02-15'),
       updatedAt: new Date()
     },
     {
-      id: 'vnd_tehpoci_nusantara',
+      _id: new ObjectId('6ab58389b2a71518d2beb889'),
       name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
-      code: 'POCI',
       status: 'ACTIVE',
       currency: 'IDR',
       createdAt: new Date('2026-03-01'),
@@ -172,65 +168,49 @@ export async function seedDatabase() {
 
   const initialCategories = [
     {
-      code: 'kopi',
       name: 'Kopi',
-      icon: '☕',
       description: 'Espresso, Latte, Cold Brew pilihan biji Arabika',
       vendorId: 'vnd_kasirkafe_central',
       variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
     },
     {
-      code: 'teh',
       name: 'Teh',
-      icon: '🍵',
       description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan',
       vendorId: 'vnd_kasirkafe_central',
       variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
     },
     {
-      code: 'jus',
       name: 'Jus',
-      icon: '🍹',
       description: '100% Buah segar cold-pressed alami tanpa pemanis buatan',
       vendorId: 'vnd_kasirkafe_central',
       variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
     },
     {
-      code: 'cemilan',
       name: 'Cemilan',
-      icon: '🥐',
       description: 'Pastry renyah, kue lezat, dan finger food pendamping',
       vendorId: 'vnd_kasirkafe_central',
       variations: []
     },
     {
-      code: 'kopi',
       name: 'Kopi',
-      icon: '☕',
       description: 'Signature Kulo Es Kopi Susu & Avocatto',
       vendorId: 'vnd_kopi_kulo_kemang',
       variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
     },
     {
-      code: 'cemilan',
       name: 'Cemilan',
-      icon: '🥐',
       description: 'Cemilan roti bakar dan snack pendamping',
       vendorId: 'vnd_kopi_kulo_kemang',
       variations: []
     },
     {
-      code: 'teh',
       name: 'Teh',
-      icon: '🍵',
       description: 'Teh Poci Melati Asli Seduh Tradisional',
       vendorId: 'vnd_tehpoci_nusantara',
       variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
     },
     {
-      code: 'cemilan',
       name: 'Cemilan',
-      icon: '🥟',
       description: 'Dimsum kukus dan goreng spesial',
       vendorId: 'vnd_tehpoci_nusantara',
       variations: []
@@ -1190,16 +1170,20 @@ export async function seedDatabase() {
   const db = getDB();
   if (db) {
     try {
-      // 0. Vendors - ensure all initial vendors including vnd_admin are present and have codes
+      // 0. Vendors - ensure all initial vendors use _id (ObjectId) and remove code & id
       for (const v of initialVendors) {
         await db.collection('vendors').updateOne(
-          { id: v.id },
+          { _id: v._id },
           { 
-            $setOnInsert: { ...v }
+            $set: { name: v.name, status: v.status, currency: v.currency, updatedAt: v.updatedAt },
+            $setOnInsert: { _id: v._id, createdAt: v.createdAt },
+            $unset: { code: '', id: '' }
           },
           { upsert: true }
         );
       }
+      // Ensure all vendor documents remove code and id
+      await db.collection('vendors').updateMany({}, { $unset: { code: '', id: '' } });
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
       // 1. Users - upsert each by email so all vendors have their staff accounts
@@ -1228,17 +1212,15 @@ export async function seedDatabase() {
       // 2. Categories & Variations
       for (const cat of initialCategories) {
         await db.collection('categories').updateOne(
-          { code: cat.code, vendorId: cat.vendorId },
+          { name: cat.name, vendorId: cat.vendorId },
           {
             $set: {
               variations: cat.variations,
               name: cat.name,
-              icon: cat.icon,
               description: cat.description,
               updatedAt: new Date()
             },
             $setOnInsert: {
-              code: cat.code,
               vendorId: cat.vendorId,
               createdAt: new Date()
             }
@@ -1246,7 +1228,9 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
-      console.log('[Seeder] Categories and Variations synced in MongoDB successfully.');
+      // Remove legacy code and icon fields from categories collection
+      await db.collection('categories').updateMany({}, { $unset: { code: '', icon: '' } });
+      console.log('[Seeder] Categories and Variations synced in MongoDB successfully (code & icon removed).');
 
       // 3. Products (on table use '_id', on node js code use 'id')
       for (const p of initialProducts) {

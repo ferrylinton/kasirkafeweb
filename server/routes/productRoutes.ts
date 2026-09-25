@@ -137,11 +137,9 @@ productRouter.get('/categories', async (req: Request, res: Response) => {
       vendorId: activeVendorId,
       cached: false,
       categories: categories.map(c => ({
-        id: c._id ? c._id.toString() : c.code,
+        id: c._id ? c._id.toString() : (c.id || c.name),
         vendorId: c.vendorId || activeVendorId,
-        code: c.code,
         name: c.name,
-        icon: c.icon,
         description: c.description,
         variations: Array.isArray(c.variations) ? c.variations : []
       }))
@@ -180,17 +178,13 @@ const categoryVariationSchema = z.object({
 });
 
 const categorySchema = z.object({
-  code: z.string().min(1, 'Kode kategori wajib diisi'),
   name: z.string().min(1, 'Nama kategori wajib diisi'),
-  icon: z.string().default('🏷️'),
   description: z.string().optional(),
   variations: z.array(categoryVariationSchema).default([])
 });
 
 const categoryUpdateSchema = z.object({
-  code: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
-  icon: z.string().optional(),
   description: z.string().optional(),
   variations: z.array(categoryVariationSchema).optional()
 });
@@ -207,7 +201,6 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     }
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
-    const formattedCode = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
 
     // Format variations with guaranteed unique IDs
     const formattedVariations = (parsed.data.variations || []).map((v, vIdx) => ({
@@ -224,8 +217,8 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     }));
 
     const newCategory = {
-      ...parsed.data,
-      code: formattedCode,
+      name: parsed.data.name.trim(),
+      description: parsed.data.description?.trim() || '',
       variations: formattedVariations,
       vendorId: activeVendorId,
       createdAt: new Date(),
@@ -241,16 +234,16 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       });
     }
 
-    // Check if category code already exists for this vendor
+    // Check if category name already exists for this vendor
     const existing = await db.collection('categories').findOne({
-      code: formattedCode,
+      name: { $regex: new RegExp(`^${parsed.data.name.trim()}$`, 'i') },
       vendorId: activeVendorId
     });
 
     if (existing) {
       return res.status(409).json({
         success: false,
-        error: 'Kategori dengan kode ini sudah ada untuk vendor Anda.'
+        error: 'Kategori dengan nama ini sudah ada untuk vendor Anda.'
       });
     }
 
@@ -268,7 +261,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       entity: 'CATEGORY',
       entityId: insertedId,
       entityName: newCategory.name,
-      summary: `Menambahkan kategori baru '${newCategory.name}' [${newCategory.code}] dengan ${formattedVariations.length} variasi`,
+      summary: `Menambahkan kategori baru '${newCategory.name}' dengan ${formattedVariations.length} variasi`,
       details: newCategory,
       req
     });
@@ -308,12 +301,12 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       });
     }
 
-    // Find category strictly by ID/code AND vendorId
+    // Find category strictly by ID or name AND vendorId
     let query: any = { vendorId: activeVendorId };
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
-      query.$or = [{ id }, { code: id }];
+      query.$or = [{ id }, { name: id }];
     }
 
     const category = await db.collection('categories').findOne(query);
@@ -329,11 +322,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
     };
 
     if (parsed.data.name !== undefined) updateFields.name = parsed.data.name.trim();
-    if (parsed.data.icon !== undefined) updateFields.icon = parsed.data.icon;
-    if (parsed.data.description !== undefined) updateFields.description = parsed.data.description;
-    if (parsed.data.code !== undefined) {
-      updateFields.code = parsed.data.code.trim().toLowerCase().replace(/\s+/g, '_');
-    }
+    if (parsed.data.description !== undefined) updateFields.description = parsed.data.description.trim();
 
     if (parsed.data.variations !== undefined) {
       updateFields.variations = parsed.data.variations.map((v, vIdx) => ({
@@ -372,9 +361,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       category: {
         id: updatedDoc?._id.toString() || id,
         vendorId: updatedDoc?.vendorId,
-        code: updatedDoc?.code,
         name: updatedDoc?.name,
-        icon: updatedDoc?.icon,
         description: updatedDoc?.description,
         variations: updatedDoc?.variations || []
       },
@@ -406,7 +393,7 @@ productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAcc
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
-      query.$or = [{ id }, { code: id }];
+      query.$or = [{ id }, { name: id }];
     }
 
     const category = await db.collection('categories').findOne(query);
@@ -427,8 +414,8 @@ productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAcc
       entity: 'CATEGORY',
       entityId: category._id.toString(),
       entityName: category.name,
-      summary: `Menghapus kategori '${category.name}' [${category.code}] beserta variasinya`,
-      details: { code: category.code, name: category.name },
+      summary: `Menghapus kategori '${category.name}' beserta variasinya`,
+      details: { name: category.name },
       req
     });
 
