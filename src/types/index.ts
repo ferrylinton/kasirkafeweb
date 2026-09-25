@@ -82,6 +82,8 @@ export interface Product {
   tag?: string;
   image?: string;
   isAvailable?: boolean;
+  temporaryUnavailableReason?: string;
+  updatedAt?: string;
 }
 
 export interface InventoryLog {

@@ -1003,7 +1003,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
 productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const { stock, adjustment, lowStockThreshold, reason } = req.body;
+    const { stock, adjustment, lowStockThreshold, reason, isAvailable, temporaryUnavailableReason } = req.body;
 
     const db = getDB();
     if (!db) {
@@ -1053,6 +1053,17 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
 
     if (typeof lowStockThreshold === 'number') {
       updateFields.lowStockThreshold = Math.max(0, Math.floor(lowStockThreshold));
+    }
+
+    if (typeof isAvailable === 'boolean') {
+      updateFields.isAvailable = isAvailable;
+      if (!isAvailable) {
+        updateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : 'Habis / Tidak tersedia sementara';
+      } else {
+        updateFields.temporaryUnavailableReason = null;
+      }
+    } else if (temporaryUnavailableReason !== undefined) {
+      updateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : null;
     }
 
     try {
@@ -1118,7 +1129,9 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
         id: product._id ? product._id.toString() : product.id,
         name: product.name,
         stock: newStock,
-        lowStockThreshold: updateFields.lowStockThreshold ?? (product.lowStockThreshold || 10)
+        lowStockThreshold: updateFields.lowStockThreshold ?? (product.lowStockThreshold || 10),
+        isAvailable: updateFields.isAvailable !== undefined ? updateFields.isAvailable : (product.isAvailable !== false),
+        temporaryUnavailableReason: updateFields.temporaryUnavailableReason !== undefined ? updateFields.temporaryUnavailableReason : product.temporaryUnavailableReason
       }
     });
   } catch (err: any) {

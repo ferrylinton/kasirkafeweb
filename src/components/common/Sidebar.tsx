@@ -50,8 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'inventaris', 'kategori', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
+  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'stok-produk', 'inventaris', 'kategori', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-stock', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -326,18 +326,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </span>
                 </button>
 
-                {/* Inventaris */}
+                {/* Stok Produk (Role Manager) */}
                 <button
                   type="button"
-                  onClick={() => handleNavClick('inventaris')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'inventaris'
+                  id="nav-stock-products-btn"
+                  onClick={() => handleNavClick('stok-produk')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'stok-produk' || currentTab === 'inventaris'
                       ? 'bg-accent text-white shadow-xs font-bold'
                       : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                     }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <Boxes className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{t('navInventory')}</span>
+                    <Boxes className="w-4 h-4 shrink-0 text-orange-500" />
+                    <span className="truncate">Stok Produk</span>
                   </div>
                   {alertCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white flex items-center gap-1 shrink-0 animate-pulse">
@@ -560,19 +561,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       </span>
                     </button>
 
-                    {/* 3. Inventaris Semua Vendor */}
+                    {/* 3. Stok Produk Semua Vendor */}
                     <button
                       type="button"
-                      id="nav-admin-inventory-btn"
-                      onClick={() => handleNavClick('admin-inventory')}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-inventory'
+                      id="nav-admin-stock-btn"
+                      onClick={() => handleNavClick('admin-stock')}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-stock' || currentTab === 'admin-inventory' || currentTab === 'admin-inventaris'
                           ? 'bg-purple-600 text-white shadow-xs font-bold'
                           : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <Boxes className="w-4 h-4 shrink-0 text-purple-500" />
-                        <span className="truncate">{t('navAdminInventory')}</span>
+                        <span className="truncate">Stok Produk Semua Vendor</span>
                       </div>
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                         SEMUA

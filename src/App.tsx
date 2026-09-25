@@ -16,7 +16,7 @@ import { ProfileScreen } from './components/screens/ProfileScreen';
 import { UserManagementScreen } from './components/screens/UserManagementScreen';
 import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
 import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
-import { InventoryScreen } from './components/screens/InventoryScreen';
+import { ProductStockScreen } from './components/screens/ProductStockScreen';
 import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
 import { ProductManagementScreen } from './components/screens/ProductManagementScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
@@ -93,6 +93,7 @@ const MainLayout: React.FC = () => {
     'admin-dashboard',
     'admin-top-products',
     'produk-manajemen',
+    'stok-produk',
     'inventaris',
     'kategori',
     'users',
@@ -112,6 +113,7 @@ const MainLayout: React.FC = () => {
     'admin-orders',
     'admin-riwayat',
     'admin-products',
+    'admin-stock',
     'admin-inventory',
     'admin-inventaris',
     'admin-users',
@@ -318,7 +320,7 @@ const MainLayout: React.FC = () => {
             <TopProductsScreen managerMode={true} />
           )}
           {isManager && activeView === 'produk-manajemen' && <ProductManagementScreen />}
-          {isManager && activeView === 'inventaris' && <InventoryScreen />}
+          {isManager && (activeView === 'stok-produk' || activeView === 'inventaris') && <ProductStockScreen />}
           {isManager && activeView === 'kategori' && <CategoryManagementScreen />}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}
@@ -340,8 +342,8 @@ const MainLayout: React.FC = () => {
           {isAdmin && activeView === 'admin-products' && (
             <ProductManagementScreen allVendorsMode={true} />
           )}
-          {isAdmin && (activeView === 'admin-inventory' || activeView === 'admin-inventaris') && (
-            <InventoryScreen allVendorsMode={true} />
+          {isAdmin && (activeView === 'admin-stock' || activeView === 'admin-inventory' || activeView === 'admin-inventaris') && (
+            <ProductStockScreen allVendorsMode={true} />
           )}
           {isAdmin && activeView === 'admin-users' && (
             <UserManagementScreen allVendorsMode={true} />
