@@ -27,8 +27,23 @@ import { initRetentionScheduler } from './server/retentionScheduler';
 import { initDailyRollingLogger, logError, writeDailyLog } from './server/dailyRollingLogger';
 import dns from "node:dns/promises";
 
-dns.setServers(["1.1.1.1", "8.8.8.8"]);
+try {
+  dns.setServers(["1.1.1.1", "8.8.8.8"]);
+} catch (e) {
+  // Ignore DNS configuration errors in restricted containers
+}
 dotenv.config();
+
+if (process.env.MONGODB_URI) {
+  let uri = process.env.MONGODB_URI.trim();
+  if (/^ongodb(\+srv)?:\/\//i.test(uri)) {
+    process.env.MONGODB_URI = 'm' + uri;
+  } else if (/^ngodb(\+srv)?:\/\//i.test(uri)) {
+    process.env.MONGODB_URI = 'mo' + uri;
+  } else if (!/^mongodb(\+srv)?:\/\//i.test(uri) && uri.includes('.mongodb.net')) {
+    process.env.MONGODB_URI = 'mongodb+srv://' + uri;
+  }
+}
 
 const PORT = 3000;
 

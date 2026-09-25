@@ -26,9 +26,12 @@ import {
   ExternalLink,
   ShieldAlert,
   PackageCheck,
-  PackageX
+  PackageX,
+  Sliders,
+  Database,
+  ArrowRight
 } from 'lucide-react';
-import { Product, Category } from '../../types';
+import { Product, Category, ProductStock } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
@@ -65,16 +68,23 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   const isReadOnly = user?.role !== 'MANAGER' || allVendorsMode;
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [stocks, setStocks] = useState<ProductStock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
+
+  // Table Tabs: 'products' (Product Table without stock column) or 'stocks' (New Table with Product ID & Stock)
+  const [activeTableTab, setActiveTableTab] = useState<'products' | 'stocks'>('products');
 
   // Filters & Sorters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'unavailable' | 'low_stock' | 'out_of_stock'>('all');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'price_asc' | 'price_desc' | 'stock_asc' | 'stock_desc'>('name_asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+
+  // Clipboard Copied State
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Add / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -98,7 +108,15 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   // Quick Toggle Availability State
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Fetch Products & Categories
+  // Adjust Stock in New Table Modal State
+  const [stockModalItem, setStockModalItem] = useState<ProductStock | null>(null);
+  const [stockInputValue, setStockInputValue] = useState<number>(0);
+  const [thresholdInputValue, setThresholdInputValue] = useState<number>(10);
+  const [stockReasonInput, setStockReasonInput] = useState<string>('');
+  const [isSavingStock, setIsSavingStock] = useState<boolean>(false);
+  const [quickAdjustingId, setQuickAdjustingId] = useState<string | null>(null);
+
+  // Fetch Products, Stocks, & Categories
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -106,8 +124,11 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         ? (selectedVendor === 'all' ? '?allVendors=true' : `?vendorId=${selectedVendor}`)
         : '';
 
-      const [prodRes, catRes] = await Promise.all([
+      const [prodRes, stockRes, catRes] = await Promise.all([
         fetch(`/api/products${vendorParam}${vendorParam ? '&refresh=true' : '?refresh=true'}`, {
+          headers: { Authorization: `Bearer ${token || ''}` }
+        }),
+        fetch(`/api/products/stocks${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
         fetch('/api/products/categories?bypassCache=true', {
@@ -115,11 +136,17 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         })
       ]);
 
-      const prodData = await prodRes.json();
-      const catData = await catRes.json();
+      const [prodData, stockData, catData] = await Promise.all([
+        prodRes.json(),
+        stockRes.json(),
+        catRes.json()
+      ]);
 
       if (prodData.success && Array.isArray(prodData.products)) {
         setProducts(prodData.products);
+      }
+      if (stockData.success && Array.isArray(stockData.stocks)) {
+        setStocks(stockData.stocks);
       }
       if (catData.success && Array.isArray(catData.categories)) {
         setCategories(catData.categories);
@@ -135,6 +162,15 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   useEffect(() => {
     fetchData();
   }, [token, allVendorsMode, selectedVendor]);
+
+  // Copy Product ID
+  const handleCopyId = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    showToast(`ID Produk '${id}' berhasil disalin ke clipboard!`, 'info');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Open Create Modal
   const handleOpenCreateModal = () => {
@@ -162,13 +198,14 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
       showToast('Akses ditolak: Hanya role MANAGER yang berhak mengubah produk.', 'warning');
       return;
     }
+    const matchingStock = stocks.find(s => s.productId === product.id);
     setEditingProduct(product);
     setIsDuplicating(false);
     setProdName(product.name);
     setProdCategory(product.category || 'kopi');
     setProdPrice(product.price);
-    setProdStock(product.stock);
-    setProdThreshold(typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10);
+    setProdStock(matchingStock ? matchingStock.stock : (typeof product.stock === 'number' ? product.stock : 20));
+    setProdThreshold(matchingStock ? matchingStock.lowStockThreshold : (typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10));
     setProdDescription(product.description || '');
     setProdTag(product.tag || '');
     setProdImage(product.image || '');
@@ -182,13 +219,14 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
       showToast('Akses ditolak: Hanya role MANAGER yang berhak menduplikasi produk.', 'warning');
       return;
     }
+    const matchingStock = stocks.find(s => s.productId === product.id);
     setEditingProduct(null);
     setIsDuplicating(true);
     setProdName(`${product.name} (Salinan)`);
     setProdCategory(product.category || 'kopi');
     setProdPrice(product.price);
-    setProdStock(product.stock);
-    setProdThreshold(typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10);
+    setProdStock(matchingStock ? matchingStock.stock : 20);
+    setProdThreshold(matchingStock ? matchingStock.lowStockThreshold : 10);
     setProdDescription(product.description || '');
     setProdTag(product.tag || '');
     setProdImage(product.image || '');
@@ -252,7 +290,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         showToast(
           editingProduct && !isDuplicating
             ? `Produk '${prodName}' berhasil diperbarui!`
-            : `Produk '${prodName}' berhasil ditambahkan ke database vendor!`,
+            : `Produk '${prodName}' berhasil ditambahkan ke database!`,
           'success'
         );
         clearClientCatalogCache();
@@ -302,6 +340,9 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         setProducts(prev =>
           prev.map(p => (p.id === product.id ? { ...p, isAvailable: newStatus } : p))
         );
+        setStocks(prev =>
+          prev.map(s => (s.productId === product.id ? { ...s, isAvailable: newStatus } : s))
+        );
       } else {
         showToast(data.error || 'Gagal memperbarui status ketersediaan', 'error');
       }
@@ -340,7 +381,96 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     }
   };
 
-  // Filtered and Sorted Products
+  // Open Adjust Stock Modal from New Table
+  const handleOpenStockModal = (stockItem: ProductStock) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Hanya role MANAGER yang berhak mengatur stok produk.', 'warning');
+      return;
+    }
+    setStockModalItem(stockItem);
+    setStockInputValue(stockItem.stock);
+    setThresholdInputValue(stockItem.lowStockThreshold || 10);
+    setStockReasonInput('');
+  };
+
+  // Quick Delta Adjust from New Table (+1, -1, +5, etc)
+  const handleQuickAdjustStock = async (productId: string, delta: number) => {
+    if (isReadOnly) {
+      showToast('Akses ditolak: Hanya role MANAGER yang berhak mengubah stok.', 'warning');
+      return;
+    }
+
+    setQuickAdjustingId(productId);
+    try {
+      const res = await fetch(`/api/products/${productId}/stock`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          adjustment: delta,
+          reason: delta > 0 ? `Penambahan cepat +${delta} unit via Tabel Stok` : `Pengurangan cepat ${delta} unit via Tabel Stok`
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Stok berhasil diperbarui!', 'success');
+        clearClientCatalogCache();
+        // Optimistic update
+        setStocks(prev =>
+          prev.map(s =>
+            s.productId === productId ? { ...s, stock: Math.max(0, s.stock + delta) } : s
+          )
+        );
+      } else {
+        showToast(data.error || 'Gagal mengubah stok', 'error');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan jaringan', 'error');
+    } finally {
+      setQuickAdjustingId(null);
+    }
+  };
+
+  // Submit Stock Update Modal
+  const handleSaveStockAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockModalItem || isReadOnly) return;
+
+    setIsSavingStock(true);
+    try {
+      const res = await fetch(`/api/products/${stockModalItem.productId}/stock`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          stock: Math.max(0, Math.floor(stockInputValue)),
+          lowStockThreshold: Math.max(0, Math.floor(thresholdInputValue)),
+          reason: stockReasonInput.trim() || 'Penyesuaian stok via Tabel Stok Produk'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Stok untuk produk '${stockModalItem.productName}' berhasil diperbarui!`, 'success');
+        clearClientCatalogCache();
+        setStockModalItem(null);
+        fetchData();
+      } else {
+        showToast(data.error || 'Gagal memperbarui stok', 'error');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan saat memperbarui stok', 'error');
+    } finally {
+      setIsSavingStock(false);
+    }
+  };
+
+  // Filtered and Sorted Products (Table 1: Katalog Produk tanpa kolom stok)
   const filteredProducts = useMemo(() => {
     return products
       .filter(p => {
@@ -351,7 +481,8 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
           const matchCat = (p.category || '').toLowerCase().includes(q);
           const matchTag = (p.tag || '').toLowerCase().includes(q);
           const matchDesc = (p.description || '').toLowerCase().includes(q);
-          if (!matchName && !matchCat && !matchTag && !matchDesc) return false;
+          const matchId = (p.id || '').toLowerCase().includes(q);
+          if (!matchName && !matchCat && !matchTag && !matchDesc && !matchId) return false;
         }
 
         // Category filter
@@ -360,11 +491,8 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         }
 
         // Status filter
-        const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
         if (statusFilter === 'available' && p.isAvailable === false) return false;
         if (statusFilter === 'unavailable' && p.isAvailable !== false) return false;
-        if (statusFilter === 'low_stock' && (p.stock <= 0 || p.stock > threshold)) return false;
-        if (statusFilter === 'out_of_stock' && p.stock > 0) return false;
 
         return true;
       })
@@ -373,21 +501,47 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
         if (sortBy === 'price_asc') return a.price - b.price;
         if (sortBy === 'price_desc') return b.price - a.price;
-        if (sortBy === 'stock_asc') return a.stock - b.stock;
-        if (sortBy === 'stock_desc') return b.stock - a.stock;
         return 0;
       });
   }, [products, searchQuery, categoryFilter, statusFilter, sortBy]);
+
+  // Filtered and Sorted Stocks (Table 2: Tabel Baru product_stocks dengan ID & Stok)
+  const filteredStocks = useMemo(() => {
+    return stocks
+      .filter(s => {
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const matchName = (s.productName || '').toLowerCase().includes(q);
+          const matchCat = (s.category || '').toLowerCase().includes(q);
+          const matchId = (s.productId || '').toLowerCase().includes(q);
+          if (!matchName && !matchCat && !matchId) return false;
+        }
+        if (categoryFilter !== 'all' && (s.category || '').toLowerCase() !== categoryFilter.toLowerCase()) {
+          return false;
+        }
+        if (statusFilter === 'available' && s.isAvailable === false) return false;
+        if (statusFilter === 'unavailable' && s.isAvailable !== false) return false;
+        if (statusFilter === 'low_stock' && (s.stock <= 0 || s.stock > s.lowStockThreshold)) return false;
+        if (statusFilter === 'out_of_stock' && s.stock > 0) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'name_asc') return (a.productName || '').localeCompare(b.productName || '');
+        if (sortBy === 'name_desc') return (b.productName || '').localeCompare(a.productName || '');
+        if (sortBy === 'stock_asc') return a.stock - b.stock;
+        if (sortBy === 'stock_desc') return b.stock - a.stock;
+        if (sortBy === 'price_asc') return (a.price || 0) - (b.price || 0);
+        if (sortBy === 'price_desc') return (b.price || 0) - (a.price || 0);
+        return 0;
+      });
+  }, [stocks, searchQuery, categoryFilter, statusFilter, sortBy]);
 
   // Key KPI stats
   const totalSku = products.length;
   const availableCount = products.filter(p => p.isAvailable !== false).length;
   const unavailableCount = products.filter(p => p.isAvailable === false).length;
-  const lowStockCount = products.filter(p => {
-    const t = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
-    return p.stock > 0 && p.stock <= t;
-  }).length;
-  const outOfStockCount = products.filter(p => p.stock <= 0).length;
+  const lowStockCount = stocks.filter(s => s.stock > 0 && s.stock <= (s.lowStockThreshold || 10)).length;
+  const outOfStockCount = stocks.filter(s => s.stock <= 0).length;
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -469,19 +623,33 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         </div>
       </div>
 
-      {/* Read-Only Notice Banner for Non-Manager / Admin */}
-      {isReadOnly && (
-        <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 p-3.5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <Eye className="w-4 h-4" />
+      {/* Relational Table Notice Banner */}
+      <div className="rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 p-3.5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <Database className="w-4 h-4" />
           </div>
-          <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+          <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed min-w-0">
             <span className="font-bold text-stone-900 dark:text-stone-100">
-              {user?.role === 'ADMIN' ? 'Hak Akses Role ADMIN: Mode Pantau (Read-Only)' : 'Mode Lihat Saja'}
-            </span> — Setiap vendor memiliki katalog produk yang terisolasi di database. Penambahan produk baru, pengubahan harga/stok, dan penghapusan produk khusus dikelola oleh role <strong className="text-amber-700 dark:text-amber-400">MANAGER</strong> pada masing-masing vendor.
+              Pemisahan Tabel Relasional Selesai:
+            </span>{' '}
+            Kolom stok telah dihapus dari tabel produk. Tabel baru{' '}
+            <code className="px-1.5 py-0.5 rounded-md bg-stone-200/80 dark:bg-stone-800 font-mono text-stone-800 dark:text-stone-200 font-bold text-[11px]">
+              product_stocks
+            </code>{' '}
+            kini menyimpan relasi <strong>ID Produk (Foreign Key)</strong> dan <strong>Stok Produk</strong> secara mandiri.
           </div>
         </div>
-      )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTableTab(activeTableTab === 'products' ? 'stocks' : 'products')}
+          className="shrink-0 px-3 py-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-amber-300 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-xs font-bold shadow-2xs hover:bg-amber-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>{activeTableTab === 'products' ? 'Buka Tabel Stok' : 'Buka Tabel Produk'}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
       {/* KPI Cards Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -533,22 +701,83 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
           </div>
         </div>
 
-        {/* Stok Rendah & Kosong */}
+        {/* Total Stock Records in new table */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#251e1c] border border-amber-200/70 dark:border-amber-950/50 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Perhatian Stok</span>
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Tabel Stok (product_stocks)</span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-600">
-              <AlertTriangle className="w-4 h-4" />
+              <Boxes className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2">
             <span className="text-2xl font-black text-amber-600 dark:text-amber-400 font-heading">
-              {lowStockCount + outOfStockCount}
+              {stocks.length}
             </span>
             <span className="text-[11px] text-amber-600/80 ml-1.5">
-              ({outOfStockCount} Habis, {lowStockCount} Tipis)
+              ({outOfStockCount} Habis, {lowStockCount} Menipis)
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Segmented Table Switcher (Tabel Produk vs Tabel Stok Produk) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-1.5 bg-stone-100 dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800">
+        <div className="flex items-center gap-1.5">
+          {/* Tab 1: Tabel Produk */}
+          <button
+            type="button"
+            id="tab-product-table"
+            onClick={() => setActiveTableTab('products')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+              activeTableTab === 'products'
+                ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            <Coffee className="w-4 h-4" />
+            <span>Tabel Produk (Katalog)</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              activeTableTab === 'products'
+                ? 'bg-orange-100 dark:bg-orange-950 text-accent font-extrabold'
+                : 'bg-stone-200 dark:bg-stone-800 text-stone-600'
+            }`}>
+              {products.length}
+            </span>
+          </button>
+
+          {/* Tab 2: Tabel Stok Produk (Baru) */}
+          <button
+            type="button"
+            id="tab-stock-table"
+            onClick={() => setActiveTableTab('stocks')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+              activeTableTab === 'stocks'
+                ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            <Boxes className="w-4 h-4 text-orange-500" />
+            <span>Tabel Stok Produk (Baru)</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase">
+              product_stocks
+            </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              activeTableTab === 'stocks'
+                ? 'bg-orange-100 dark:bg-orange-950 text-accent font-extrabold'
+                : 'bg-stone-200 dark:bg-stone-800 text-stone-600'
+            }`}>
+              {stocks.length}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+          <span>
+            {activeTableTab === 'products'
+              ? 'Tabel produk menampilkan metadata katalog tanpa kolom stok'
+              : 'Tabel baru menampilkan relasi ID Produk dan Stok Produk terisolasi'}
+          </span>
         </div>
       </div>
 
@@ -562,7 +791,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Cari nama produk, kategori, tag, atau deskripsi..."
+              placeholder="Cari ID produk, nama produk, kategori, atau tag..."
               className="w-full pl-10 pr-8 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs focus:outline-none focus:ring-2 focus:ring-accent text-stone-900 dark:text-stone-100 placeholder-stone-400"
             />
             {searchQuery && (
@@ -577,7 +806,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
           </div>
 
           {/* Sorter & View Toggle */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {/* Sort Dropdown */}
             <div className="flex items-center gap-1 bg-stone-50 dark:bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-800 text-xs">
               <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
@@ -590,8 +819,12 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 <option value="name_desc">Nama (Z - A)</option>
                 <option value="price_asc">Harga Terendah</option>
                 <option value="price_desc">Harga Tertinggi</option>
-                <option value="stock_asc">Stok Tersedikit</option>
-                <option value="stock_desc">Stok Terbanyak</option>
+                {activeTableTab === 'stocks' && (
+                  <>
+                    <option value="stock_asc">Stok Tersedikit</option>
+                    <option value="stock_desc">Stok Terbanyak</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -606,38 +839,44 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 <option value="all">Semua Status</option>
                 <option value="available">Tersedia Saja</option>
                 <option value="unavailable">Nonaktif / Draft</option>
-                <option value="low_stock">Stok Menipis</option>
-                <option value="out_of_stock">Stok Habis (0)</option>
+                {activeTableTab === 'stocks' && (
+                  <>
+                    <option value="low_stock">Stok Menipis</option>
+                    <option value="out_of_stock">Stok Habis (0)</option>
+                  </>
+                )}
               </select>
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-stone-100 dark:bg-stone-800 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
-                    : 'text-stone-400 hover:text-stone-600'
-                }`}
-                title="Tampilan Grid Kartu"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === 'table'
-                    ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
-                    : 'text-stone-400 hover:text-stone-600'
-                }`}
-                title="Tampilan Tabel / List"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
+            {/* View Mode Toggle (Grid vs Table) */}
+            {activeTableTab === 'products' && (
+              <div className="flex items-center bg-stone-100 dark:bg-stone-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                      : 'text-stone-400 hover:text-stone-600'
+                  }`}
+                  title="Tampilan Tabel Katalog"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                      : 'text-stone-400 hover:text-stone-600'
+                  }`}
+                  title="Tampilan Grid Kartu"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -683,345 +922,581 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <RefreshCw className="w-8 h-8 text-accent animate-spin" />
-          <span className="text-xs font-semibold text-stone-500">Memuat katalog produk database...</span>
+          <span className="text-xs font-semibold text-stone-500">Memuat data produk & tabel stok dari database...</span>
         </div>
-      ) : filteredProducts.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-950/60 text-accent flex items-center justify-center mx-auto">
-            <Coffee className="w-8 h-8" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
-              Tidak ada produk ditemukan
-            </h3>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-md mx-auto">
-              {searchQuery || categoryFilter !== 'all' || statusFilter !== 'all'
-                ? 'Tidak ada produk yang sesuai dengan kriteria pencarian dan filter Anda.'
-                : 'Belum ada produk yang didaftarkan untuk vendor ini.'}
-            </p>
-          </div>
-          {!isReadOnly && (
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="px-5 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-xs hover:bg-accent/90 transition-all cursor-pointer inline-flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Produk Pertama</span>
-            </button>
-          )}
-        </div>
-      ) : viewMode === 'grid' ? (
-        /* Grid Cards View */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredProducts.map(product => {
-            const threshold = typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10;
-            const isOut = product.stock <= 0;
-            const isLow = product.stock > 0 && product.stock <= threshold;
-            const isAvailable = product.isAvailable !== false;
-            const isToggling = togglingId === product.id;
-
-            return (
-              <div
-                key={product.id}
-                className={`flex flex-col justify-between rounded-3xl bg-white dark:bg-[#251e1c] border transition-all duration-200 overflow-hidden shadow-2xs hover:shadow-md ${
-                  !isAvailable
-                    ? 'border-stone-200 dark:border-stone-800 opacity-75'
-                    : isOut
-                    ? 'border-red-300 dark:border-red-900/60'
-                    : isLow
-                    ? 'border-amber-300 dark:border-amber-900/60'
-                    : 'border-stone-200/80 dark:border-stone-800 hover:border-accent/40'
-                }`}
+      ) : activeTableTab === 'products' ? (
+        /* ================= TABEL 1: TABEL PRODUK (KATALOG TANPA STOK) ================= */
+        filteredProducts.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-950/60 text-accent flex items-center justify-center mx-auto">
+              <Coffee className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
+                Tidak ada produk ditemukan
+              </h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-md mx-auto">
+                {searchQuery || categoryFilter !== 'all' || statusFilter !== 'all'
+                  ? 'Tidak ada produk yang sesuai dengan kriteria pencarian dan filter Anda.'
+                  : 'Belum ada produk yang didaftarkan untuk vendor ini.'}
+              </p>
+            </div>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="px-5 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-xs hover:bg-accent/90 transition-all cursor-pointer inline-flex items-center gap-2"
               >
-                {/* Image & Badges Banner */}
-                <div className="relative aspect-4/3 bg-stone-100 dark:bg-stone-900 overflow-hidden">
-                  <ProductImage
-                    src={product.image}
-                    alt={product.name}
-                    category={product.category}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                <Plus className="w-4 h-4" />
+                <span>Tambah Produk Pertama</span>
+              </button>
+            )}
+          </div>
+        ) : viewMode === 'grid' ? (
+          /* Grid Cards View */
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredProducts.map(product => {
+              const isAvailable = product.isAvailable !== false;
+              const isToggling = togglingId === product.id;
 
-                  {/* Top Left: Category & Vendor Tag */}
-                  <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
-                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-black/60 backdrop-blur-xs text-white">
-                      {product.category}
-                    </span>
-                    {allVendorsMode && product.vendorId && (
-                      <VendorBadge vendorId={product.vendorId} />
+              return (
+                <div
+                  key={product.id}
+                  className={`flex flex-col justify-between rounded-3xl bg-white dark:bg-[#251e1c] border transition-all duration-200 overflow-hidden shadow-2xs hover:shadow-md ${
+                    !isAvailable
+                      ? 'border-stone-200 dark:border-stone-800 opacity-75'
+                      : 'border-stone-200/80 dark:border-stone-800 hover:border-accent/40'
+                  }`}
+                >
+                  {/* Image & Badges Banner */}
+                  <div className="relative aspect-4/3 bg-stone-100 dark:bg-stone-900 overflow-hidden">
+                    <ProductImage
+                      src={product.image}
+                      alt={product.name}
+                      category={product.category}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+
+                    {/* Top Left: Category & Vendor Tag */}
+                    <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
+                      <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-black/60 backdrop-blur-xs text-white">
+                        {product.category}
+                      </span>
+                      {allVendorsMode && product.vendorId && (
+                        <VendorBadge vendorId={product.vendorId} />
+                      )}
+                    </div>
+
+                    {/* Top Right: Tag Promo/Badge */}
+                    {product.tag && (
+                      <div className="absolute top-2.5 right-2.5">
+                        <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-accent text-white shadow-2xs">
+                          {product.tag}
+                        </span>
+                      </div>
                     )}
-                  </div>
 
-                  {/* Top Right: Tag Promo/Badge */}
-                  {product.tag && (
-                    <div className="absolute top-2.5 right-2.5">
-                      <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-accent text-white shadow-2xs">
-                        {product.tag}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Bottom Ribbon: If unavailable / out of stock */}
-                  {!isAvailable && (
-                    <div className="absolute inset-x-0 bottom-0 py-1 bg-stone-900/80 backdrop-blur-xs text-stone-200 text-[10px] font-bold text-center tracking-wider uppercase">
-                      Non-Aktif (Draft)
-                    </div>
-                  )}
-                </div>
-
-                {/* Card Body */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                  <div>
-                    <h3 className="font-bold text-sm text-stone-900 dark:text-stone-100 font-heading line-clamp-1" title={product.name}>
-                      {product.name}
-                    </h3>
-                    <p className="text-[11px] text-stone-400 line-clamp-2 mt-0.5 min-h-8">
-                      {product.description || 'Tidak ada deskripsi produk.'}
-                    </p>
-                  </div>
-
-                  {/* Price and Stock Indicators */}
-                  <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-stone-800/80">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-base font-extrabold text-accent font-heading">
-                        Rp {product.price.toLocaleString('id-ID')}
-                      </span>
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                        isOut
-                          ? 'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400'
-                          : isLow
-                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
-                          : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
-                      }`}>
-                        Stok: {product.stock}
-                      </span>
-                    </div>
-
-                    {/* Availability Quick Toggle (Only for Manager) */}
-                    {!isReadOnly && (
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[11px] text-stone-500 font-medium">Status Kasir:</span>
-                        <button
-                          type="button"
-                          disabled={isToggling}
-                          onClick={() => handleToggleAvailability(product)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
-                            isAvailable
-                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                              : 'bg-stone-100 dark:bg-stone-800 text-stone-500 border border-stone-200 dark:border-stone-700'
-                          }`}
-                          title="Klik untuk mengaktifkan / menonaktifkan produk di kasir"
-                        >
-                          {isToggling ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                          ) : isAvailable ? (
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <XCircle className="w-3 h-3 text-stone-400" />
-                          )}
-                          <span>{isAvailable ? 'Tersedia' : 'Non-Aktif'}</span>
-                        </button>
+                    {/* Bottom Ribbon: If unavailable */}
+                    {!isAvailable && (
+                      <div className="absolute inset-x-0 bottom-0 py-1 bg-stone-900/80 backdrop-blur-xs text-stone-200 text-[10px] font-bold text-center tracking-wider uppercase">
+                        Non-Aktif (Draft)
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Card Actions Footer */}
-                {!isReadOnly ? (
-                  <div className="px-4 py-2.5 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1">
-                      {/* Edit Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditModal(product)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:text-accent text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                        title="Ubah detail produk"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Ubah</span>
-                      </button>
-
-                      {/* Duplicate Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDuplicateModal(product)}
-                        className="p-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-800 text-xs shadow-2xs transition-colors cursor-pointer"
-                        title="Duplikasi produk ini menjadi produk baru"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Card Body */}
+                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyId(product.id, e)}
+                          className="inline-flex items-center gap-1 font-mono text-[10px] text-stone-400 hover:text-accent bg-stone-100 dark:bg-stone-800/80 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                          title="Klik untuk menyalin ID Produk"
+                        >
+                          <span>ID: {product.id.slice(-6)}</span>
+                          {copiedId === product.id ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+                        </button>
+                      </div>
+                      <h3 className="font-bold text-sm text-stone-900 dark:text-stone-100 font-heading line-clamp-1" title={product.name}>
+                        {product.name}
+                      </h3>
+                      <p className="text-[11px] text-stone-400 line-clamp-2 mt-0.5 min-h-8">
+                        {product.description || 'Tidak ada deskripsi produk.'}
+                      </p>
                     </div>
 
-                    {/* Delete Button */}
-                    <button
-                      type="button"
-                      onClick={() => setProductToDelete(product)}
-                      className="p-1.5 rounded-xl text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
-                      title="Hapus produk dari katalog"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="px-4 py-2 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-100 dark:border-stone-800/80 text-[10px] text-stone-400 font-mono">
-                    ID: {product.id}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        /* Table List View */
-        <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-50 dark:bg-stone-900 border-b border-stone-200/80 dark:border-stone-800 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3 px-4">Produk</th>
-                  <th className="py-3 px-4">Kategori</th>
-                  <th className="py-3 px-4 text-right">Harga Jual</th>
-                  <th className="py-3 px-4 text-center">Stok</th>
-                  <th className="py-3 px-4 text-center">Status Kasir</th>
-                  {!isReadOnly && <th className="py-3 px-4 text-center">Aksi</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                {filteredProducts.map(product => {
-                  const threshold = typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10;
-                  const isOut = product.stock <= 0;
-                  const isLow = product.stock > 0 && product.stock <= threshold;
-                  const isAvailable = product.isAvailable !== false;
-                  const isToggling = togglingId === product.id;
-
-                  return (
-                    <tr key={product.id} className="hover:bg-stone-50/70 dark:hover:bg-stone-900/40 transition-colors">
-                      {/* Product Thumbnail & Name */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200/60 dark:border-stone-700">
-                            <ProductImage
-                              src={product.image}
-                              alt={product.name}
-                              category={product.category}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-heading">
-                                {product.name}
-                              </span>
-                              {product.tag && (
-                                <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-orange-100 dark:bg-orange-950 text-accent">
-                                  {product.tag}
-                                </span>
-                              )}
-                              {allVendorsMode && product.vendorId && (
-                                <VendorBadge vendorId={product.vendorId} />
-                              )}
-                            </div>
-                            <span className="text-[11px] text-stone-400 line-clamp-1 max-w-xs">
-                              {product.description || 'Tidak ada deskripsi'}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Category */}
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-                          {product.category}
-                        </span>
-                      </td>
-
-                      {/* Price */}
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-extrabold text-accent font-heading">
+                    {/* Price and Availability Indicators (Stock removed from card) */}
+                    <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-stone-800/80">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-base font-extrabold text-accent font-heading">
                           Rp {product.price.toLocaleString('id-ID')}
                         </span>
-                      </td>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTableTab('stocks')}
+                          className="text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Boxes className="w-3 h-3" />
+                          <span>Lihat Stok</span>
+                        </button>
+                      </div>
 
-                      {/* Stock */}
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          isOut
-                            ? 'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400'
-                            : isLow
-                            ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
-                            : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
-                        }`}>
-                          {product.stock} unit
-                        </span>
-                      </td>
-
-                      {/* Availability */}
-                      <td className="py-3 px-4 text-center">
-                        {!isReadOnly ? (
+                      {/* Availability Quick Toggle (Only for Manager) */}
+                      {!isReadOnly && (
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] text-stone-500 font-medium">Status Kasir:</span>
                           <button
                             type="button"
                             disabled={isToggling}
                             onClick={() => handleToggleAvailability(product)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                               isAvailable
-                                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-stone-100 dark:bg-stone-800 text-stone-400'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-stone-100 dark:bg-stone-800 text-stone-500 border border-stone-200 dark:border-stone-700'
                             }`}
+                            title="Klik untuk mengaktifkan / menonaktifkan produk di kasir"
                           >
                             {isToggling ? (
                               <RefreshCw className="w-3 h-3 animate-spin" />
                             ) : isAvailable ? (
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             ) : (
-                              <XCircle className="w-3 h-3" />
+                              <XCircle className="w-3 h-3 text-stone-400" />
                             )}
                             <span>{isAvailable ? 'Tersedia' : 'Non-Aktif'}</span>
                           </button>
-                        ) : (
-                          <span className={`text-[10px] font-bold ${isAvailable ? 'text-emerald-600' : 'text-stone-400'}`}>
-                            {isAvailable ? 'Tersedia' : 'Non-Aktif'}
-                          </span>
-                        )}
-                      </td>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                      {/* Action Buttons */}
-                      {!isReadOnly && (
+                  {/* Card Actions Footer */}
+                  {!isReadOnly ? (
+                    <div className="px-4 py-2.5 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(product)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:text-accent text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                          title="Ubah detail produk"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Ubah</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDuplicateModal(product)}
+                          className="p-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-800 text-xs shadow-2xs transition-colors cursor-pointer"
+                          title="Duplikasi produk ini menjadi produk baru"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setProductToDelete(product)}
+                        className="p-1.5 rounded-xl text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                        title="Hapus produk dari katalog"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-100 dark:border-stone-800/80 text-[10px] text-stone-400 font-mono">
+                      ID: {product.id}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Table List View: STOCK COLUMN REMOVED FROM PRODUCT TABLE */
+          <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs overflow-hidden">
+            <div className="p-3 bg-stone-50/50 dark:bg-stone-900/50 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
+              <span className="font-bold flex items-center gap-1.5">
+                <Coffee className="w-3.5 h-3.5 text-accent" />
+                <span>Tabel Katalog Produk (Kolom Stok Telah Dipindahkan ke Tabel Stok)</span>
+              </span>
+              <span className="text-[11px] text-stone-400">Total {filteredProducts.length} Produk</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-stone-50 dark:bg-stone-900 border-b border-stone-200/80 dark:border-stone-800 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="py-3 px-4">ID Produk</th>
+                    <th className="py-3 px-4">Produk</th>
+                    <th className="py-3 px-4">Kategori</th>
+                    <th className="py-3 px-4 text-right">Harga Jual</th>
+                    <th className="py-3 px-4 text-center">Status Kasir</th>
+                    {!isReadOnly && <th className="py-3 px-4 text-center">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                  {filteredProducts.map(product => {
+                    const isAvailable = product.isAvailable !== false;
+                    const isToggling = togglingId === product.id;
+
+                    return (
+                      <tr key={product.id} className="hover:bg-stone-50/70 dark:hover:bg-stone-900/40 transition-colors">
+                        {/* ID Produk (Key Column) */}
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyId(product.id, e)}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800/80 text-stone-700 dark:text-stone-300 hover:text-accent border border-stone-200/60 dark:border-stone-700 transition-colors cursor-pointer"
+                            title="Klik untuk menyalin ID Produk lengkap"
+                          >
+                            <span>{product.id}</span>
+                            {copiedId === product.id ? (
+                              <Check className="w-3 h-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-stone-400" />
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Product Thumbnail & Name */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200/60 dark:border-stone-700">
+                              <ProductImage
+                                src={product.image}
+                                alt={product.name}
+                                category={product.category}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-heading">
+                                  {product.name}
+                                </span>
+                                {product.tag && (
+                                  <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-orange-100 dark:bg-orange-950 text-accent">
+                                    {product.tag}
+                                  </span>
+                                )}
+                                {allVendorsMode && product.vendorId && (
+                                  <VendorBadge vendorId={product.vendorId} />
+                                )}
+                              </div>
+                              <span className="text-[11px] text-stone-400 line-clamp-1 max-w-xs">
+                                {product.description || 'Tidak ada deskripsi'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Category */}
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+                            {product.category}
+                          </span>
+                        </td>
+
+                        {/* Price */}
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-extrabold text-accent font-heading">
+                            Rp {product.price.toLocaleString('id-ID')}
+                          </span>
+                        </td>
+
+                        {/* Availability */}
                         <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                          {!isReadOnly ? (
                             <button
                               type="button"
-                              onClick={() => handleOpenEditModal(product)}
-                              className="p-1.5 rounded-lg text-stone-600 hover:text-accent hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
-                              title="Ubah Produk"
+                              disabled={isToggling}
+                              onClick={() => handleToggleAvailability(product)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                                isAvailable
+                                  ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-stone-100 dark:bg-stone-800 text-stone-400'
+                              }`}
                             >
-                              <Edit3 className="w-4 h-4" />
+                              {isToggling ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : isAvailable ? (
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <XCircle className="w-3 h-3" />
+                              )}
+                              <span>{isAvailable ? 'Tersedia' : 'Non-Aktif'}</span>
                             </button>
+                          ) : (
+                            <span className={`text-[10px] font-bold ${isAvailable ? 'text-emerald-600' : 'text-stone-400'}`}>
+                              {isAvailable ? 'Tersedia' : 'Non-Aktif'}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Action Buttons */}
+                        {!isReadOnly && (
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(product)}
+                                className="p-1.5 rounded-lg text-stone-600 hover:text-accent hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                                title="Ubah Produk"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDuplicateModal(product)}
+                                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                                title="Duplikasi Produk"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setProductToDelete(product)}
+                                className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors cursor-pointer"
+                                title="Hapus Produk"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      ) : (
+        /* ================= TABEL 2: TABEL BARU STOK PRODUK (ID & STOK) ================= */
+        <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs overflow-hidden">
+          <div className="p-4 bg-orange-50/60 dark:bg-orange-950/30 border-b border-orange-100 dark:border-orange-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-accent" />
+                <h3 className="font-bold text-sm text-stone-900 dark:text-stone-100 font-heading">
+                  Tabel Relasi Stok Produk (Tabel <code className="font-mono text-accent">product_stocks</code>)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent text-white">
+                  Tabel Baru
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                Menyimpan secara khusus <strong>ID Produk</strong> (foreign key) dan <strong>Stok Produk</strong> beserta batas ambang peringatan minimum
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-stone-500">
+                {filteredStocks.length} Record Stok
+              </span>
+            </div>
+          </div>
+
+          {filteredStocks.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 text-stone-400 flex items-center justify-center mx-auto">
+                <Boxes className="w-7 h-7" />
+              </div>
+              <p className="text-xs text-stone-500">Tidak ada data stok yang sesuai dengan filter pencarian.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-stone-50 dark:bg-stone-900 border-b border-stone-200/80 dark:border-stone-800 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="py-3 px-4">ID Produk (productId)</th>
+                    <th className="py-3 px-4">Nama Produk</th>
+                    <th className="py-3 px-4">Kategori</th>
+                    <th className="py-3 px-4 text-center">Stok Produk</th>
+                    <th className="py-3 px-4 text-center">Batas Minimum</th>
+                    <th className="py-3 px-4 text-center">Status Stok</th>
+                    <th className="py-3 px-4 text-center">Status Kasir</th>
+                    {!isReadOnly && <th className="py-3 px-4 text-center">Aksi Kelola Stok</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                  {filteredStocks.map(stockItem => {
+                    const isOut = stockItem.stock <= 0;
+                    const isLow = stockItem.stock > 0 && stockItem.stock <= (stockItem.lowStockThreshold || 10);
+                    const isQuickAdjusting = quickAdjustingId === stockItem.productId;
+
+                    return (
+                      <tr key={stockItem.id || stockItem.productId} className="hover:bg-stone-50/70 dark:hover:bg-stone-900/40 transition-colors">
+                        {/* ID Produk (Prominent Column in New Table) */}
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleOpenDuplicateModal(product)}
-                              className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
-                              title="Duplikasi Produk"
+                              onClick={(e) => handleCopyId(stockItem.productId, e)}
+                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-950/60 text-accent font-bold hover:bg-orange-100 border border-orange-200/80 dark:border-orange-900/60 transition-colors cursor-pointer"
+                              title="Salin ID Produk"
                             >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setProductToDelete(product)}
-                              className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors cursor-pointer"
-                              title="Hapus Produk"
-                            >
-                              <Trash2 className="w-4 h-4" />
+                              <span>{stockItem.productId}</span>
+                              {copiedId === stockItem.productId ? (
+                                <Check className="w-3 h-3 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-accent" />
+                              )}
                             </button>
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+                        {/* Product Thumbnail & Name */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200/60 dark:border-stone-700">
+                              <ProductImage
+                                src={stockItem.image}
+                                alt={stockItem.productName || 'Produk'}
+                                category={stockItem.category}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <span className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-heading block">
+                                {stockItem.productName || 'Tanpa Nama'}
+                              </span>
+                              {stockItem.price && (
+                                <span className="text-[11px] text-stone-400">
+                                  Rp {stockItem.price.toLocaleString('id-ID')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Category */}
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+                            {stockItem.category || 'kopi'}
+                          </span>
+                        </td>
+
+                        {/* Stok Produk (Centerpiece of the new table) */}
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                disabled={isQuickAdjusting || stockItem.stock <= 0}
+                                onClick={() => handleQuickAdjustStock(stockItem.productId, -1)}
+                                className="w-6 h-6 rounded-md bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 disabled:opacity-30 flex items-center justify-center font-bold text-xs cursor-pointer"
+                                title="Kurangi 1 unit"
+                              >
+                                -
+                              </button>
+                            )}
+
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-black min-w-16 text-center ${
+                              isOut
+                                ? 'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-900'
+                                : isLow
+                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-900'
+                                : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-900'
+                            }`}>
+                              {stockItem.stock} unit
+                            </span>
+
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                disabled={isQuickAdjusting}
+                                onClick={() => handleQuickAdjustStock(stockItem.productId, 1)}
+                                className="w-6 h-6 rounded-md bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 flex items-center justify-center font-bold text-xs cursor-pointer"
+                                title="Tambah 1 unit"
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Batas Minimum (Threshold) */}
+                        <td className="py-3 px-4 text-center">
+                          <span className="font-semibold text-stone-600 dark:text-stone-400">
+                            {stockItem.lowStockThreshold || 10} unit
+                          </span>
+                        </td>
+
+                        {/* Status Stok */}
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            isOut
+                              ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                              : isLow
+                              ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                          }`}>
+                            {isOut ? (
+                              <>
+                                <AlertCircle className="w-3 h-3" />
+                                <span>Habis (0)</span>
+                              </>
+                            ) : isLow ? (
+                              <>
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Menipis</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Aman</span>
+                              </>
+                            )}
+                          </span>
+                        </td>
+
+                        {/* Availability */}
+                        <td className="py-3 px-4 text-center">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            stockItem.isAvailable !== false
+                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-stone-100 dark:bg-stone-800 text-stone-500'
+                          }`}>
+                            {stockItem.isAvailable !== false ? 'Tersedia' : 'Non-Aktif'}
+                          </span>
+                        </td>
+
+                        {/* Action Column */}
+                        {!isReadOnly && (
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStockModal(stockItem)}
+                                className="px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                title="Buka form penyesuaian stok produk ini"
+                              >
+                                <Sliders className="w-3.5 h-3.5" />
+                                <span>Sesuaikan</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isQuickAdjusting}
+                                onClick={() => handleQuickAdjustStock(stockItem.productId, 5)}
+                                className="px-2 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-bold transition-colors cursor-pointer"
+                                title="Restock cepat +5 unit"
+                              >
+                                +5
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1051,7 +1526,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                     )}
                   </h3>
                   <p className="text-[11px] text-stone-400">
-                    Produk tersimpan di database khusus vendor Anda ({user?.vendorName || user?.vendorId}) dan hanya dapat dikelola oleh role Manager
+                    Data produk tersimpan di tabel <code className="font-mono">products</code>, dan stok dialokasikan ke tabel relasional <code className="font-mono">product_stocks</code>
                   </p>
                 </div>
               </div>
@@ -1126,32 +1601,40 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 </div>
               </div>
 
-              {/* Stok & Batas Threshold */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
-                    Stok Saat Ini (Unit)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={prodStock}
-                    onChange={e => setProdStock(Math.max(0, Math.floor(Number(e.target.value))))}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
+              {/* Alokasi Stok Awal ke Tabel product_stocks */}
+              <div className="p-3.5 rounded-2xl bg-orange-50/60 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-900/40 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Boxes className="w-4 h-4 text-accent" />
+                  <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                    Alokasi Stok Awal (Tabel product_stocks)
+                  </span>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600 dark:text-stone-400 block mb-1">
+                      Stok Awal (Unit)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={prodStock}
+                      onChange={e => setProdStock(Math.max(0, Math.floor(Number(e.target.value))))}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1.5">
-                    Batas Peringatan Minimum
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={prodThreshold}
-                    onChange={e => setProdThreshold(Math.max(1, Math.floor(Number(e.target.value))))}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600 dark:text-stone-400 block mb-1">
+                      Batas Ambang Peringatan (Unit)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={prodThreshold}
+                      onChange={e => setProdThreshold(Math.max(1, Math.floor(Number(e.target.value))))}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1297,6 +1780,135 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         </div>
       )}
 
+      {/* MODAL: Sesuaikan Stok di Tabel Baru (product_stocks) */}
+      {!isReadOnly && stockModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-[#251e1c] rounded-3xl p-6 border border-stone-200 dark:border-stone-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-stone-900 dark:text-stone-100 font-heading">
+                    Sesuaikan Stok Produk
+                  </h3>
+                  <span className="text-[10px] font-mono text-stone-400">
+                    ID: {stockModalItem.productId}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockModalItem(null)}
+                className="p-1 rounded-full text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-stone-50 dark:bg-stone-900 rounded-2xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-stone-200 shrink-0">
+                <ProductImage
+                  src={stockModalItem.image}
+                  alt={stockModalItem.productName || 'Produk'}
+                  category={stockModalItem.category}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <span className="font-bold text-xs text-stone-900 dark:text-stone-100 block">
+                  {stockModalItem.productName}
+                </span>
+                <span className="text-[11px] text-stone-500">
+                  Stok saat ini di tabel <code className="font-mono">product_stocks</code>: <strong>{stockModalItem.stock} unit</strong>
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveStockAdjustment} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block mb-1">
+                  Stok Baru (Unit) <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={stockInputValue}
+                    onChange={e => setStockInputValue(Math.max(0, Math.floor(Number(e.target.value))))}
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setStockInputValue(prev => prev + 5)}
+                      className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-xs font-bold text-stone-700 dark:text-stone-300 cursor-pointer"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStockInputValue(prev => prev + 10)}
+                      className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-xs font-bold text-stone-700 dark:text-stone-300 cursor-pointer"
+                    >
+                      +10
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block mb-1">
+                  Batas Ambang Peringatan (Unit)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={thresholdInputValue}
+                  onChange={e => setThresholdInputValue(Math.max(0, Math.floor(Number(e.target.value))))}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block mb-1">
+                  Alasan Penyesuaian
+                </label>
+                <input
+                  type="text"
+                  value={stockReasonInput}
+                  onChange={e => setStockReasonInput(e.target.value)}
+                  placeholder="Contoh: Restock supplier, koreksi fisik, bahan rusak..."
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStockModalItem(null)}
+                  disabled={isSavingStock}
+                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingStock}
+                  className="px-5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent/90 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSavingStock && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Simpan ke Tabel Stok</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Konfirmasi Hapus Produk */}
       {!isReadOnly && productToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -1309,7 +1921,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 Hapus Produk '{productToDelete.name}'?
               </h3>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Produk ini akan dihapus dari database vendor Anda secara permanen. Tindakan ini tidak dapat dibatalkan.
+                Produk ini akan dihapus dari database vendor Anda secara permanen. Record pada tabel <code className="font-mono">product_stocks</code> juga akan dibersihkan otomatis.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">

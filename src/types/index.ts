@@ -86,6 +86,20 @@ export interface Product {
   updatedAt?: string;
 }
 
+export interface ProductStock {
+  id: string;
+  productId: string;
+  vendorId?: string;
+  productName?: string;
+  category?: string;
+  image?: string;
+  price?: number;
+  stock: number;
+  lowStockThreshold: number;
+  isAvailable?: boolean;
+  updatedAt?: string;
+}
+
 export interface InventoryLog {
   id: string;
   vendorId?: string;

@@ -4,7 +4,29 @@ import { logDatabase } from './dailyRollingLogger';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI;
+function normalizeMongoUri(rawUri?: string): string | null {
+  if (!rawUri || typeof rawUri !== 'string') return null;
+  let uri = rawUri.trim();
+  if (!uri) return null;
+
+  // Auto-correct common typo: missing leading 'm' or letters in 'mongodb'
+  if (/^ongodb(\+srv)?:\/\//i.test(uri)) {
+    uri = 'm' + uri;
+  } else if (/^ngodb(\+srv)?:\/\//i.test(uri)) {
+    uri = 'mo' + uri;
+  } else if (/^godb(\+srv)?:\/\//i.test(uri)) {
+    uri = 'mon' + uri;
+  } else if (!/^mongodb(\+srv)?:\/\//i.test(uri) && uri.includes('.mongodb.net')) {
+    uri = 'mongodb+srv://' + uri;
+  }
+  return uri;
+}
+
+const rawUri = process.env.MONGODB_URI;
+const MONGODB_URI = normalizeMongoUri(rawUri);
+if (MONGODB_URI && MONGODB_URI !== rawUri) {
+  process.env.MONGODB_URI = MONGODB_URI;
+}
 const DB_NAME = process.env.MONGODB_DB_NAME || 'beverage_app_db';
 
 let client: MongoClient | null = null;

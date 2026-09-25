@@ -506,24 +506,38 @@ productRouter.get('/', async (req: Request, res: Response) => {
       products = await db.collection('products').find(filter).toArray();
     } catch (e) {}
 
+    // Join with isolated product_stocks table
+    const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
+    const stockMap = new Map<string, any>();
+    try {
+      const stockDocs = await db.collection('product_stocks').find({
+        productId: { $in: productIds }
+      }).toArray();
+      stockDocs.forEach(s => stockMap.set(String(s.productId), s));
+    } catch (e) {}
+
     const payload = {
       success: true,
       vendorId: targetVendor,
       isAllVendors,
       cached: false,
-      products: products.map(p => ({
-        id: p._id ? p._id.toString() : p.id,
-        vendorId: p.vendorId || 'vnd_kasirkafe_central',
-        name: p.name,
-        category: p.category,
-        price: p.price,
-        stock: p.stock,
-        lowStockThreshold: typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10,
-        description: p.description,
-        tag: p.tag,
-        image: p.image,
-        isAvailable: p.isAvailable !== false
-      }))
+      products: products.map(p => {
+        const prodId = p._id ? p._id.toString() : p.id;
+        const stockRec = stockMap.get(prodId);
+        return {
+          id: prodId,
+          vendorId: p.vendorId || 'vnd_kasirkafe_central',
+          name: p.name,
+          category: p.category,
+          price: p.price,
+          stock: stockRec ? stockRec.stock : (typeof p.stock === 'number' ? p.stock : 0),
+          lowStockThreshold: stockRec ? stockRec.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10),
+          description: p.description,
+          tag: p.tag,
+          image: p.image,
+          isAvailable: p.isAvailable !== false
+        };
+      })
     };
 
     // Cache products for 5 minutes
@@ -535,6 +549,74 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
     res.setHeader('X-Cache', 'MISS');
     return res.json(payload);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * GET /api/products/stocks
+ * Returns product stocks from dedicated product_stocks table joined with product metadata
+ */
+productRouter.get('/stocks', async (req: Request, res: Response) => {
+  try {
+    const isAdmin = (req as any).user?.role === 'ADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
+    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
+
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    let filter: any = {};
+    if (isAllVendors) {
+      // All vendors
+    } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+      filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
+        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+        : requestedVendor;
+    } else if (activeVendorId === 'vnd_kasirkafe_central') {
+      filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+    } else {
+      filter.vendorId = activeVendorId;
+    }
+
+    const products = await db.collection('products').find(filter).toArray();
+    const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
+
+    const stockDocs = await db.collection('product_stocks').find({
+      productId: { $in: productIds }
+    }).toArray();
+    const stockMap = new Map<string, any>();
+    stockDocs.forEach(s => stockMap.set(String(s.productId), s));
+
+    const stocks = products.map(p => {
+      const prodId = p._id ? p._id.toString() : p.id;
+      const s = stockMap.get(prodId);
+      return {
+        id: s?._id ? s._id.toString() : `stk_${prodId}`,
+        productId: prodId,
+        vendorId: p.vendorId || activeVendorId,
+        productName: p.name,
+        category: p.category,
+        image: p.image,
+        price: p.price,
+        stock: s ? s.stock : 0,
+        lowStockThreshold: s ? s.lowStockThreshold : 10,
+        isAvailable: p.isAvailable !== false,
+        updatedAt: s?.updatedAt || p.updatedAt
+      };
+    });
+
+    return res.json({
+      success: true,
+      vendorId: targetVendor,
+      isAllVendors,
+      stocks
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
@@ -578,13 +660,20 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       products = await db.collection('products').find(query).toArray();
     } catch (e) {}
 
+    const productIds = products.map(p => (p._id ? p._id.toString() : p.id));
+    const stockDocs = await db.collection('product_stocks').find({ productId: { $in: productIds } }).toArray();
+    const stockMap = new Map<string, any>();
+    stockDocs.forEach(s => stockMap.set(String(s.productId), s));
+
     const mapped = products.map(p => {
-      const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
-      const stock = typeof p.stock === 'number' ? p.stock : 0;
+      const prodId = p._id ? p._id.toString() : p.id;
+      const s = stockMap.get(prodId);
+      const threshold = s && typeof s.lowStockThreshold === 'number' ? s.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10);
+      const stock = s && typeof s.stock === 'number' ? s.stock : (typeof p.stock === 'number' ? p.stock : 0);
       const isOutOfStock = stock === 0;
       const isLowStock = stock > 0 && stock <= threshold;
       return {
-        id: p._id ? p._id.toString() : p.id,
+        id: prodId,
         vendorId: p.vendorId || 'vnd_kasirkafe_central',
         name: p.name,
         category: p.category,
@@ -723,9 +812,12 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
     }
 
     try {
-      await db.collection('products').updateMany(filter, {
-        $set: { lowStockThreshold: thresholdNum, updatedAt: new Date() }
-      });
+      const prodsToUpdate = await db.collection('products').find(filter).toArray();
+      const pIds = prodsToUpdate.map(p => (p._id ? p._id.toString() : p.id));
+      await db.collection('product_stocks').updateMany(
+        { productId: { $in: pIds } },
+        { $set: { lowStockThreshold: thresholdNum, updatedAt: new Date() } }
+      );
     } catch (e) {}
 
     const logDoc = {
@@ -832,25 +924,24 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           existing.price = newPrice;
         }
 
-        // Stock update
+        // Stock update in product_stocks table
         let stockChange = 0;
+        let newStock = prevStock;
         if (item.stock !== undefined && item.stock !== null && !isNaN(Number(item.stock))) {
           const parsedStock = Math.floor(Number(item.stock));
-          let newStock = prevStock;
           if (stockMode === 'add') {
             newStock = Math.max(0, prevStock + parsedStock);
           } else {
             newStock = Math.max(0, parsedStock);
           }
           stockChange = newStock - prevStock;
-          updateFields.stock = newStock;
           existing.stock = newStock;
         }
 
         // Low stock threshold
+        let newThresh = typeof existing.lowStockThreshold === 'number' ? existing.lowStockThreshold : 10;
         if (item.lowStockThreshold !== undefined && item.lowStockThreshold !== null && !isNaN(Number(item.lowStockThreshold))) {
-          const newThresh = Math.max(0, Math.floor(Number(item.lowStockThreshold)));
-          updateFields.lowStockThreshold = newThresh;
+          newThresh = Math.max(0, Math.floor(Number(item.lowStockThreshold)));
           existing.lowStockThreshold = newThresh;
         }
 
@@ -871,6 +962,18 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         try {
           const query: any = ObjectId.isValid(existingId) ? { _id: new ObjectId(existingId) } : { _id: existingId };
           await db.collection('products').updateOne(query, { $set: updateFields });
+          await db.collection('product_stocks').updateOne(
+            { productId: existingId },
+            {
+              $set: {
+                stock: newStock,
+                lowStockThreshold: newThresh,
+                updatedAt: new Date()
+              },
+              $setOnInsert: { vendorId: existing.vendorId || activeVendorId }
+            },
+            { upsert: true }
+          );
         } catch (e) {}
 
         // Audit log if stock changed or price changed
@@ -889,7 +992,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
             productId: existingId,
             productName: existing.name,
             previousStock: prevStock,
-            newStock: updateFields.stock ?? prevStock,
+            newStock,
             change: stockChange,
             type: 'CSV_IMPORT',
             reason: reasons.join(' • '),
@@ -905,7 +1008,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
 
         updatedCount++;
       } else {
-        // CREATE new product
+        // CREATE new product (without stock in products table, stored in product_stocks table)
         const newStock = item.stock !== undefined && !isNaN(Number(item.stock)) ? Math.max(0, Math.floor(Number(item.stock))) : 0;
         const newPrice = item.price !== undefined && !isNaN(Number(item.price)) ? Math.max(0, Math.round(Number(item.price))) : 0;
         const newThreshold = item.lowStockThreshold !== undefined && !isNaN(Number(item.lowStockThreshold)) ? Math.max(0, Math.floor(Number(item.lowStockThreshold))) : 10;
@@ -918,8 +1021,6 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           name: rawName,
           category: newCat,
           price: newPrice,
-          stock: newStock,
-          lowStockThreshold: newThreshold,
           description: newDesc,
           image: newImg,
           isAvailable: true,
@@ -931,9 +1032,18 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         try {
           const resInsert = await db.collection('products').insertOne(newDoc);
           insertedId = resInsert.insertedId.toString();
+          await db.collection('product_stocks').insertOne({
+            productId: insertedId,
+            vendorId: activeVendorId,
+            stock: newStock,
+            lowStockThreshold: newThreshold,
+            updatedAt: new Date()
+          });
         } catch (e) {}
         newDoc._id = insertedId;
         newDoc.id = insertedId;
+        newDoc.stock = newStock;
+        newDoc.lowStockThreshold = newThreshold;
         currentProducts.push(newDoc);
 
         const logDoc = {
@@ -1037,7 +1147,9 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       });
     }
 
-    const currentStock = typeof product.stock === 'number' ? product.stock : 0;
+    const prodIdStr = product._id ? product._id.toString() : id;
+    const stockDoc = await db.collection('product_stocks').findOne({ productId: prodIdStr });
+    const currentStock = stockDoc && typeof stockDoc.stock === 'number' ? stockDoc.stock : (typeof product.stock === 'number' ? product.stock : 0);
     let newStock = currentStock;
 
     if (typeof stock === 'number') {
@@ -1046,29 +1158,40 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
       newStock = Math.max(0, currentStock + Math.floor(adjustment));
     }
 
-    const updateFields: any = {
+    const currentThreshold = stockDoc && typeof stockDoc.lowStockThreshold === 'number' ? stockDoc.lowStockThreshold : (typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10);
+    const newThreshold = typeof lowStockThreshold === 'number' ? Math.max(0, Math.floor(lowStockThreshold)) : currentThreshold;
+
+    const stockUpdateFields: any = {
       stock: newStock,
+      lowStockThreshold: newThreshold,
       updatedAt: new Date()
     };
 
-    if (typeof lowStockThreshold === 'number') {
-      updateFields.lowStockThreshold = Math.max(0, Math.floor(lowStockThreshold));
-    }
+    try {
+      await db.collection('product_stocks').updateOne(
+        { productId: prodIdStr },
+        { $set: stockUpdateFields, $setOnInsert: { vendorId: prodVendorId } },
+        { upsert: true }
+      );
+    } catch (e) {}
 
+    const prodUpdateFields: any = {
+      updatedAt: new Date()
+    };
     if (typeof isAvailable === 'boolean') {
-      updateFields.isAvailable = isAvailable;
+      prodUpdateFields.isAvailable = isAvailable;
       if (!isAvailable) {
-        updateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : 'Habis / Tidak tersedia sementara';
+        prodUpdateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : 'Habis / Tidak tersedia sementara';
       } else {
-        updateFields.temporaryUnavailableReason = null;
+        prodUpdateFields.temporaryUnavailableReason = null;
       }
     } else if (temporaryUnavailableReason !== undefined) {
-      updateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : null;
+      prodUpdateFields.temporaryUnavailableReason = temporaryUnavailableReason ? String(temporaryUnavailableReason).trim() : null;
     }
 
     try {
       const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-      await db.collection('products').updateOne(query, { $set: updateFields });
+      await db.collection('products').updateOne(query, { $set: prodUpdateFields });
     } catch (e) {}
 
     const stockChange = newStock - currentStock;
@@ -1112,7 +1235,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
         previousStock: currentStock,
         newStock,
         change: stockChange,
-        lowStockThreshold: updateFields.lowStockThreshold,
+        lowStockThreshold: newThreshold,
         reason
       },
       req
@@ -1129,9 +1252,9 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
         id: product._id ? product._id.toString() : product.id,
         name: product.name,
         stock: newStock,
-        lowStockThreshold: updateFields.lowStockThreshold ?? (product.lowStockThreshold || 10),
-        isAvailable: updateFields.isAvailable !== undefined ? updateFields.isAvailable : (product.isAvailable !== false),
-        temporaryUnavailableReason: updateFields.temporaryUnavailableReason !== undefined ? updateFields.temporaryUnavailableReason : product.temporaryUnavailableReason
+        lowStockThreshold: newThreshold,
+        isAvailable: prodUpdateFields.isAvailable !== undefined ? prodUpdateFields.isAvailable : (product.isAvailable !== false),
+        temporaryUnavailableReason: prodUpdateFields.temporaryUnavailableReason !== undefined ? prodUpdateFields.temporaryUnavailableReason : product.temporaryUnavailableReason
       }
     });
   } catch (err: any) {
@@ -1154,10 +1277,11 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       });
     }
 
+    const { stock, lowStockThreshold, ...productCleanData } = parsed.data;
     const user = (req as any).user;
     const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
     const newProd = {
-      ...parsed.data,
+      ...productCleanData,
       category: parsed.data.category.toLowerCase().trim(),
       vendorId: activeVendorId,
       createdAt: new Date(),
@@ -1174,9 +1298,21 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
     }
 
     let insertedId = new ObjectId().toString();
+    const stockVal = typeof stock === 'number' ? Math.max(0, Math.floor(stock)) : 20;
+    const thresholdVal = typeof lowStockThreshold === 'number' ? Math.max(0, Math.floor(lowStockThreshold)) : 10;
+
     try {
       const result = await db.collection('products').insertOne(newProd);
       insertedId = result.insertedId.toString();
+
+      // Store in new product_stocks table
+      await db.collection('product_stocks').insertOne({
+        productId: insertedId,
+        vendorId: activeVendorId,
+        stock: stockVal,
+        lowStockThreshold: thresholdVal,
+        updatedAt: new Date()
+      });
     } catch (e) {
       return res.status(500).json({ success: false, error: 'Failed to create product in db' });
     }
@@ -1187,14 +1323,14 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       entity: 'PRODUCT',
       entityId: insertedId,
       entityName: newProd.name,
-      summary: `Menambahkan produk baru '${newProd.name}' (${newProd.category}) - Rp ${newProd.price.toLocaleString('id-ID')} (Stok: ${newProd.stock})`,
+      summary: `Menambahkan produk baru '${newProd.name}' (${newProd.category}) - Rp ${newProd.price.toLocaleString('id-ID')} (Stok: ${stockVal})`,
       details: {
         id: insertedId,
         name: newProd.name,
         category: newProd.category,
         price: newProd.price,
-        stock: newProd.stock,
-        lowStockThreshold: newProd.lowStockThreshold,
+        stock: stockVal,
+        lowStockThreshold: thresholdVal,
         vendorId: activeVendorId
       },
       req
@@ -1206,7 +1342,12 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
     return res.status(201).json({
       success: true,
       message: 'Produk berhasil ditambahkan!',
-      product: { id: insertedId, ...newProd }
+      product: {
+        id: insertedId,
+        ...newProd,
+        stock: stockVal,
+        lowStockThreshold: thresholdVal
+      }
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -1228,11 +1369,16 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     if (updateData.price !== undefined) {
       updateData.price = Math.max(0, Number(updateData.price));
     }
+
+    // Handle stock update in isolated product_stocks table
+    const stockToUpdate: any = {};
     if (updateData.stock !== undefined) {
-      updateData.stock = Math.max(0, Math.floor(Number(updateData.stock)));
+      stockToUpdate.stock = Math.max(0, Math.floor(Number(updateData.stock)));
+      delete updateData.stock;
     }
     if (updateData.lowStockThreshold !== undefined) {
-      updateData.lowStockThreshold = Math.max(0, Math.floor(Number(updateData.lowStockThreshold)));
+      stockToUpdate.lowStockThreshold = Math.max(0, Math.floor(Number(updateData.lowStockThreshold)));
+      delete updateData.lowStockThreshold;
     }
 
     const user = (req as any).user;
@@ -1270,6 +1416,18 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       });
     }
 
+    const prodIdStr = existingProd._id ? existingProd._id.toString() : id;
+    if (Object.keys(stockToUpdate).length > 0) {
+      stockToUpdate.updatedAt = new Date();
+      try {
+        await db.collection('product_stocks').updateOne(
+          { productId: prodIdStr },
+          { $set: stockToUpdate, $setOnInsert: { vendorId: prodVendorId, stock: 20, lowStockThreshold: 10 } },
+          { upsert: true }
+        );
+      } catch (e) {}
+    }
+
     // Do not overwrite vendorId or _id
     delete updateData._id;
     delete updateData.id;
@@ -1290,7 +1448,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       summary: `Memperbarui data produk '${prodName}'`,
       details: {
         productId: id,
-        updates: updateData
+        updates: updateData,
+        stockUpdates: stockToUpdate
       },
       req
     });
@@ -1299,6 +1458,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     serverProductCache.invalidateProducts(activeVendorId);
 
     const updatedProduct = await db.collection('products').findOne({ _id: existingProd._id });
+    const stockDoc = await db.collection('product_stocks').findOne({ productId: prodIdStr });
 
     return res.json({
       success: true,
@@ -1309,8 +1469,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
         name: updatedProduct?.name,
         category: updatedProduct?.category,
         price: updatedProduct?.price,
-        stock: updatedProduct?.stock,
-        lowStockThreshold: updatedProduct?.lowStockThreshold,
+        stock: stockDoc ? stockDoc.stock : (typeof stockToUpdate.stock === 'number' ? stockToUpdate.stock : 0),
+        lowStockThreshold: stockDoc ? stockDoc.lowStockThreshold : (typeof stockToUpdate.lowStockThreshold === 'number' ? stockToUpdate.lowStockThreshold : 10),
         description: updatedProduct?.description,
         tag: updatedProduct?.tag,
         image: updatedProduct?.image,
@@ -1364,8 +1524,10 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
       });
     }
 
+    const targetProdIdStr = targetProd._id ? targetProd._id.toString() : targetProd.id;
     try {
       await db.collection('products').deleteOne({ _id: targetProd._id });
+      await db.collection('product_stocks').deleteOne({ productId: targetProdIdStr });
     } catch (e) {}
 
     const prodName = targetProd?.name || id;

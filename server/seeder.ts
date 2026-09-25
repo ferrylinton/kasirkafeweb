@@ -1058,18 +1058,40 @@ export async function seedDatabase() {
       }
       console.log('[Seeder] Categories and Variations synced in MongoDB successfully.');
 
-      // 3. Products - ensure all vendor products are present
+      // 3. Products & Product Stocks (isolated tables)
       for (const p of initialProducts) {
         const vId = p.vendorId || 'vnd_kasirkafe_central';
+        const { stock: initialStockVal, lowStockThreshold: initialThresholdVal, ...prodCleanData } = p as any;
         await db.collection('products').updateOne(
           { name: p.name, vendorId: vId },
-          { $setOnInsert: { ...p, vendorId: vId } },
+          { $setOnInsert: { ...prodCleanData, vendorId: vId } },
           { upsert: true }
         );
+
+        // Fetch inserted / existing product ID
+        const existingProd = await db.collection('products').findOne({ name: p.name, vendorId: vId });
+        if (existingProd) {
+          const prodId = existingProd._id ? existingProd._id.toString() : existingProd.id;
+          await db.collection('product_stocks').updateOne(
+            { productId: prodId },
+            {
+              $setOnInsert: {
+                productId: prodId,
+                vendorId: vId,
+                stock: typeof initialStockVal === 'number' ? initialStockVal : 20,
+                lowStockThreshold: typeof initialThresholdVal === 'number' ? initialThresholdVal : 10,
+                updatedAt: new Date()
+              }
+            },
+            { upsert: true }
+          );
+        }
       }
       await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('products').updateMany({ vendorId: null }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      console.log('[Seeder] Products verified and synced in MongoDB.');
+      // Ensure stock is removed from product table, stored in new product_stocks table
+      await db.collection('products').updateMany({}, { $unset: { stock: '', lowStockThreshold: '' } });
+      console.log('[Seeder] Products verified and stocks synced into separate product_stocks table.');
 
       // 4. Email Templates
       const tmplCount = await db.collection('email_templates').countDocuments();

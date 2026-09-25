@@ -348,13 +348,16 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
           ? { _id: new ObjectId(item.productId) }
           : { _id: item.productId };
 
-        const existingProd = await db.collection('products').findOne(query);
-        const prevStock = existingProd?.stock ?? 0;
+        const prodIdStr = String(item.productId);
+        const stockRecord = await db.collection('product_stocks').findOne({ productId: prodIdStr });
+        const prevStock = stockRecord?.stock ?? 0;
         const nextStock = Math.max(0, prevStock - item.quantity);
 
-        await db.collection('products').updateOne(query, {
-          $inc: { stock: -item.quantity }
-        });
+        await db.collection('product_stocks').updateOne(
+          { productId: prodIdStr },
+          { $inc: { stock: -item.quantity }, $set: { updatedAt: new Date() } },
+          { upsert: true }
+        );
 
         const saleLog = {
           vendorId: activeVendorId,
@@ -386,13 +389,16 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
           ? { _id: new ObjectId(discountItem.productId) }
           : { _id: discountItem.productId };
 
-        const existingProd = await db.collection('products').findOne(query);
-        const prevStock = existingProd?.stock ?? 0;
+        const promoProdIdStr = String(discountItem.productId);
+        const stockRecord = await db.collection('product_stocks').findOne({ productId: promoProdIdStr });
+        const prevStock = stockRecord?.stock ?? 0;
         const nextStock = Math.max(0, prevStock - 1);
 
-        await db.collection('products').updateOne(query, {
-          $inc: { stock: -1 }
-        });
+        await db.collection('product_stocks').updateOne(
+          { productId: promoProdIdStr },
+          { $inc: { stock: -1 }, $set: { updatedAt: new Date() } },
+          { upsert: true }
+        );
 
         const promoLog = {
           vendorId: activeVendorId,
@@ -1168,7 +1174,12 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
             const query: any = ObjectId.isValid(item.productId)
               ? { _id: new ObjectId(item.productId) }
               : { _id: item.productId };
-            await db.collection('products').updateOne(query, { $inc: { stock: item.quantity || 1 } });
+            const prodIdStr = String(item.productId);
+            await db.collection('product_stocks').updateOne(
+              { productId: prodIdStr },
+              { $inc: { stock: item.quantity || 1 }, $set: { updatedAt: now } },
+              { upsert: true }
+            );
             await db.collection('inventory_logs').insertOne({
               vendorId: activeVendorId,
               productId: item.productId,
