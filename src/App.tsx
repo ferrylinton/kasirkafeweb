@@ -83,8 +83,8 @@ const MainLayout: React.FC = () => {
   });
 
   // Kategori Tab Berdasarkan Hak Akses Role
-  // 1. Operasional Kasir: Hanya boleh diakses role CASHIER dan role MANAGER
-  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
+  // 1. Operasional Kasir: Hanya boleh diakses role CASHIER dan role MANAGER (ditambah Kategori & Variasi untuk referensi menu)
+  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori', 'kategori', 'variasi-kategori', 'category-variations'];
 
   // 2. Manajemen Toko: Hanya boleh diakses role MANAGER
   const managerTabs = [
@@ -327,9 +327,11 @@ const MainLayout: React.FC = () => {
           )}
           {isManager && activeView === 'produk-manajemen' && <ProductManagementScreen />}
           {isManager && (activeView === 'stok-produk' || activeView === 'inventaris') && <ProductStockScreen />}
-          {isManager && activeView === 'kategori' && <CategoryManagementScreen />}
-          {(isManager || isAdmin) && (activeView === 'variasi-kategori' || activeView === 'category-variations') && (
-            <CategoryVariationManagementScreen />
+          {(isManager || isAdmin || isCashier) && activeView === 'kategori' && (
+            <CategoryManagementScreen onNavigateTab={handleNavigateTab} />
+          )}
+          {(isManager || isAdmin || isCashier) && (activeView === 'variasi-kategori' || activeView === 'category-variations') && (
+            <CategoryVariationManagementScreen onNavigateTab={handleNavigateTab} />
           )}
           {isManager && activeView === 'users' && <UserManagementScreen />}
           {isManager && activeView === 'diskon' && <DiscountRulesScreen />}

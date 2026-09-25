@@ -38,6 +38,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navHistory');
       case 'inventaris':
         return t('navInventory');
+      case 'kategori':
+        return 'Kategori Menu';
+      case 'variasi-kategori':
+      case 'category-variations':
+        return 'Variasi Kategori';
+      case 'produk-manajemen':
+        return 'Manajemen Produk';
+      case 'stok-produk':
+        return 'Stok Produk';
       case 'users':
         return t('navUsers');
       case 'diskon':

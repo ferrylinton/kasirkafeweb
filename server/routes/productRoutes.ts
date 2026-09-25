@@ -68,6 +68,30 @@ function requireInventoryWriteAccess(req: Request, res: Response, next: () => vo
   next();
 }
 
+/**
+ * Access check for Category Variations: Allowed for MANAGER and ADMIN
+ */
+function requireCategoryVariationWriteAccess(req: Request, res: Response, next: () => void) {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Autentikasi diperlukan.'
+    });
+  }
+
+  if (user.role !== 'MANAGER' && user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Akses Ditolak: Pengelolaan variasi kategori hanya dapat dilakukan oleh role MANAGER atau ADMIN.'
+    });
+  }
+
+  next();
+}
+
 const productSchema = z.object({
   name: z.string().min(2, 'Nama produk minimal 2 karakter'),
   category: z.string().min(1, 'Kategori wajib dipilih'),
@@ -152,7 +176,18 @@ const categoryVariationUpdateSchema = z.object({
 
 productRouter.get('/category-variations', async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    const requestedVendor = (req.query.vendorId as string)?.trim();
+    const isAllVendors = req.query.allVendors === 'true' || requestedVendor === 'all';
+
+    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    // If user is ADMIN and no specific non-admin vendor is given, or if activeVendorId is Admin vendor
+    if (requestedVendor && requestedVendor !== 'all') {
+      activeVendorId = resolveVendorId(requestedVendor);
+    } else if (activeVendorId === '6ab58389b2a71518d2beb886' || activeVendorId === 'vnd_admin') {
+      activeVendorId = '6ab58389b2a71518d2beb887';
+    }
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -162,11 +197,11 @@ productRouter.get('/category-variations', async (req: Request, res: Response) =>
       });
     }
 
-    const varQuery = buildVendorQuery(activeVendorId);
+    const varQuery = isAllVendors ? {} : buildVendorQuery(activeVendorId);
     const variationsRaw = await db.collection('category_variations').find(varQuery).sort({ createdAt: -1 }).toArray();
 
     // Query categories for this vendor to find where each variation is referenced
-    const catQuery = buildVendorQuery(activeVendorId);
+    const catQuery = isAllVendors ? {} : buildVendorQuery(activeVendorId);
     const categories = await db.collection('categories').find(catQuery).toArray();
 
     const variations = variationsRaw.map(v => {
@@ -249,10 +284,10 @@ productRouter.get('/category-variations/:id', async (req: Request, res: Response
 
 /**
  * POST /api/products/category-variations
- * Create Category Variation in new table (Manager only)
+ * Create Category Variation in new table (Manager & Admin)
  * on table use '_id', on node js code use 'id'
  */
-productRouter.post('/category-variations', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+productRouter.post('/category-variations', authMiddleware, requireCategoryVariationWriteAccess, async (req: Request, res: Response) => {
   try {
     const parsed = categoryVariationInputSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -263,7 +298,17 @@ productRouter.post('/category-variations', authMiddleware, requireInventoryWrite
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    if (user?.role === 'ADMIN') {
+      const targetVendor = (req.body?.vendorId || (req.query?.vendorId as string))?.trim();
+      if (targetVendor && targetVendor !== 'all') {
+        activeVendorId = resolveVendorId(targetVendor);
+      } else if (activeVendorId === '6ab58389b2a71518d2beb886' || activeVendorId === 'vnd_admin') {
+        activeVendorId = '6ab58389b2a71518d2beb887';
+      }
+    }
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
@@ -300,7 +345,7 @@ productRouter.post('/category-variations', authMiddleware, requireInventoryWrite
 
       if (catObjectIds.length > 0) {
         await db.collection('categories').updateMany(
-          { _id: { $in: catObjectIds }, vendorId: activeVendorId },
+          { _id: { $in: catObjectIds }, ...(user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId }) },
           {
             $addToSet: {
               categoryVariationIds: newId,
@@ -345,9 +390,9 @@ productRouter.post('/category-variations', authMiddleware, requireInventoryWrite
 
 /**
  * PUT /api/products/category-variations/:id
- * Update Category Variation (Manager only)
+ * Update Category Variation (Manager & Admin)
  */
-productRouter.put('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVariationWriteAccess, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id || '');
     const parsed = categoryVariationUpdateSchema.safeParse(req.body);
@@ -359,13 +404,23 @@ productRouter.put('/category-variations/:id', authMiddleware, requireInventoryWr
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    if (user?.role === 'ADMIN') {
+      const targetVendor = (req.body?.vendorId || (req.query?.vendorId as string))?.trim();
+      if (targetVendor && targetVendor !== 'all') {
+        activeVendorId = resolveVendorId(targetVendor);
+      } else if (activeVendorId === '6ab58389b2a71518d2beb886' || activeVendorId === 'vnd_admin') {
+        activeVendorId = '6ab58389b2a71518d2beb887';
+      }
+    }
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    let query: any = { vendorId: activeVendorId };
+    let query: any = user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId };
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -461,18 +516,28 @@ productRouter.put('/category-variations/:id', authMiddleware, requireInventoryWr
 
 /**
  * DELETE /api/products/category-variations/:id
- * Delete Category Variation & remove its reference from categories (Manager only)
+ * Delete Category Variation & remove its reference from categories (Manager & Admin)
  */
-productRouter.delete('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+productRouter.delete('/category-variations/:id', authMiddleware, requireCategoryVariationWriteAccess, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id || '');
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const user = (req as any).user;
+    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    if (user?.role === 'ADMIN') {
+      const targetVendor = (req.query?.vendorId as string)?.trim();
+      if (targetVendor && targetVendor !== 'all') {
+        activeVendorId = resolveVendorId(targetVendor);
+      } else if (activeVendorId === '6ab58389b2a71518d2beb886' || activeVendorId === 'vnd_admin') {
+        activeVendorId = '6ab58389b2a71518d2beb887';
+      }
+    }
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    let query: any = { vendorId: activeVendorId };
+    let query: any = user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId };
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {

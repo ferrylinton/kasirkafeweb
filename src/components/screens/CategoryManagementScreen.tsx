@@ -25,12 +25,19 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { clearClientCatalogCache } from '../../utils/productCache';
 
-export const CategoryManagementScreen: React.FC = () => {
+interface CategoryManagementScreenProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> = ({ onNavigateTab }) => {
   const { user, token } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
   const isManager = user?.role === 'MANAGER';
+  const isAdmin = user?.role === 'ADMIN';
+  const isCashier = user?.role === 'CASHIER';
+  const canManage = isManager || isAdmin;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [masterVariations, setMasterVariations] = useState<CategoryVariation[]>([]);
@@ -393,7 +400,7 @@ export const CategoryManagementScreen: React.FC = () => {
     }
   };
 
-  if (!isManager) {
+  if (!canManage && !isCashier) {
     return (
       <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex items-center justify-center p-6">
         <div className="bg-white dark:bg-[#251e1c] p-8 rounded-3xl border border-stone-200 dark:border-stone-800 text-center max-w-md shadow-lg">
@@ -404,7 +411,7 @@ export const CategoryManagementScreen: React.FC = () => {
             Akses Ditolak
           </h2>
           <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
-            Pengelolaan kategori dan variasi produk khusus dipegang oleh role <strong>MANAGER</strong>.
+            Pengelolaan kategori dan variasi produk khusus dipegang oleh role <strong>MANAGER</strong> atau <strong>ADMIN</strong>.
           </p>
         </div>
       </div>
@@ -413,6 +420,29 @@ export const CategoryManagementScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
+      {/* Sub-Navigation Switcher: Kategori Menu vs Variasi Kategori */}
+      <div className="flex items-center gap-2 border-b border-stone-200/80 dark:border-stone-800 pb-2">
+        <button
+          type="button"
+          className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white shadow-xs flex items-center gap-2 cursor-pointer"
+        >
+          <Layers className="w-4 h-4" />
+          <span>Kategori Menu</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onNavigateTab ? onNavigateTab('variasi-kategori') : null}
+          className="px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-750 text-stone-600 dark:text-stone-300 transition-colors flex items-center gap-2 cursor-pointer"
+        >
+          <SlidersHorizontal className="w-4 h-4 text-amber-500" />
+          <span>Variasi Kategori (Master Table)</span>
+          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+            Master
+          </span>
+        </button>
+      </div>
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
         <div>
@@ -423,8 +453,14 @@ export const CategoryManagementScreen: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
               Kategori & Variasi Menu
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-              Role: Manager
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+              isAdmin
+                ? 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300'
+                : isManager
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300'
+            }`}>
+              {isAdmin ? 'Role: Admin Sistem' : isManager ? 'Role: Manager' : 'Role: Kasir (Lihat)'}
             </span>
           </div>
           <p className="text-xs text-stone-500 dark:text-stone-400 max-w-2xl">
@@ -442,14 +478,16 @@ export const CategoryManagementScreen: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-accent' : ''}`} />
           </button>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-98 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Kategori Baru</span>
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-accent text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-98 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Kategori Baru</span>
+            </button>
+          )}
         </div>
       </div>
 

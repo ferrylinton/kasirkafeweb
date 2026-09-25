@@ -51,7 +51,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Radit Admin Sistem',
       role: 'ADMIN',
-      vendorId: 'vnd_admin',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb886'),
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -61,7 +61,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Ferry Manager',
       role: 'MANAGER',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb887'),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -71,7 +71,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Sarah Barista',
       role: 'CASHIER',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb887'),
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -81,7 +81,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Budi Manager (Kulo)',
       role: 'MANAGER',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb888'),
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -91,7 +91,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Dewi Kasir (Kulo)',
       role: 'CASHIER',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb888'),
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -101,7 +101,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Hendra Manager (Teh Poci)',
       role: 'MANAGER',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb889'),
       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -111,7 +111,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Rina Kasir (Teh Poci)',
       role: 'CASHIER',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: new ObjectId('6ab58389b2a71518d2beb889'),
       avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -1358,28 +1358,81 @@ export async function seedDatabase() {
       await db.collection('vendors').updateMany({}, { $unset: { code: '', id: '' } });
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
 
-      // 1. Users - upsert each by email so all vendors have their staff accounts
+      // 1. Users - upsert each by email so all vendors have their staff accounts with Vendor ObjectId
       for (const u of initialUsers) {
         await db.collection('users').updateOne(
           { email: u.email },
-          { $setOnInsert: u },
+          {
+            $set: {
+              name: u.name,
+              role: u.role,
+              vendorId: u.vendorId, // ObjectId
+              avatar: u.avatar,
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              email: u.email,
+              password: u.password,
+              createdAt: u.createdAt
+            }
+          },
           { upsert: true }
         );
       }
-      // Explicitly sync Admin user to role ADMIN and vnd_admin vendor
+      // Explicitly sync Admin user to role ADMIN and Admin Vendor ObjectId
       await db.collection('users').updateOne(
         { email: 'admin@kasirkafe.com' },
         {
           $set: {
             role: 'ADMIN',
-            vendorId: 'vnd_admin',
+            vendorId: new ObjectId('6ab58389b2a71518d2beb886'),
             name: 'Radit Admin Sistem'
           }
         }
       );
 
-      // Ensure vendorId is set on legacy users
-      console.log('[Seeder] Users verified and synced in MongoDB.');
+      // Migrate any legacy users in MongoDB that still have string vendorId to Vendor ObjectId
+      const legacyVendorMapping: Record<string, ObjectId> = {
+        'vnd_admin': new ObjectId('6ab58389b2a71518d2beb886'),
+        '6ab58389b2a71518d2beb886': new ObjectId('6ab58389b2a71518d2beb886'),
+        'vnd_kasirkafe_central': new ObjectId('6ab58389b2a71518d2beb887'),
+        '6ab58389b2a71518d2beb887': new ObjectId('6ab58389b2a71518d2beb887'),
+        'vnd_kopi_kulo_kemang': new ObjectId('6ab58389b2a71518d2beb888'),
+        '6ab58389b2a71518d2beb888': new ObjectId('6ab58389b2a71518d2beb888'),
+        'vnd_tehpoci_nusantara': new ObjectId('6ab58389b2a71518d2beb889'),
+        '6ab58389b2a71518d2beb889': new ObjectId('6ab58389b2a71518d2beb889')
+      };
+
+      for (const [legacyId, targetOid] of Object.entries(legacyVendorMapping)) {
+        await db.collection('users').updateMany(
+          { vendorId: legacyId },
+          { $set: { vendorId: targetOid } }
+        );
+      }
+
+      // Convert any remaining string ObjectId vendorId to real ObjectId
+      const allUsers = await db.collection('users').find({}).toArray();
+      for (const u of allUsers) {
+        if (typeof u.vendorId === 'string') {
+          if (ObjectId.isValid(u.vendorId)) {
+            await db.collection('users').updateOne(
+              { _id: u._id },
+              { $set: { vendorId: new ObjectId(u.vendorId) } }
+            );
+          } else {
+            await db.collection('users').updateOne(
+              { _id: u._id },
+              { $set: { vendorId: new ObjectId('6ab58389b2a71518d2beb887') } }
+            );
+          }
+        } else if (!u.vendorId) {
+          await db.collection('users').updateOne(
+            { _id: u._id },
+            { $set: { vendorId: new ObjectId('6ab58389b2a71518d2beb887') } }
+          );
+        }
+      }
+      console.log('[Seeder] Users verified and synced in MongoDB with Vendor ObjectId.');
 
       // 2a. Category Variations (on table use '_id', on node js code use 'id')
       for (const v of initialCategoryVariations) {

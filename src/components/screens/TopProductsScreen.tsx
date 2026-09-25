@@ -11,7 +11,6 @@ import {
   FileSpreadsheet,
   FileCode,
   Printer,
-  TrendingUp,
   Clock,
   ShieldCheck,
   Building2,
@@ -42,7 +41,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { VendorOption, KNOWN_VENDORS, getVendorName } from '../common/AdminAllVendorsHeader';
 
-export type TopProductPeriod = 'day' | 'week' | 'month' | 'year';
+export type TopProductPeriod = 'day' | 'week' | 'month';
 
 interface TopProductItem {
   rank: number;
@@ -475,20 +474,6 @@ export const TopProductsScreen: React.FC<TopProductsScreenProps> = ({ managerMod
           >
             <CalendarRange className="w-3.5 h-3.5" />
             <span>Per Bulan</span>
-          </button>
-
-          <button
-            type="button"
-            id="period-year-tab"
-            onClick={() => setPeriod('year')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              period === 'year'
-                ? activeTabClass
-                : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/50 dark:hover:bg-stone-800'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Per Tahun</span>
           </button>
         </div>
 

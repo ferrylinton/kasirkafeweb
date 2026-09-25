@@ -26,16 +26,23 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { clearClientCatalogCache } from '../../utils/productCache';
 
-export const CategoryVariationManagementScreen: React.FC = () => {
+interface CategoryVariationManagementScreenProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+export const CategoryVariationManagementScreen: React.FC<CategoryVariationManagementScreenProps> = ({ onNavigateTab }) => {
   const { user, token } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
 
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
+  const isCashier = user?.role === 'CASHIER';
+  const canManage = isManager || isAdmin;
 
   const [variations, setVariations] = useState<CategoryVariation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -61,11 +68,12 @@ export const CategoryVariationManagementScreen: React.FC = () => {
     if (showLoadingState) setLoading(true);
     setIsRefreshing(true);
     try {
+      const vendorParam = isAdmin ? (selectedVendor === 'all' ? '?allVendors=true' : `?vendorId=${selectedVendor}`) : '';
       const [varRes, catRes] = await Promise.all([
-        fetch('/api/products/category-variations', {
+        fetch(`/api/products/category-variations${vendorParam}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
-        fetch('/api/products/categories?bypassCache=true', {
+        fetch(`/api/products/categories?bypassCache=true${vendorParam ? '&' + vendorParam.slice(1) : ''}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         })
       ]);
@@ -93,7 +101,7 @@ export const CategoryVariationManagementScreen: React.FC = () => {
 
   useEffect(() => {
     fetchVariationsAndCategories();
-  }, [token]);
+  }, [token, selectedVendor]);
 
   // Open Create Modal
   const openCreateModal = () => {
@@ -390,6 +398,39 @@ export const CategoryVariationManagementScreen: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Sub-Navigation Switcher: Kategori Menu vs Variasi Kategori */}
+      <div className="flex items-center gap-2 border-b border-stone-200/80 dark:border-stone-800 pb-2">
+        <button
+          type="button"
+          onClick={() => onNavigateTab ? onNavigateTab('kategori') : null}
+          className="px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-750 text-stone-600 dark:text-stone-300 transition-colors flex items-center gap-2 cursor-pointer"
+        >
+          <Layers className="w-4 h-4 text-orange-500" />
+          <span>Kategori Menu</span>
+        </button>
+
+        <button
+          type="button"
+          className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white shadow-xs flex items-center gap-2 cursor-pointer"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Variasi Kategori (Master Table)</span>
+          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+            Master
+          </span>
+        </button>
+      </div>
+
+      {/* Cashier Notice Banner */}
+      {isCashier && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
+          <HelpCircle className="w-4 h-4 shrink-0 text-amber-600" />
+          <p>
+            <strong>Mode Kasir (Hanya Lihat):</strong> Anda dapat melihat master variasi dan harga ekstra modifier untuk referensi operasional. Pembuatan atau pengubahan variasi dilakukan oleh role <strong>Manager</strong> atau <strong>Admin</strong>.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200/80 dark:border-stone-800 pb-5">
         <div>
@@ -398,9 +439,20 @@ export const CategoryVariationManagementScreen: React.FC = () => {
               <SlidersHorizontal className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-                Manajemen Variasi Kategori
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading tracking-tight">
+                  Manajemen Variasi Kategori
+                </h1>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  isAdmin
+                    ? 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300'
+                    : isManager
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                      : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300'
+                }`}>
+                  {isAdmin ? 'Role: Admin Sistem' : isManager ? 'Role: Manager' : 'Role: Kasir (Lihat)'}
+                </span>
+              </div>
               <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-0.5">
                 Tabel master variasi menu (Ukuran, Level Es, Gula, Topping). Kategori menu mereferensikan ID variasi ini.
               </p>
@@ -408,7 +460,23 @@ export const CategoryVariationManagementScreen: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs">
+              <span className="font-semibold text-stone-500 text-[11px]">Vendor:</span>
+              <select
+                value={selectedVendor}
+                onChange={e => setSelectedVendor(e.target.value)}
+                className="bg-transparent font-bold text-stone-800 dark:text-stone-200 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Semua Vendor</option>
+                <option value="6ab58389b2a71518d2beb887">KasirKafe Pusat</option>
+                <option value="6ab58389b2a71518d2beb888">Kopi Kulo (Kemang)</option>
+                <option value="6ab58389b2a71518d2beb889">Teh Poci (Bekasi)</option>
+              </select>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => fetchVariationsAndCategories(false)}
@@ -420,7 +488,7 @@ export const CategoryVariationManagementScreen: React.FC = () => {
             <span>Segarkan</span>
           </button>
 
-          {isManager && (
+          {canManage && (
             <button
               type="button"
               id="add-variation-btn"

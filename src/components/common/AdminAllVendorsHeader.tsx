@@ -9,9 +9,13 @@ export interface VendorOption {
 }
 
 export const KNOWN_VENDORS: VendorOption[] = [
+  { id: '6ab58389b2a71518d2beb887', name: 'KasirKafe Coffee (Pusat)', code: 'SIP-CENTRAL' },
   { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee (Pusat)', code: 'SIP-CENTRAL' },
+  { id: '6ab58389b2a71518d2beb888', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO-KEMANG' },
   { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO-KEMANG' },
+  { id: '6ab58389b2a71518d2beb889', name: 'Teh Poci Nusantara (Bekasi)', code: 'POCI-BEKASI' },
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci Nusantara (Bekasi)', code: 'POCI-BEKASI' },
+  { id: '6ab58389b2a71518d2beb886', name: 'Admin Sistem Pusat', code: 'ADMIN-SYS' },
   { id: 'vnd_admin', name: 'Admin Sistem Pusat', code: 'ADMIN-SYS' }
 ];
 
@@ -20,25 +24,25 @@ export function getVendorName(vendorId?: string, vendorsList?: VendorOption[]): 
   const list = vendorsList && vendorsList.length > 0 ? vendorsList : KNOWN_VENDORS;
   const found = list.find(v => v.id === vendorId);
   if (found) return found.name;
-  if (vendorId === 'vnd_kasirkafe_central') return 'KasirKafe Pusat';
-  if (vendorId === 'vnd_kopi_kulo_kemang') return 'Kopi Kulo Kemang';
-  if (vendorId === 'vnd_tehpoci_nusantara') return 'Teh Poci Bekasi';
-  if (vendorId === 'vnd_admin') return 'Admin Pusat';
+  if (vendorId === 'vnd_kasirkafe_central' || vendorId === '6ab58389b2a71518d2beb887') return 'KasirKafe Pusat';
+  if (vendorId === 'vnd_kopi_kulo_kemang' || vendorId === '6ab58389b2a71518d2beb888') return 'Kopi Kulo Kemang';
+  if (vendorId === 'vnd_tehpoci_nusantara' || vendorId === '6ab58389b2a71518d2beb889') return 'Teh Poci Bekasi';
+  if (vendorId === 'vnd_admin' || vendorId === '6ab58389b2a71518d2beb886') return 'Admin Pusat';
   return vendorId;
 }
 
 export function VendorBadge({ vendorId, vendorsList }: { vendorId?: string; vendorsList?: VendorOption[] }) {
-  const vId = vendorId || 'vnd_kasirkafe_central';
+  const vId = vendorId || '6ab58389b2a71518d2beb887';
   const name = getVendorName(vId, vendorsList);
 
   let colorClasses = 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 border-stone-200 dark:border-stone-700';
-  if (vId === 'vnd_kasirkafe_central') {
+  if (vId === 'vnd_kasirkafe_central' || vId === '6ab58389b2a71518d2beb887') {
     colorClasses = 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800/60';
-  } else if (vId === 'vnd_kopi_kulo_kemang') {
+  } else if (vId === 'vnd_kopi_kulo_kemang' || vId === '6ab58389b2a71518d2beb888') {
     colorClasses = 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60';
-  } else if (vId === 'vnd_tehpoci_nusantara') {
+  } else if (vId === 'vnd_tehpoci_nusantara' || vId === '6ab58389b2a71518d2beb889') {
     colorClasses = 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60';
-  } else if (vId === 'vnd_admin') {
+  } else if (vId === 'vnd_admin' || vId === '6ab58389b2a71518d2beb886') {
     colorClasses = 'bg-purple-50 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800/60';
   }
 

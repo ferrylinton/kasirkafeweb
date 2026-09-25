@@ -5,6 +5,36 @@ import { hashPassword, authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
+import { resolveVendorId, CENTRAL_VENDOR_ID } from '../vendorMiddleware';
+
+function buildUserVendorQuery(vendorId?: string) {
+  const vId = vendorId || CENTRAL_VENDOR_ID;
+  const isCentral = vId === 'vnd_kasirkafe_central' || vId === CENTRAL_VENDOR_ID;
+  const centralOid = new ObjectId(CENTRAL_VENDOR_ID);
+
+  if (isCentral) {
+    return {
+      $or: [
+        { vendorId: centralOid },
+        { vendorId: CENTRAL_VENDOR_ID },
+        { vendorId: 'vnd_kasirkafe_central' },
+        { vendorId: { $exists: false } },
+        { vendorId: null }
+      ]
+    };
+  }
+
+  const resolved = resolveVendorId(vId);
+  const resolvedOid = ObjectId.isValid(resolved) ? new ObjectId(resolved) : null;
+
+  return {
+    $or: [
+      ...(resolvedOid ? [{ vendorId: resolvedOid }] : []),
+      { vendorId: resolved },
+      { vendorId: vId }
+    ]
+  };
+}
 
 export const userRouter = Router();
 
@@ -35,7 +65,7 @@ userRouter.get('/', async (req: Request, res: Response) => {
     const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || CENTRAL_VENDOR_ID;
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -49,13 +79,9 @@ userRouter.get('/', async (req: Request, res: Response) => {
     if (isAllVendors) {
       query = {};
     } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-      query = requestedVendor === 'vnd_kasirkafe_central'
-        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-        : { vendorId: requestedVendor };
+      query = buildUserVendorQuery(requestedVendor);
     } else {
-      query = activeVendorId === 'vnd_kasirkafe_central'
-        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-        : { vendorId: activeVendorId };
+      query = buildUserVendorQuery(activeVendorId);
     }
 
     const cursor = db.collection('users').find(query, { projection: { password: 0 } });
@@ -67,7 +93,7 @@ userRouter.get('/', async (req: Request, res: Response) => {
       isAllVendors,
       users: usersList.map(u => ({
         id: u._id ? u._id.toString() : u.id,
-        vendorId: u.vendorId || 'vnd_kasirkafe_central',
+        vendorId: u.vendorId ? u.vendorId.toString() : CENTRAL_VENDOR_ID,
         email: u.email,
         name: u.name,
         role: u.role,
@@ -95,7 +121,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const { name, email, password, role, avatar } = parsed.data;
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || CENTRAL_VENDOR_ID;
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -115,13 +141,18 @@ userRouter.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    const resolvedVendor = resolveVendorId(activeVendorId);
+    const vendorObjectId = ObjectId.isValid(resolvedVendor)
+      ? new ObjectId(resolvedVendor)
+      : new ObjectId(CENTRAL_VENDOR_ID);
+
     const hashedPassword = await hashPassword(password);
     const newUser: any = {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       role,
-      vendorId: activeVendorId,
+      vendorId: vendorObjectId, // Stored as Vendor ObjectId in MongoDB
       avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -136,10 +167,10 @@ userRouter.post('/', async (req: Request, res: Response) => {
       entity: 'USER',
       entityId: insertedId,
       entityName: `${name} (${role})`,
-      summary: `Mendaftarkan pengguna baru '${name}' dengan peran ${role} (${email}) untuk vendor ${activeVendorId}`,
+      summary: `Mendaftarkan pengguna baru '${name}' dengan peran ${role} (${email}) untuk vendor ${vendorObjectId.toString()}`,
       details: {
         userId: insertedId,
-        vendorId: activeVendorId,
+        vendorId: vendorObjectId.toString(),
         name,
         email,
         role
@@ -152,7 +183,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
       message: `User ${name} (${role}) berhasil didaftarkan!`,
       user: {
         id: insertedId,
-        vendorId: activeVendorId,
+        vendorId: vendorObjectId.toString(),
         email: newUser.email,
         name: newUser.name,
         role: newUser.role
@@ -170,7 +201,7 @@ userRouter.post('/', async (req: Request, res: Response) => {
 userRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || CENTRAL_VENDOR_ID;
 
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -197,8 +228,11 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
     }
 
-    const userVendor = existingUser.vendorId || 'vnd_kasirkafe_central';
-    if (userVendor !== activeVendorId) {
+    const userVendorStr = existingUser.vendorId ? existingUser.vendorId.toString() : CENTRAL_VENDOR_ID;
+    const resolvedActiveVendor = resolveVendorId(activeVendorId);
+    const resolvedUserVendor = resolveVendorId(userVendorStr);
+
+    if (resolvedUserVendor !== resolvedActiveVendor && req.user?.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak memiliki izin untuk mengedit pengguna dari vendor lain.'
@@ -227,7 +261,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       summary: `Memperbarui data akun pengguna '${userName}'${parsed.data.newPassword ? ' (termasuk reset password)' : ''}`,
       details: {
         userId: id,
-        vendorId: userVendor,
+        vendorId: userVendorStr,
         updatedFields: Object.keys(updateFields).filter(k => k !== 'password'),
         passwordChanged: !!parsed.data.newPassword
       },
@@ -249,7 +283,7 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
 userRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as unknown as IParam;
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || CENTRAL_VENDOR_ID;
 
     // Prevent deleting self
     if (req.user?.userId === id) {
@@ -276,8 +310,11 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
     }
 
-    const userVendor = targetUser.vendorId || 'vnd_kasirkafe_central';
-    if (userVendor !== activeVendorId) {
+    const userVendorStr = targetUser.vendorId ? targetUser.vendorId.toString() : CENTRAL_VENDOR_ID;
+    const resolvedActiveVendor = resolveVendorId(activeVendorId);
+    const resolvedUserVendor = resolveVendorId(userVendorStr);
+
+    if (resolvedUserVendor !== resolvedActiveVendor && req.user?.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         error: 'Akses Ditolak: Anda tidak dapat menghapus pengguna milik vendor lain.'
@@ -297,7 +334,7 @@ userRouter.delete('/:id', async (req: Request, res: Response) => {
       summary: `Menghapus pengguna '${userName}' dari sistem POS`,
       details: {
         userId: id,
-        vendorId: userVendor,
+        vendorId: userVendorStr,
         deletedUser: targetUser ? {
           name: targetUser.name,
           email: targetUser.email,
