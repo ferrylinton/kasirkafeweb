@@ -10,9 +10,14 @@ export async function seedDatabase() {
   const managerPassword = await hashPassword('Password123!');
   const cashierPassword = await hashPassword('Password123!');
 
+  const ADMIN_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb886');
+  const CENTRAL_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb887');
+  const KULO_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb888');
+  const POCI_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb889');
+
   const initialVendors = [
     {
-      _id: new ObjectId('6ab58389b2a71518d2beb886'),
+      _id: ADMIN_VENDOR_OID,
       name: 'Admin',
       status: 'ACTIVE',
       currency: 'IDR',
@@ -20,7 +25,7 @@ export async function seedDatabase() {
       updatedAt: new Date()
     },
     {
-      _id: new ObjectId('6ab58389b2a71518d2beb887'),
+      _id: CENTRAL_VENDOR_OID,
       name: 'KasirKafe Coffee & Boba (Pusat)',
       status: 'ACTIVE',
       currency: 'IDR',
@@ -28,7 +33,7 @@ export async function seedDatabase() {
       updatedAt: new Date()
     },
     {
-      _id: new ObjectId('6ab58389b2a71518d2beb888'),
+      _id: KULO_VENDOR_OID,
       name: 'Kopi Kulo & Toast (Kemang)',
       status: 'ACTIVE',
       currency: 'IDR',
@@ -36,7 +41,7 @@ export async function seedDatabase() {
       updatedAt: new Date()
     },
     {
-      _id: new ObjectId('6ab58389b2a71518d2beb889'),
+      _id: POCI_VENDOR_OID,
       name: 'Teh Poci & Dimsum Nusantara (Bekasi)',
       status: 'ACTIVE',
       currency: 'IDR',
@@ -51,7 +56,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Radit Admin Sistem',
       role: 'ADMIN',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb886'),
+      vendorId: ADMIN_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -61,7 +66,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Ferry Manager',
       role: 'MANAGER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb887'),
+      vendorId: CENTRAL_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -71,7 +76,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Sarah Barista',
       role: 'CASHIER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb887'),
+      vendorId: CENTRAL_VENDOR_OID,
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAAjgCQE0xuFbycGsf6WrsOWezNIYgI_Mgqgra6If5l-kM6PFqvc7XWy5YiF5Nz7EygG4k0H2Mtwi3YvU3QNeoo32v6smnPch82-FkkCAsKzcGQi4I6AHfwmT_EX6gLASiAhpg3Id6wKlIGsRatzjG67KlS-ijqvdQ7j0udvFAvMNaF2qsoHvAhSZgovySmbs3wEEzo0f3ygY8yk_4gbXMWCCpyHK8UOowRpDf-Wf_uDLVXJMCXtWJ8Hw',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -81,7 +86,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Budi Manager (Kulo)',
       role: 'MANAGER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb888'),
+      vendorId: KULO_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -91,7 +96,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Dewi Kasir (Kulo)',
       role: 'CASHIER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb888'),
+      vendorId: KULO_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -101,7 +106,7 @@ export async function seedDatabase() {
       password: managerPassword,
       name: 'Hendra Manager (Teh Poci)',
       role: 'MANAGER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb889'),
+      vendorId: POCI_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -111,7 +116,7 @@ export async function seedDatabase() {
       password: cashierPassword,
       name: 'Rina Kasir (Teh Poci)',
       role: 'CASHIER',
-      vendorId: new ObjectId('6ab58389b2a71518d2beb889'),
+      vendorId: POCI_VENDOR_OID,
       avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -123,7 +128,7 @@ export async function seedDatabase() {
     name: 'Ukuran Cup',
     type: 'SINGLE_SELECT',
     required: true,
-    vendorId: 'vnd_kasirkafe_central',
+    vendorId: CENTRAL_VENDOR_OID,
     options: [
       { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
       { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
@@ -136,7 +141,7 @@ export async function seedDatabase() {
     name: 'Level Es',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kasirkafe_central',
+    vendorId: CENTRAL_VENDOR_OID,
     options: [
       { id: 'opt_normal_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
       { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
@@ -149,7 +154,7 @@ export async function seedDatabase() {
     name: 'Tingkat Gula',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kasirkafe_central',
+    vendorId: CENTRAL_VENDOR_OID,
     options: [
       { id: 'opt_normal_sugar', name: '100% Normal', extraPrice: 0, isDefault: true },
       { id: 'opt_less_sugar', name: '50% Less Sugar', extraPrice: 0 },
@@ -162,7 +167,7 @@ export async function seedDatabase() {
     name: 'Espresso Shot',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kasirkafe_central',
+    vendorId: CENTRAL_VENDOR_OID,
     options: [
       { id: 'opt_normal_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
       { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
@@ -175,7 +180,7 @@ export async function seedDatabase() {
     name: 'Ukuran Cup',
     type: 'SINGLE_SELECT',
     required: true,
-    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorId: KULO_VENDOR_OID,
     options: [
       { id: 'opt_kulo_reg', name: 'Regular Cup', extraPrice: 0, isDefault: true },
       { id: 'opt_kulo_large', name: 'Large Cup', extraPrice: 5000 }
@@ -187,7 +192,7 @@ export async function seedDatabase() {
     name: 'Level Es',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorId: KULO_VENDOR_OID,
     options: [
       { id: 'opt_kulo_norm_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
       { id: 'opt_kulo_less_ice', name: 'Less Ice', extraPrice: 0 }
@@ -199,7 +204,7 @@ export async function seedDatabase() {
     name: 'Tingkat Gula',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorId: KULO_VENDOR_OID,
     options: [
       { id: 'opt_kulo_norm_sug', name: 'Normal Aren', extraPrice: 0, isDefault: true },
       { id: 'opt_kulo_less_sug', name: 'Less Aren', extraPrice: 0 }
@@ -211,7 +216,7 @@ export async function seedDatabase() {
     name: 'Espresso Shot',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_kopi_kulo_kemang',
+    vendorId: KULO_VENDOR_OID,
     options: [
       { id: 'opt_kulo_norm_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
       { id: 'opt_kulo_extra_shot', name: '+1 Extra Shot', extraPrice: 5000 }
@@ -223,7 +228,7 @@ export async function seedDatabase() {
     name: 'Ukuran Gelas',
     type: 'SINGLE_SELECT',
     required: true,
-    vendorId: 'vnd_tehpoci_nusantara',
+    vendorId: POCI_VENDOR_OID,
     options: [
       { id: 'opt_poci_cup_m', name: 'Cup Sedang (16oz)', extraPrice: 0, isDefault: true },
       { id: 'opt_poci_cup_l', name: 'Cup Jumbo (22oz)', extraPrice: 3000 }
@@ -235,7 +240,7 @@ export async function seedDatabase() {
     name: 'Penyajian Es',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_tehpoci_nusantara',
+    vendorId: POCI_VENDOR_OID,
     options: [
       { id: 'opt_poci_ice_norm', name: 'Dingin Es Segar', extraPrice: 0, isDefault: true },
       { id: 'opt_poci_ice_less', name: 'Sedikit Es', extraPrice: 0 },
@@ -248,7 +253,7 @@ export async function seedDatabase() {
     name: 'Tingkat Manis',
     type: 'SINGLE_SELECT',
     required: false,
-    vendorId: 'vnd_tehpoci_nusantara',
+    vendorId: POCI_VENDOR_OID,
     options: [
       { id: 'opt_poci_sug_norm', name: 'Manis Pas', extraPrice: 0, isDefault: true },
       { id: 'opt_poci_sug_less', name: 'Kurang Manis', extraPrice: 0 },
@@ -275,7 +280,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb881'),
       name: 'Kopi',
       description: 'Espresso, Latte, Cold Brew pilihan biji Arabika',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       categoryVariationIds: [
         standardDrinkSizeVariation.id,
         standardIceVariation.id,
@@ -294,7 +299,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb882'),
       name: 'Teh',
       description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       categoryVariationIds: [
         standardDrinkSizeVariation.id,
         standardIceVariation.id,
@@ -311,7 +316,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb883'),
       name: 'Jus',
       description: '100% Buah segar cold-pressed alami tanpa pemanis buatan',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       categoryVariationIds: [
         standardDrinkSizeVariation.id,
         standardIceVariation.id,
@@ -328,7 +333,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb884'),
       name: 'Cemilan',
       description: 'Pastry renyah, kue lezat, dan finger food pendamping',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       categoryVariationIds: [],
       variationIds: [],
       categoryVariationId: null
@@ -337,7 +342,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb885'),
       name: 'Kopi',
       description: 'Signature Kulo Es Kopi Susu & Avocatto',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       categoryVariationIds: [
         kuloDrinkSizeVariation.id,
         kuloIceVariation.id,
@@ -356,7 +361,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb886'),
       name: 'Cemilan',
       description: 'Cemilan roti bakar dan snack pendamping',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       categoryVariationIds: [],
       variationIds: [],
       categoryVariationId: null
@@ -365,7 +370,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb887'),
       name: 'Teh',
       description: 'Teh Poci Melati Asli Seduh Tradisional',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       categoryVariationIds: [
         tehPociDrinkSizeVariation.id,
         tehPociIceVariation.id,
@@ -382,7 +387,7 @@ export async function seedDatabase() {
       id: new ObjectId('6ab5838bb2a71518d2beb888'),
       name: 'Cemilan',
       description: 'Dimsum kukus dan goreng spesial',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       categoryVariationIds: [],
       variationIds: [],
       categoryVariationId: null
@@ -399,7 +404,7 @@ export async function seedDatabase() {
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtNMfSOkPEgLdVc2vKwY45wCgzwwn4srarfAclzt4f_z1t2GCXiXjKzKyLTw4Qb8HF_DbCT7aVAnSQEmWwHcfzRoFT7jXlEGDi9-Syypy9Jfw4AYn5_pfnyO7wbmT7XnhAnvqvJK8cZzK5Vv7IGXNv6tuat4pduj-j3JDy_TgWxA1oG-n8JqvJJGHe8FFYHRmRoIuEyWYwXNfISAcW7eYXrJwGpLW2jC44VdVHli4si8Q_iL9P2f3tLg',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89a'),
@@ -410,7 +415,7 @@ export async function seedDatabase() {
       tag: 'Favorit Barista',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCvJdh749nH1gR2JunVywYMQZwKd2m2nffiuj2Mvs2KMwqC9BBJ49yOGr_9_JunjgM9BxcD5KR_nAPO1VF42jGfY5qhEuGwJ-gqaQi1vwD8pJlZvZIq9eBfOaUmi26UhKFA9phssHpmNM6n-B0JgNOtDATqeCk3I9xvzv0PVXhp0xgpiC68lFuRhz08JtMKVwm0mgVxahNDoLqkP0RVYozDd8OtNWaJeeeAdnrDckAcMSSOjFMVUACykA',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89b'),
@@ -421,7 +426,7 @@ export async function seedDatabase() {
       tag: 'Best Seller',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA3nRgdjGnqjynsqzx5F2To8GoeiFzh-DW-eLq11HogGzQtZ2WKL6j2VrNlG8FGeztHN07Lunlrzb0tVO3hD2Wa0Ogc2n15NQmlOwBrUWdFGOYvR28xkISb08HbMXkYYMqiKH5Q3KwV0GSodGTQpdTzimlb7_J9qpWyHVf9hm14yI6zgyOiC5lKUWtOFSq78X7baLmSyw-13RQBCqVHMeIFTgwfI84p6knVpLuhkLG1tGIzn5dHiJHauw',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89c'),
@@ -432,7 +437,7 @@ export async function seedDatabase() {
       tag: 'Matcha Uji',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyUf2Pv_hsauF8bNxe7DbZfgv8KjnRNMji6pTuhzjaaKuZQJJ8goHYZ1vwnWe7W0qb2PfiNWEpMbADXDOn6FkTmlVOnf5ijPtDH3tUl_MDNWySfMhcrwvDjWK7Qvd9ZEQ4w6OeerwlFMEvmpe9Am8t57ie6yPyFRckYlRx7Av9IjDKBIxYkpjqLzqSOIcehmbGogUhaf9E0XGBlkrOsAGpD0GbzX18XoH4v5gDtjW-5U4ZrUfu8mciBw',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89d'),
@@ -443,7 +448,7 @@ export async function seedDatabase() {
       tag: 'Populer',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDRLFgKetXqgXN7L2j8MWsu9Q1Eb9yHwzyH6-ASIfUwawAa9Enj3XMOj3yT86b_LEmCuXDTFvluCM0F10enTo2U0OLeQqJdWeFTImS0m-nw__5a8Kmthg-b5xhuPnnPAVecNG8akkmHvu1HieuycWai8C2Zowe1OYFo5Xgu3Riec6vW3kaRaS_yvZxwYE4x3PGxUXGKVuLk3FdzMBRvjKWTPYXCwhbmsDJE-tXXL4nh8a9666-msWD1JA',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89e'),
@@ -454,7 +459,7 @@ export async function seedDatabase() {
       tag: 'Segar Alami',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEDdNAgqpFDYomBUwebjH1cUlD6u-s6RdfV_B3Zb2sErpLrfWBAlI-B4p9ghPK0MgP7u-BExqyPi0O6Fy5nc1a9JyE3lDkxO1GyavPWK6Rmk67W9jItT13snorCP72I1AEUd4jAYXNMKn2Lz44DGZ6HM9_iOY7NSczXkEJzmmMyq-3b2vxTM-puw_0iCpUshE4u_GwKW-TTggh5T670zI2UA3bRKmSkfrEPZWMX1SqFzQj0F5diM9zYQ',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb89f'),
@@ -465,7 +470,7 @@ export async function seedDatabase() {
       tag: '100% Buah Asli',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA214agMyoRUOTHtl6f0KAbXn_zJMECP7woU_OtmC93inU5O1qM5MclDciInpj44f0qLM8WWK1B2JHsIvFLMvLRjvrAKYlmGsw_pe959wyisWjhJbgzB4-lo35bufA_rJi8FENB_IGS5fQ8aOVuYFjCzaoBdfq9NsX0if5hyAJbwywBpXL1xb3bVw7al16zdBhF8c5Gc6KxnOlBV2-7YkAuapgkybmUh9vVVzOKUx8chHfxhEiTOpYh0A',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb8a0'),
@@ -476,7 +481,7 @@ export async function seedDatabase() {
       tag: 'Segar & Asam',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBOVXfWtFg9LCiGW5J0ud5qjQ0jGXJMeAczCs-pbDuX3RAR6hCtNrdxaMfeEUbGqkxEsXZa2mL9kEU1UBgCQ71XrzS1oVfn0Bk9BEYOItPZZ1otsDaOWYZdTqYnbo89dHJwf8WiOMUqDDcupTXFTxIc1Vl86Ei2gMwcKXBPtYrHTGShQCjjcVeYI_4OWcFWVAr5Rx8duqgdwCpRbMOvKIpAO6bKkiQBPFI5C_XOTBE9wab0Nj86w21Y9Q',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb8a1'),
@@ -487,7 +492,7 @@ export async function seedDatabase() {
       tag: 'Segar Favorit',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsJDrQVcuTN15ytH6JXl2Sy1VxvsGMvJXf-uUvj-Cb8PrNhnnWViYvbqt5iYdo5tOkmdoUOoAGQyzqygOJaIomUHbcGWh68FXlZAm7maoXw8duNaOEuU40MckVywC0bynGatT1MLvbjyce6fsgcqhT0XmnqgVCRgC3XFamT00-1Y5E2HMq6ccb5Rn4pZFXHPpPQ2D-tpTrlrRWvLghCVS3qLc3PjAKjk2kh_Vli28UF9GS_LwWvg61Zw',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838bb2a71518d2beb8a2'),
@@ -498,7 +503,7 @@ export async function seedDatabase() {
       tag: 'Fresh Baked',
       image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a3'),
@@ -509,7 +514,7 @@ export async function seedDatabase() {
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a4'),
@@ -520,7 +525,7 @@ export async function seedDatabase() {
       tag: 'Cemilan Asin',
       image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a5'),
@@ -531,7 +536,7 @@ export async function seedDatabase() {
       tag: 'Tradisional',
       image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a6'),
@@ -542,7 +547,7 @@ export async function seedDatabase() {
       tag: 'Habis / Out of Stock',
       image: 'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&auto=format&fit=crop&q=80',
       isAvailable: false,
-      vendorId: 'vnd_kasirkafe_central'
+      vendorId: CENTRAL_VENDOR_OID
     },
     // Vendor 2: Kopi Kulo (Kemang)
     {
@@ -554,7 +559,7 @@ export async function seedDatabase() {
       tag: 'Best Seller',
       image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kopi_kulo_kemang'
+      vendorId: KULO_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a8'),
@@ -565,7 +570,7 @@ export async function seedDatabase() {
       tag: 'Artisan',
       image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kopi_kulo_kemang'
+      vendorId: KULO_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8a9'),
@@ -576,7 +581,7 @@ export async function seedDatabase() {
       tag: 'Favorit Pelanggan',
       image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kopi_kulo_kemang'
+      vendorId: KULO_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8aa'),
@@ -587,7 +592,7 @@ export async function seedDatabase() {
       tag: 'Cemilan Hangat',
       image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kopi_kulo_kemang'
+      vendorId: KULO_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838cb2a71518d2beb8ab'),
@@ -598,7 +603,7 @@ export async function seedDatabase() {
       tag: 'Manis Gurih',
       image: 'https://images.unsplash.com/photo-1588685912170-07e0c7e2b7e5?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_kopi_kulo_kemang'
+      vendorId: KULO_VENDOR_OID
     },
     // Vendor 3: Teh Poci & Dimsum (Bekasi)
     {
@@ -610,7 +615,7 @@ export async function seedDatabase() {
       tag: 'Khas Poci',
       image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_tehpoci_nusantara'
+      vendorId: POCI_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838db2a71518d2beb8ad'),
@@ -621,7 +626,7 @@ export async function seedDatabase() {
       tag: 'Super Segar',
       image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_tehpoci_nusantara'
+      vendorId: POCI_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838db2a71518d2beb8ae'),
@@ -632,7 +637,7 @@ export async function seedDatabase() {
       tag: 'Chef Choice',
       image: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_tehpoci_nusantara'
+      vendorId: POCI_VENDOR_OID
     },
     {
       id: new ObjectId('6ab5838db2a71518d2beb8af'),
@@ -643,7 +648,7 @@ export async function seedDatabase() {
       tag: 'Terlaris',
       image: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?w=400&auto=format&fit=crop&q=80',
       isAvailable: true,
-      vendorId: 'vnd_tehpoci_nusantara'
+      vendorId: POCI_VENDOR_OID
     }
   ];
 
@@ -652,7 +657,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec662'),
       productId: new ObjectId('6ab5838bb2a71518d2beb899'), // reference Espresso Latte id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 28,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -660,7 +665,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec663'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89a'), // reference Aren Cold Brew id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 19,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -668,7 +673,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec664'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89b'), // reference Caramel Macchiato Latte id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 20,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -676,7 +681,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec665'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89c'), // reference Matcha Jasmine Tea id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 34,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -684,7 +689,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec666'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89d'), // reference Earl Grey Milk Tea id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 15,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -692,7 +697,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec667'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89e'), // reference Jasmine Green Tea id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 25,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -700,7 +705,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2beb89f'),
       productId: new ObjectId('6ab5838bb2a71518d2beb89f'), // reference Tropical Mango id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 22,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -708,7 +713,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3eb2a71518d2bec669'),
       productId: new ObjectId('6ab5838bb2a71518d2beb8a0'), // reference Dragonfruit Berry id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 11,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -716,7 +721,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66a'),
       productId: new ObjectId('6ab5838bb2a71518d2beb8a1'), // reference Mango Berry Breeze id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 18,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -724,7 +729,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66b'),
       productId: new ObjectId('6ab5838bb2a71518d2beb8a2'), // reference Croissant Butter Gold id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 15,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -732,7 +737,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66c'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a3'), // reference Choco Danish Pastry id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 12,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -740,7 +745,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66d'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a4'), // reference French Fries Truffle id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 30,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -748,7 +753,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66e'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a5'), // reference Singkong Keju Gurih id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 20,
       lowStockThreshold: 15,
       updatedAt: new Date()
@@ -756,7 +761,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec66f'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a6'), // reference Red Velvet Pastry id
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       stock: 0,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -764,7 +769,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec670'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a7'), // reference Kulo Avocatto Chocolate id
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       stock: 35,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -772,7 +777,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec671'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a8'), // reference Kulo Baileys Cream Latte id
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       stock: 25,
       lowStockThreshold: 8,
       updatedAt: new Date()
@@ -780,7 +785,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec672'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8a9'), // reference Kopi Kulo Gula Aren id
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       stock: 45,
       lowStockThreshold: 12,
       updatedAt: new Date()
@@ -788,7 +793,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec673'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8aa'), // reference Toast Keju Melted Spesial id
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       stock: 20,
       lowStockThreshold: 5,
       updatedAt: new Date()
@@ -796,7 +801,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec674'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8ab'), // reference Croffle Gula Palem Karamel id
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       stock: 18,
       lowStockThreshold: 5,
       updatedAt: new Date()
@@ -804,7 +809,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec675'),
       productId: new ObjectId('6ab5838cb2a71518d2beb8ac'), // reference Teh Poci Seduh Gula Batu Asli id
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       stock: 50,
       lowStockThreshold: 15,
       updatedAt: new Date()
@@ -812,7 +817,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f3fb2a71518d2bec676'),
       productId: new ObjectId('6ab5838db2a71518d2beb8ad'), // reference Es Teh Melati Jumbo Segar id
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       stock: 80,
       lowStockThreshold: 20,
       updatedAt: new Date()
@@ -820,7 +825,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f40b2a71518d2bec677'),
       productId: new ObjectId('6ab5838db2a71518d2beb8ae'), // reference Dimsum Hakau Udang Kukus (4 Pcs) id
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       stock: 30,
       lowStockThreshold: 8,
       updatedAt: new Date()
@@ -828,7 +833,7 @@ export async function seedDatabase() {
     {
       id: new ObjectId('6ab64f40b2a71518d2bec678'),
       productId: new ObjectId('6ab5838db2a71518d2beb8af'), // reference Siomay Dimsum Ayam Udang (4 Pcs) id
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       stock: 40,
       lowStockThreshold: 10,
       updatedAt: new Date()
@@ -838,7 +843,7 @@ export async function seedDatabase() {
   const initialTemplates = [
     {
       code: 'RECEIPT_EMAIL',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       name: 'Struk Transaksi Pembeli - KasirKafe Central',
       description: 'Template otomatis yang dikirim ke email pelanggan setelah pesanan dibayar',
       subject: 'Struk Pembelian KasirKafe POS - #{{orderNumber}}',
@@ -869,7 +874,7 @@ export async function seedDatabase() {
     },
     {
       code: 'RECEIPT_EMAIL',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       name: 'Struk Transaksi - Kopi Kulo Kemang',
       description: 'Template otomatis struk email khas Kopi Kulo Kemang',
       subject: 'Struk Transaksi Kopi Kulo Kemang - #{{orderNumber}}',
@@ -900,7 +905,7 @@ export async function seedDatabase() {
     },
     {
       code: 'RECEIPT_EMAIL',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       name: 'Struk Transaksi - Teh Poci Nusantara',
       description: 'Template otomatis struk email khas Teh Poci Nusantara & Dimsum',
       subject: 'Struk Pembelian Teh Poci Nusantara - #{{orderNumber}}',
@@ -935,7 +940,7 @@ export async function seedDatabase() {
   const initialInventoryLogs = [
     {
       id: 'log_1',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       productId: 'prod_1',
       productName: 'Espresso Latte',
       previousStock: 18,
@@ -948,7 +953,7 @@ export async function seedDatabase() {
     },
     {
       id: 'log_2',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       productId: 'prod_7',
       productName: 'Dragonfruit Berry',
       previousStock: 15,
@@ -961,7 +966,7 @@ export async function seedDatabase() {
     },
     {
       id: 'log_3',
-      vendorId: 'vnd_kopi_kulo_kemang',
+      vendorId: KULO_VENDOR_OID,
       productId: 'kulo_prod_1',
       productName: 'Es Kopi Kulo (Signature)',
       previousStock: 30,
@@ -974,7 +979,7 @@ export async function seedDatabase() {
     },
     {
       id: 'log_4',
-      vendorId: 'vnd_tehpoci_nusantara',
+      vendorId: POCI_VENDOR_OID,
       productId: 'poci_prod_1',
       productName: 'Teh Poci Melati Jumbo',
       previousStock: 25,
@@ -1269,7 +1274,7 @@ export async function seedDatabase() {
   const initialSavedOrders = [
     {
       id: 'hold_001',
-      vendorId: 'vnd_kasirkafe_central',
+      vendorId: CENTRAL_VENDOR_OID,
       draftNumber: 'HOLD-014',
       tableNameOrNote: 'Pesanan Doni Pratama',
       items: [
@@ -1519,14 +1524,14 @@ export async function seedDatabase() {
 
       // 3. Products (on table use '_id', on node js code use 'id')
       for (const p of initialProducts) {
-        const vId = p.vendorId || 'vnd_kasirkafe_central';
+        const vOid = p.vendorId instanceof ObjectId ? p.vendorId : (legacyVendorMapping[p.vendorId] || CENTRAL_VENDOR_OID);
         const { id, ...prodCleanData } = p;
         await db.collection('products').updateOne(
           { _id: id },
           {
             $set: {
               ...prodCleanData,
-              vendorId: vId,
+              vendorId: vOid,
               updatedAt: new Date()
             },
             $setOnInsert: {
@@ -1537,20 +1542,20 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
-      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('products').updateMany({ vendorId: null }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       // Ensure stock is removed from product table, stored in new product_stocks table
       await db.collection('products').updateMany({}, { $unset: { stock: '', lowStockThreshold: '' } });
-      console.log('[Seeder] Products verified and synced in MongoDB (table uses _id, node code uses id).');
+      console.log('[Seeder] Products verified and synced in MongoDB with Vendor ObjectId.');
 
       // 4. Product Stocks (on table use '_id', on node js code use 'id', referencing Product id)
       for (const s of initialProductStocks) {
-        const { id, productId, ...stockData } = s;
+        const { id, productId, vendorId, ...stockData } = s;
+        const vOid = vendorId instanceof ObjectId ? vendorId : (legacyVendorMapping[vendorId] || CENTRAL_VENDOR_OID);
         await db.collection('product_stocks').updateOne(
           { _id: id },
           {
             $set: {
               productId: productId.toString(),
+              vendorId: vOid,
               ...stockData,
               updatedAt: new Date()
             },
@@ -1561,69 +1566,94 @@ export async function seedDatabase() {
           { upsert: true }
         );
       }
-      console.log('[Seeder] Product stocks synced referencing Product id (table uses _id, node code uses id).');
+      console.log('[Seeder] Product stocks synced referencing Product id with Vendor ObjectId.');
 
-      // 4. Email Templates
+      // 5. Email Templates
       const tmplCount = await db.collection('email_templates').countDocuments();
       if (tmplCount === 0) {
         await db.collection('email_templates').insertMany(initialTemplates);
         console.log('[Seeder] Email templates seeded in MongoDB successfully.');
       }
 
-      // 5. Discount Rules
+      // 6. Discount Rules
       const ruleCount = await db.collection('discount_rules').countDocuments();
       if (ruleCount === 0) {
         await db.collection('discount_rules').insertMany(DEFAULT_RULES);
         console.log('[Seeder] Discount rules seeded in MongoDB successfully.');
       }
 
-      // 6. Login History
+      // 7. Login History
       const historyCount = await db.collection('login_history').countDocuments();
       if (historyCount === 0) {
         await db.collection('login_history').insertMany(initialLoginHistory.map(h => ({
-          vendorId: (h as any).vendorId || 'vnd_kasirkafe_central',
-          ...h
+          ...h,
+          vendorId: h.vendorId instanceof ObjectId ? h.vendorId : (legacyVendorMapping[(h as any).vendorId] || CENTRAL_VENDOR_OID)
         })));
         console.log('[Seeder] Login history seeded in MongoDB successfully.');
       }
 
-      // 7. Activity Logs
+      // 8. Activity Logs
       const activityCount = await db.collection('activity_logs').countDocuments();
       if (activityCount === 0) {
         await db.collection('activity_logs').insertMany(initialActivityLogs.map(a => ({
-          vendorId: (a as any).vendorId || 'vnd_kasirkafe_central',
-          ...a
+          ...a,
+          vendorId: a.vendorId instanceof ObjectId ? a.vendorId : (legacyVendorMapping[(a as any).vendorId] || CENTRAL_VENDOR_OID)
         })));
         console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
       }
 
-      // 8. Historical Orders for Multi-Vendor Dashboard
+      // 9. Historical Orders for Multi-Vendor Dashboard
       const orderCount = await db.collection('orders').countDocuments();
       if (orderCount < 20) {
-        await db.collection('orders').insertMany(historicalOrders.map(o => ({ ...o })));
+        await db.collection('orders').insertMany(historicalOrders.map(o => ({
+          ...o,
+          vendorId: legacyVendorMapping[o.vendorId] || CENTRAL_VENDOR_OID
+        })));
         console.log('[Seeder] Historical multi-vendor orders seeded in MongoDB successfully.');
       }
 
-      // 9. Saved / Hold Orders
+      // 10. Saved / Hold Orders
       const savedCount = await db.collection('saved_orders').countDocuments();
       if (savedCount === 0) {
-        await db.collection('saved_orders').insertMany(initialSavedOrders.map(s => ({ ...s })));
+        await db.collection('saved_orders').insertMany(initialSavedOrders.map(s => ({
+          ...s,
+          vendorId: s.vendorId instanceof ObjectId ? s.vendorId : (legacyVendorMapping[(s as any).vendorId] || CENTRAL_VENDOR_OID)
+        })));
         console.log('[Seeder] Saved/hold orders seeded in MongoDB successfully.');
       }
 
-      // 10. Universal Vendor Partition Migration across all collections
-      await db.collection('saved_orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('activity_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('categories').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('daily_counters').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('discount_rules').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('email_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('email_templates').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('inventory_logs').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('login_history').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      await db.collection('products').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
-      console.log('[Seeder] All 10 data collections verified and updated with vendorId partition.');
+      // 11. Universal Vendor Partition Migration across all collections:
+      // Migrate all collections so vendorId is always an ObjectId from table Vendor
+      const collectionsToMigrate = [
+        'products',
+        'product_stocks',
+        'categories',
+        'category_variations',
+        'orders',
+        'saved_orders',
+        'users',
+        'activity_logs',
+        'inventory_logs',
+        'daily_counters',
+        'discount_rules',
+        'email_logs',
+        'email_templates',
+        'login_history'
+      ];
+
+      for (const col of collectionsToMigrate) {
+        for (const [legacyId, targetOid] of Object.entries(legacyVendorMapping)) {
+          await db.collection(col).updateMany(
+            { vendorId: legacyId },
+            { $set: { vendorId: targetOid } }
+          );
+        }
+        await db.collection(col).updateMany(
+          { $or: [{ vendorId: { $exists: false } }, { vendorId: null }, { vendorId: '' }] },
+          { $set: { vendorId: CENTRAL_VENDOR_OID } }
+        );
+      }
+      console.log('[Seeder] All collections verified and updated with Vendor ObjectId partition.');
     } catch (err: any) {
       console.warn('[Seeder] MongoDB insert warning, using initialized fallback store:', err.message);
     }

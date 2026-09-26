@@ -133,10 +133,10 @@ adminVendorRouter.post('/', requireAdmin, async (req: Request, res: Response) =>
 
       // Initialize default categories for the new vendor so staff can immediately add menu items
       const initialCategories = [
-        { name: 'Kopi', description: 'Menu racikan kopi khas vendor', vendorId: newVendorId },
-        { name: 'Teh', description: 'Artisan teh segar dan seduhan', vendorId: newVendorId },
-        { name: 'Jus & Segar', description: 'Minuman buah dan sparkling segar', vendorId: newVendorId },
-        { name: 'Cemilan', description: 'Pastry, snack, dan makanan pendamping', vendorId: newVendorId }
+        { name: 'Kopi', description: 'Menu racikan kopi khas vendor', vendorId: _id },
+        { name: 'Teh', description: 'Artisan teh segar dan seduhan', vendorId: _id },
+        { name: 'Jus & Segar', description: 'Minuman buah dan sparkling segar', vendorId: _id },
+        { name: 'Cemilan', description: 'Pastry, snack, dan makanan pendamping', vendorId: _id }
       ];
       await db.collection('categories').insertMany(initialCategories);
     }

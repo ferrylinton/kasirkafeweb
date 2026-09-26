@@ -26,6 +26,9 @@ declare global {
 export const CENTRAL_VENDOR_ID = '6ab58389b2a71518d2beb887';
 export const ADMIN_VENDOR_ID = '6ab58389b2a71518d2beb886';
 
+export const CENTRAL_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb887');
+export const ADMIN_VENDOR_OID = new ObjectId('6ab58389b2a71518d2beb886');
+
 const LEGACY_VENDOR_MAP: Record<string, string> = {
   vnd_admin: '6ab58389b2a71518d2beb886',
   vnd_kasirkafe_central: '6ab58389b2a71518d2beb887',
@@ -40,6 +43,56 @@ export function resolveVendorId(id?: string): string {
   if (!id) return CENTRAL_VENDOR_ID;
   const trimmed = id.trim();
   return LEGACY_VENDOR_MAP[trimmed] || trimmed;
+}
+
+/**
+ * Converts any vendor ID (string slug, hex string, or ObjectId) to the corresponding Vendor ObjectId
+ */
+export function toVendorObjectId(id?: string | ObjectId): ObjectId {
+  if (!id) return CENTRAL_VENDOR_OID;
+  if (id instanceof ObjectId) return id;
+  const trimmed = String(id).trim();
+  const resolved = resolveVendorId(trimmed);
+  if (ObjectId.isValid(resolved) && resolved.length === 24) {
+    return new ObjectId(resolved);
+  }
+  return CENTRAL_VENDOR_OID;
+}
+
+/**
+ * Builds a MongoDB filter query matching vendorId as ObjectId and legacy string values
+ */
+export function buildVendorQuery(vendorId?: string | ObjectId) {
+  const vOid = toVendorObjectId(vendorId);
+  const vStr = vOid.toString();
+  const isCentral = vStr === CENTRAL_VENDOR_ID;
+
+  if (isCentral) {
+    return {
+      $or: [
+        { vendorId: vOid },
+        { vendorId: vStr },
+        { vendorId: 'vnd_kasirkafe_central' },
+        { vendorId: { $exists: false } },
+        { vendorId: null }
+      ]
+    };
+  }
+
+  const legacyMap: Record<string, string> = {
+    '6ab58389b2a71518d2beb888': 'vnd_kopi_kulo_kemang',
+    '6ab58389b2a71518d2beb889': 'vnd_tehpoci_nusantara',
+    '6ab58389b2a71518d2beb886': 'vnd_admin'
+  };
+  const legacySlug = legacyMap[vStr];
+
+  return {
+    $or: [
+      { vendorId: vOid },
+      { vendorId: vStr },
+      ...(legacySlug ? [{ vendorId: legacySlug }] : [])
+    ]
+  };
 }
 
 /**

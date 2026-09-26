@@ -6,29 +6,7 @@ import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
 import { serverProductCache } from '../cache/productCache';
-import { resolveVendorId } from '../vendorMiddleware';
-
-function buildVendorQuery(vendorId?: string) {
-  const vId = vendorId || 'vnd_kasirkafe_central';
-  const isCentral = vId === 'vnd_kasirkafe_central' || vId === '6ab58389b2a71518d2beb887';
-  if (isCentral) {
-    return {
-      $or: [
-        { vendorId: 'vnd_kasirkafe_central' },
-        { vendorId: '6ab58389b2a71518d2beb887' },
-        { vendorId: { $exists: false } },
-        { vendorId: null }
-      ]
-    };
-  }
-  const resolved = resolveVendorId(vId);
-  return {
-    $or: [
-      { vendorId: vId },
-      { vendorId: resolved }
-    ]
-  };
-}
+import { resolveVendorId, toVendorObjectId, buildVendorQuery } from '../vendorMiddleware';
 
 export const productRouter = Router();
 
@@ -120,7 +98,7 @@ productRouter.get('/cache/stats', (req: Request, res: Response) => {
  * Clear in-memory product and category cache
  */
 productRouter.post('/cache/clear', (req: Request, res: Response) => {
-  const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+  const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
   const isAdmin = (req as any).user?.role === 'ADMIN';
   const clearAll = req.query.all === 'true' && isAdmin;
 
@@ -180,7 +158,7 @@ productRouter.get('/category-variations', async (req: Request, res: Response) =>
     const requestedVendor = (req.query.vendorId as string)?.trim();
     const isAllVendors = req.query.allVendors === 'true' || requestedVendor === 'all';
 
-    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    let activeVendorId = req.vendorId || user?.vendorId || '6ab58389b2a71518d2beb887';
     // If user is ADMIN and no specific non-admin vendor is given, or if activeVendorId is Admin vendor
     if (requestedVendor && requestedVendor !== 'all') {
       activeVendorId = resolveVendorId(requestedVendor);
@@ -216,9 +194,10 @@ productRouter.get('/category-variations', async (req: Request, res: Response) =>
         return catVarIds.some(refId => refId && (refId.toString() === vIdStr || refId === vIdStr));
       });
 
+      const vVendorOid = toVendorObjectId(v.vendorId || activeVendorId);
       return {
         id: v._id.toString(), // on node js code use 'id', on table use '_id'
-        vendorId: v.vendorId || activeVendorId,
+        vendorId: vVendorOid.toString(), // on node js code use 'id'
         name: v.name,
         type: v.type || 'SINGLE_SELECT',
         required: !!v.required,
@@ -232,7 +211,7 @@ productRouter.get('/category-variations', async (req: Request, res: Response) =>
 
     return res.json({
       success: true,
-      vendorId: activeVendorId,
+      vendorId: toVendorObjectId(activeVendorId).toString(),
       variations
     });
   } catch (err: any) {
@@ -246,13 +225,13 @@ productRouter.get('/category-variations', async (req: Request, res: Response) =>
 productRouter.get('/category-variations/:id', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id || '');
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    let query: any = { vendorId: activeVendorId };
+    let query: any = buildVendorQuery(activeVendorId);
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -264,11 +243,12 @@ productRouter.get('/category-variations/:id', async (req: Request, res: Response
       return res.status(404).json({ success: false, error: 'Variasi kategori tidak ditemukan.' });
     }
 
+    const vVendorOid = toVendorObjectId(variation.vendorId || activeVendorId);
     return res.json({
       success: true,
       variation: {
         id: variation._id.toString(),
-        vendorId: variation.vendorId,
+        vendorId: vVendorOid.toString(),
         name: variation.name,
         type: variation.type,
         required: variation.required,
@@ -299,7 +279,7 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
     }
 
     const user = (req as any).user;
-    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    let activeVendorId = req.vendorId || user?.vendorId || '6ab58389b2a71518d2beb887';
     if (user?.role === 'ADMIN') {
       const targetVendor = (req.body?.vendorId || (req.query?.vendorId as string))?.trim();
       if (targetVendor && targetVendor !== 'all') {
@@ -308,6 +288,9 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
         activeVendorId = '6ab58389b2a71518d2beb887';
       }
     }
+
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
 
     const db = getDB();
     if (!db) {
@@ -330,7 +313,7 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
       type: parsed.data.type || 'SINGLE_SELECT',
       required: !!parsed.data.required,
       options: formattedOptions,
-      vendorId: activeVendorId,
+      vendorId: vendorOid, // on table use ObjectId from table Vendor
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -345,7 +328,7 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
 
       if (catObjectIds.length > 0) {
         await db.collection('categories').updateMany(
-          { _id: { $in: catObjectIds }, ...(user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId }) },
+          { _id: { $in: catObjectIds }, ...(user?.role === 'ADMIN' ? {} : buildVendorQuery(activeVendorId)) },
           {
             $addToSet: {
               categoryVariationIds: newId,
@@ -357,7 +340,7 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
     }
 
     // Invalidate categories cache
-    serverProductCache.invalidateCategories(activeVendorId);
+    serverProductCache.invalidateCategories(vendorIdStr);
 
     await recordActivityLog({
       action: 'CREATE',
@@ -373,7 +356,7 @@ productRouter.post('/category-variations', authMiddleware, requireCategoryVariat
       success: true,
       variation: {
         id: newId.toString(), // on node js code use 'id'
-        vendorId: activeVendorId,
+        vendorId: vendorIdStr, // on node js code use 'id'
         name: newVariationDoc.name,
         type: newVariationDoc.type,
         required: newVariationDoc.required,
@@ -405,7 +388,7 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
     }
 
     const user = (req as any).user;
-    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    let activeVendorId = req.vendorId || user?.vendorId || '6ab58389b2a71518d2beb887';
     if (user?.role === 'ADMIN') {
       const targetVendor = (req.body?.vendorId || (req.query?.vendorId as string))?.trim();
       if (targetVendor && targetVendor !== 'all') {
@@ -415,12 +398,15 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
       }
     }
 
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    let query: any = user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId };
+    let query: any = user?.role === 'ADMIN' ? {} : buildVendorQuery(activeVendorId);
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -432,7 +418,9 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
       return res.status(404).json({ success: false, error: 'Variasi kategori tidak ditemukan atau bukan milik vendor Anda.' });
     }
 
+    const varVendorOid = toVendorObjectId(existingVar.vendorId || activeVendorId);
     const updateFields: any = {
+      vendorId: varVendorOid,
       updatedAt: new Date()
     };
 
@@ -458,7 +446,7 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
 
       // Remove from categories not in target list
       await db.collection('categories').updateMany(
-        { _id: { $nin: targetCatObjectIds }, vendorId: activeVendorId },
+        { _id: { $nin: targetCatObjectIds }, ...buildVendorQuery(activeVendorId) },
         {
           $pull: {
             categoryVariationIds: existingVar._id,
@@ -470,7 +458,7 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
       // Add to categories in target list
       if (targetCatObjectIds.length > 0) {
         await db.collection('categories').updateMany(
-          { _id: { $in: targetCatObjectIds }, vendorId: activeVendorId },
+          { _id: { $in: targetCatObjectIds }, ...buildVendorQuery(activeVendorId) },
           {
             $addToSet: {
               categoryVariationIds: existingVar._id,
@@ -482,7 +470,7 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
     }
 
     // Invalidate categories cache
-    serverProductCache.invalidateCategories(activeVendorId);
+    serverProductCache.invalidateCategories(varVendorOid.toString());
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -500,7 +488,7 @@ productRouter.put('/category-variations/:id', authMiddleware, requireCategoryVar
       success: true,
       variation: {
         id: updatedDoc?._id.toString() || id,
-        vendorId: updatedDoc?.vendorId,
+        vendorId: varVendorOid.toString(), // on node js code use 'id'
         name: updatedDoc?.name,
         type: updatedDoc?.type,
         required: updatedDoc?.required,
@@ -522,7 +510,7 @@ productRouter.delete('/category-variations/:id', authMiddleware, requireCategory
   try {
     const id = String(req.params.id || '');
     const user = (req as any).user;
-    let activeVendorId = req.vendorId || user?.vendorId || 'vnd_kasirkafe_central';
+    let activeVendorId = req.vendorId || user?.vendorId || '6ab58389b2a71518d2beb887';
     if (user?.role === 'ADMIN') {
       const targetVendor = (req.query?.vendorId as string)?.trim();
       if (targetVendor && targetVendor !== 'all') {
@@ -532,12 +520,15 @@ productRouter.delete('/category-variations/:id', authMiddleware, requireCategory
       }
     }
 
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    let query: any = user?.role === 'ADMIN' ? {} : { vendorId: activeVendorId };
+    let query: any = user?.role === 'ADMIN' ? {} : buildVendorQuery(activeVendorId);
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -554,7 +545,7 @@ productRouter.delete('/category-variations/:id', authMiddleware, requireCategory
 
     // Pull reference from all categories
     await db.collection('categories').updateMany(
-      { vendorId: activeVendorId },
+      buildVendorQuery(activeVendorId),
       {
         $pull: {
           categoryVariationIds: variation._id,
@@ -565,12 +556,12 @@ productRouter.delete('/category-variations/:id', authMiddleware, requireCategory
 
     // Also handle categoryVariationId unset if matched
     await db.collection('categories').updateMany(
-      { vendorId: activeVendorId, categoryVariationId: variation._id },
+      { ...buildVendorQuery(activeVendorId), categoryVariationId: variation._id },
       { $unset: { categoryVariationId: '' } }
     );
 
     // Invalidate categories cache
-    serverProductCache.invalidateCategories(activeVendorId);
+    serverProductCache.invalidateCategories(vendorIdStr);
 
     await recordActivityLog({
       action: 'DELETE',
@@ -598,7 +589,7 @@ productRouter.delete('/category-variations/:id', authMiddleware, requireCategory
  */
 productRouter.get('/categories', async (req: Request, res: Response) => {
   try {
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
     const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
     const cacheKey = `categories:${activeVendorId}`;
 
@@ -748,7 +739,10 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
+
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -761,7 +755,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     // Check if category name already exists for this vendor
     const existing = await db.collection('categories').findOne({
       name: { $regex: new RegExp(`^${parsed.data.name.trim()}$`, 'i') },
-      vendorId: activeVendorId
+      ...buildVendorQuery(activeVendorId)
     });
 
     if (existing) {
@@ -812,7 +806,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
               extraPrice: Number(opt.extraPrice || 0),
               isDefault: !!opt.isDefault
             })),
-            vendorId: activeVendorId,
+            vendorId: vendorOid, // on table use ObjectId from table Vendor
             createdAt: new Date(),
             updatedAt: new Date()
           };
@@ -830,7 +824,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       categoryVariationIds: variationObjectIds, // reference Category Variation id on table use '_id'
       variationIds: variationObjectIds,
       categoryVariationId: variationObjectIds[0] || null,
-      vendorId: activeVendorId,
+      vendorId: vendorOid, // on table use ObjectId from table Vendor
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -838,7 +832,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     await db.collection('categories').insertOne(newCategoryDoc);
 
     // Invalidate categories cache for active vendor
-    serverProductCache.invalidateCategories(activeVendorId);
+    serverProductCache.invalidateCategories(vendorIdStr);
 
     await recordActivityLog({
       action: 'CREATE',
@@ -859,7 +853,7 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       success: true,
       category: {
         id: newCategoryId.toString(), // on node js code use 'id'
-        vendorId: activeVendorId,
+        vendorId: vendorIdStr, // on node js code use 'id'
         name: newCategoryDoc.name,
         description: newCategoryDoc.description,
         categoryVariationIds: variationObjectIds.map(oid => oid.toString()), // on node js code use 'id'
@@ -897,7 +891,8 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
+    const activeVendorOid = toVendorObjectId(activeVendorId);
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -907,7 +902,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
     }
 
     // Find category strictly by ID or name AND vendorId
-    let query: any = { vendorId: activeVendorId };
+    let query: any = buildVendorQuery(activeVendorId);
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -922,7 +917,9 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       });
     }
 
+    const catVendorOid = toVendorObjectId(category.vendorId || activeVendorId);
     const updateFields: any = {
+      vendorId: catVendorOid,
       updatedAt: new Date()
     };
 
@@ -974,7 +971,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
                 extraPrice: Number(opt.extraPrice || 0),
                 isDefault: !!opt.isDefault
               })),
-              vendorId: activeVendorId,
+              vendorId: catVendorOid,
               createdAt: new Date(),
               updatedAt: new Date()
             };
@@ -993,7 +990,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
     await db.collection('categories').updateOne({ _id: category._id }, { $set: updateFields });
 
     // Invalidate categories cache
-    serverProductCache.invalidateCategories(activeVendorId);
+    serverProductCache.invalidateCategories(catVendorOid.toString());
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -1016,7 +1013,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       success: true,
       category: {
         id: updatedDoc?._id.toString() || id, // on node js code use 'id'
-        vendorId: updatedDoc?.vendorId,
+        vendorId: catVendorOid.toString(), // on node js code use 'id'
         name: updatedDoc?.name,
         description: updatedDoc?.description,
         categoryVariationIds: finalVarObjectIds.map(oid => oid.toString()), // on node js code use 'id'
@@ -1044,7 +1041,7 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
 productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id || '');
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
 
     const db = getDB();
     if (!db) {
@@ -1054,7 +1051,7 @@ productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAcc
       });
     }
 
-    let query: any = { vendorId: activeVendorId };
+    let query: any = buildVendorQuery(activeVendorId);
     if (ObjectId.isValid(id)) {
       query._id = new ObjectId(id);
     } else {
@@ -1105,7 +1102,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
     const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
 
     const bypassCache = req.query.bypassCache === 'true' || req.query.refresh === 'true';
@@ -1140,13 +1137,9 @@ productRouter.get('/', async (req: Request, res: Response) => {
       if (isAllVendors) {
         // No vendor restriction across all vendors
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : requestedVendor;
-      } else if (activeVendorId === 'vnd_kasirkafe_central') {
-        filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+        Object.assign(filter, buildVendorQuery(requestedVendor));
       } else {
-        filter.vendorId = activeVendorId;
+        Object.assign(filter, buildVendorQuery(activeVendorId));
       }
 
       if (category && category !== 'all') {
@@ -1180,9 +1173,10 @@ productRouter.get('/', async (req: Request, res: Response) => {
       products: products.map(p => {
         const prodId = p._id ? p._id.toString() : p.id;
         const stockRec = stockMap.get(prodId);
+        const pVendorOid = toVendorObjectId(p.vendorId || activeVendorId);
         return {
           id: prodId,
-          vendorId: p.vendorId || 'vnd_kasirkafe_central',
+          vendorId: pVendorOid.toString(), // On Node.js code use 'id'
           name: p.name,
           category: p.category,
           price: p.price,
@@ -1219,7 +1213,7 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
     const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
 
     const db = getDB();
@@ -1231,13 +1225,9 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
     if (isAllVendors) {
       // All vendors
     } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-      filter.vendorId = requestedVendor === 'vnd_kasirkafe_central'
-        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-        : requestedVendor;
-    } else if (activeVendorId === 'vnd_kasirkafe_central') {
-      filter.$or = [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }];
+      Object.assign(filter, buildVendorQuery(requestedVendor));
     } else {
-      filter.vendorId = activeVendorId;
+      Object.assign(filter, buildVendorQuery(activeVendorId));
     }
 
     const products = await db.collection('products').find(filter).toArray();
@@ -1256,10 +1246,11 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
     const stocks = products.map(p => {
       const prodId = p._id ? p._id.toString() : p.id;
       const s = stockMap.get(prodId);
+      const pVendorOid = toVendorObjectId(p.vendorId || activeVendorId);
       return {
         id: s?._id ? s._id.toString() : `stk_${prodId}`,
         productId: prodId,
-        vendorId: p.vendorId || activeVendorId,
+        vendorId: pVendorOid.toString(), // On Node.js code use 'id'
         productName: p.name,
         category: p.category,
         image: p.image,
@@ -1292,7 +1283,7 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || '6ab58389b2a71518d2beb887';
 
     const db = getDB();
     if (!db) {
@@ -1309,13 +1300,9 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       if (isAllVendors) {
         query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        query = requestedVendor === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: requestedVendor };
+        query = buildVendorQuery(requestedVendor);
       } else {
-        query = activeVendorId === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
+        query = buildVendorQuery(activeVendorId);
       }
       products = await db.collection('products').find(query).toArray();
     } catch (e) {}
@@ -1338,9 +1325,10 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       const stock = s && typeof s.stock === 'number' ? s.stock : (typeof p.stock === 'number' ? p.stock : 0);
       const isOutOfStock = stock === 0;
       const isLowStock = stock > 0 && stock <= threshold;
+      const pVendorOid = toVendorObjectId(p.vendorId || activeVendorId);
       return {
         id: prodId,
-        vendorId: p.vendorId || 'vnd_kasirkafe_central',
+        vendorId: pVendorOid.toString(), // On Node.js code use 'id'
         name: p.name,
         category: p.category,
         price: p.price,
@@ -1395,7 +1383,7 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
     const isAdmin = (req as any).user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1411,13 +1399,9 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
       if (isAllVendors) {
         query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        query = requestedVendor === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: requestedVendor };
+        query = buildVendorQuery(requestedVendor);
       } else {
-        query = activeVendorId === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
+        query = buildVendorQuery(activeVendorId);
       }
       logs = await db.collection('inventory_logs').find(query).sort({ createdAt: -1 }).limit(200).toArray();
     } catch (e) {}
@@ -1428,7 +1412,7 @@ productRouter.get('/inventory/logs', authMiddleware, requireManager, async (req:
       isAllVendors,
       logs: logs.map(l => ({
         id: l._id ? l._id.toString() : l.id,
-        vendorId: l.vendorId || 'vnd_kasirkafe_central',
+        vendorId: l.vendorId ? toVendorObjectId(l.vendorId).toString() : toVendorObjectId(activeVendorId).toString(),
         productId: l.productId,
         productName: l.productName,
         previousStock: l.previousStock,
@@ -1457,7 +1441,8 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       return res.status(400).json({ success: false, error: 'Batas threshold harus berupa angka positif' });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
+    const vendorOid = toVendorObjectId(activeVendorId);
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1467,12 +1452,7 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       });
     }
 
-    const filter: any = {
-      $or: [
-        { vendorId: activeVendorId },
-        ...(activeVendorId === 'vnd_kasirkafe_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
-      ]
-    };
+    const filter: any = buildVendorQuery(activeVendorId);
     if (category && category !== 'all') {
       filter.category = category.toLowerCase();
     }
@@ -1487,7 +1467,7 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
     } catch (e) {}
 
     const logDoc = {
-      vendorId: activeVendorId,
+      vendorId: vendorOid,
       productId: 'BULK',
       productName: category && category !== 'all' ? `Kategori: ${category.toUpperCase()}` : 'Semua Produk',
       previousStock: 0,
@@ -1514,12 +1494,12 @@ productRouter.post('/inventory/bulk-threshold', authMiddleware, requireInventory
       entityId: 'BULK',
       entityName: category && category !== 'all' ? `Kategori ${category}` : 'Semua Produk',
       summary: `Mengatur batas peringatan stok menjadi ${thresholdNum} untuk ${category && category !== 'all' ? `kategori ${category}` : 'seluruh produk'}`,
-      details: { threshold: thresholdNum, category: category || 'all', vendorId: activeVendorId },
+      details: { threshold: thresholdNum, category: category || 'all', vendorId: vendorOid.toString() },
       req
     });
 
     // Invalidate product cache for active vendor
-    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateProducts(vendorOid.toString());
 
     return res.json({
       success: true,
@@ -1541,7 +1521,8 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
       return res.status(400).json({ success: false, error: 'Data baris CSV tidak boleh kosong' });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || '6ab58389b2a71518d2beb887';
+    const vendorOid = toVendorObjectId(activeVendorId);
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1553,9 +1534,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
 
     let currentProducts: any[] = [];
     try {
-      const query = (activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId });
+      const query = buildVendorQuery(activeVendorId);
       currentProducts = await db.collection('products').find(query).toArray();
     } catch (e) {}
 
@@ -1581,7 +1560,8 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         // UPDATE existing product
         const prevStock = typeof existing.stock === 'number' ? existing.stock : 0;
         const prevPrice = typeof existing.price === 'number' ? existing.price : 0;
-        const updateFields: any = { updatedAt: new Date() };
+        const prodVendorOid = toVendorObjectId(existing.vendorId || activeVendorId);
+        const updateFields: any = { updatedAt: new Date(), vendorId: prodVendorOid };
 
         // Price update
         if (item.price !== undefined && item.price !== null && !isNaN(Number(item.price))) {
@@ -1636,7 +1616,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
                 lowStockThreshold: newThresh,
                 updatedAt: new Date()
               },
-              $setOnInsert: { vendorId: existing.vendorId || activeVendorId }
+              $setOnInsert: { vendorId: prodVendorOid }
             },
             { upsert: true }
           );
@@ -1654,7 +1634,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           }
 
           const logDoc = {
-            vendorId: existing.vendorId || activeVendorId,
+            vendorId: prodVendorOid,
             productId: existingId,
             productName: existing.name,
             previousStock: prevStock,
@@ -1683,7 +1663,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         const newImg = item.image ? String(item.image).trim() : '';
 
         const newDoc: any = {
-          vendorId: activeVendorId,
+          vendorId: vendorOid, // On table use ObjectId from table Vendor
           name: rawName,
           category: newCat,
           price: newPrice,
@@ -1700,7 +1680,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
           insertedId = resInsert.insertedId.toString();
           await db.collection('product_stocks').insertOne({
             productId: insertedId,
-            vendorId: activeVendorId,
+            vendorId: vendorOid, // On table use ObjectId
             stock: newStock,
             lowStockThreshold: newThreshold,
             updatedAt: new Date()
@@ -1713,7 +1693,7 @@ productRouter.post('/inventory/import-csv', authMiddleware, requireInventoryWrit
         currentProducts.push(newDoc);
 
         const logDoc = {
-          vendorId: activeVendorId,
+          vendorId: vendorOid,
           productId: insertedId,
           productName: rawName,
           previousStock: 0,
@@ -1801,10 +1781,10 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
     }
 
     const user = (req as any).user;
-    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
-    const prodVendorId = product.vendorId || 'vnd_kasirkafe_central';
-    const isOwner = prodVendorId === activeVendorId ||
-      (activeVendorId === 'vnd_kasirkafe_central' && (!product.vendorId || product.vendorId === 'vnd_kasirkafe_central'));
+    const activeVendorId = user?.vendorId || req.vendorId || '6ab58389b2a71518d2beb887';
+    const activeVendorOid = toVendorObjectId(activeVendorId);
+    const prodVendorOid = toVendorObjectId(product.vendorId);
+    const isOwner = prodVendorOid.toString() === activeVendorOid.toString();
 
     if (!isOwner) {
       return res.status(403).json({
@@ -1836,7 +1816,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
     try {
       await db.collection('product_stocks').updateOne(
         { productId: prodIdStr },
-        { $set: stockUpdateFields, $setOnInsert: { vendorId: prodVendorId } },
+        { $set: stockUpdateFields, $setOnInsert: { vendorId: prodVendorOid } },
         { upsert: true }
       );
     } catch (e) {}
@@ -1857,12 +1837,12 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
 
     try {
       const query: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
-      await db.collection('products').updateOne(query, { $set: prodUpdateFields });
+      await db.collection('products').updateOne(query, { $set: { ...prodUpdateFields, vendorId: prodVendorOid } });
     } catch (e) {}
 
     const stockChange = newStock - currentStock;
     const logDoc = {
-      vendorId: product.vendorId || req.vendorId || 'vnd_kasirkafe_central',
+      vendorId: prodVendorOid,
       productId: id,
       productName: product.name,
       previousStock: currentStock,
@@ -1908,8 +1888,7 @@ productRouter.patch('/:id/stock', authMiddleware, requireInventoryWriteAccess, a
     });
 
     // Invalidate product cache for product's vendor
-    const targetVendor = product.vendorId || req.vendorId || 'vnd_kasirkafe_central';
-    serverProductCache.invalidateProducts(targetVendor);
+    serverProductCache.invalidateProducts(prodVendorOid.toString());
 
     return res.json({
       success: true,
@@ -1945,11 +1924,14 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
 
     const { stock, lowStockThreshold, ...productCleanData } = parsed.data;
     const user = (req as any).user;
-    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = user?.vendorId || req.vendorId || '6ab58389b2a71518d2beb887';
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
+
     const newProd = {
       ...productCleanData,
       category: parsed.data.category.toLowerCase().trim(),
-      vendorId: activeVendorId,
+      vendorId: vendorOid, // On table use ObjectId from table Vendor
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -1971,10 +1953,10 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
       const result = await db.collection('products').insertOne(newProd);
       insertedId = result.insertedId.toString();
 
-      // Store in new product_stocks table
+      // Store in new product_stocks table with Vendor ObjectId
       await db.collection('product_stocks').insertOne({
         productId: insertedId,
-        vendorId: activeVendorId,
+        vendorId: vendorOid, // On table use ObjectId
         stock: stockVal,
         lowStockThreshold: thresholdVal,
         updatedAt: new Date()
@@ -1997,22 +1979,77 @@ productRouter.post('/', authMiddleware, requireInventoryWriteAccess, async (req:
         price: newProd.price,
         stock: stockVal,
         lowStockThreshold: thresholdVal,
-        vendorId: activeVendorId
+        vendorId: vendorIdStr
       },
       req
     });
 
     // Invalidate product cache for active vendor
-    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateProducts(vendorIdStr);
 
     return res.status(201).json({
       success: true,
       message: 'Produk berhasil ditambahkan!',
       product: {
         id: insertedId,
-        ...newProd,
+        ...productCleanData,
+        category: newProd.category,
+        vendorId: vendorIdStr, // On Node.js code use 'id'
         stock: stockVal,
-        lowStockThreshold: thresholdVal
+        lowStockThreshold: thresholdVal,
+        createdAt: newProd.createdAt,
+        updatedAt: newProd.updatedAt
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * GET /api/products/:id
+ * Retrieve a single product by ID
+ */
+productRouter.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || '');
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'can not connect to db' });
+    }
+
+    const query = ObjectId.isValid(id)
+      ? { $or: [{ _id: new ObjectId(id) }, { id }, { _id: id }] }
+      : { $or: [{ id }, { _id: id }] };
+
+    const p = await db.collection('products').findOne(query);
+    if (!p) {
+      return res.status(404).json({ success: false, error: 'Produk tidak ditemukan' });
+    }
+
+    const prodId = p._id ? p._id.toString() : p.id;
+    const stockRec = await db.collection('product_stocks').findOne({
+      $or: [
+        { productId: prodId },
+        ...(ObjectId.isValid(prodId) ? [{ productId: new ObjectId(prodId) }] : [])
+      ]
+    });
+
+    const pVendorOid = toVendorObjectId(p.vendorId);
+    return res.json({
+      success: true,
+      product: {
+        id: prodId,
+        vendorId: pVendorOid.toString(), // On Node.js code use 'id'
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        stock: stockRec ? stockRec.stock : (typeof p.stock === 'number' ? p.stock : 0),
+        lowStockThreshold: stockRec ? stockRec.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10),
+        description: p.description,
+        tag: p.tag,
+        image: p.image,
+        isAvailable: p.isAvailable !== false
       }
     });
   } catch (err: any) {
@@ -2048,7 +2085,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     }
 
     const user = (req as any).user;
-    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = user?.vendorId || req.vendorId || '6ab58389b2a71518d2beb887';
+    const activeVendorOid = toVendorObjectId(activeVendorId);
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -2071,9 +2109,8 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
     }
 
-    const prodVendorId = existingProd.vendorId || 'vnd_kasirkafe_central';
-    const isOwner = prodVendorId === activeVendorId ||
-      (activeVendorId === 'vnd_kasirkafe_central' && (!existingProd.vendorId || existingProd.vendorId === 'vnd_kasirkafe_central'));
+    const prodVendorOid = toVendorObjectId(existingProd.vendorId);
+    const isOwner = prodVendorOid.toString() === activeVendorOid.toString();
 
     if (!isOwner) {
       return res.status(403).json({
@@ -2088,19 +2125,22 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       try {
         await db.collection('product_stocks').updateOne(
           { productId: prodIdStr },
-          { $set: stockToUpdate, $setOnInsert: { vendorId: prodVendorId, stock: 20, lowStockThreshold: 10 } },
+          { $set: stockToUpdate, $setOnInsert: { vendorId: prodVendorOid, stock: 20, lowStockThreshold: 10 } },
           { upsert: true }
         );
       } catch (e) {}
     }
 
-    // Do not overwrite vendorId or _id
+    // Do not overwrite _id or id; ensure vendorId is properly set to Vendor ObjectId
     delete updateData._id;
     delete updateData.id;
     delete updateData.vendorId;
 
     try {
-      await db.collection('products').updateOne({ _id: existingProd._id }, { $set: updateData });
+      await db.collection('products').updateOne(
+        { _id: existingProd._id },
+        { $set: { ...updateData, vendorId: prodVendorOid } }
+      );
     } catch (e) {}
 
     const prodName = updateData.name || existingProd.name || id;
@@ -2121,7 +2161,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
     });
 
     // Invalidate product cache for active vendor
-    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateProducts(activeVendorOid.toString());
 
     const updatedProduct = await db.collection('products').findOne({ _id: existingProd._id });
     const stockDoc = await db.collection('product_stocks').findOne({ productId: prodIdStr });
@@ -2131,7 +2171,7 @@ productRouter.put('/:id', authMiddleware, requireInventoryWriteAccess, async (re
       message: 'Produk berhasil diperbarui!',
       product: {
         id: updatedProduct?._id ? updatedProduct._id.toString() : id,
-        vendorId: updatedProduct?.vendorId,
+        vendorId: prodVendorOid.toString(), // On Node.js code use 'id'
         name: updatedProduct?.name,
         category: updatedProduct?.category,
         price: updatedProduct?.price,
@@ -2156,7 +2196,8 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
   try {
     const id = String(req.params.id || '');
     const user = (req as any).user;
-    const activeVendorId = user?.vendorId || req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = user?.vendorId || req.vendorId || '6ab58389b2a71518d2beb887';
+    const activeVendorOid = toVendorObjectId(activeVendorId);
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -2179,9 +2220,8 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan.' });
     }
 
-    const prodVendorId = targetProd.vendorId || 'vnd_kasirkafe_central';
-    const isOwner = prodVendorId === activeVendorId ||
-      (activeVendorId === 'vnd_kasirkafe_central' && (!targetProd.vendorId || targetProd.vendorId === 'vnd_kasirkafe_central'));
+    const prodVendorOid = toVendorObjectId(targetProd.vendorId);
+    const isOwner = prodVendorOid.toString() === activeVendorOid.toString();
 
     if (!isOwner) {
       return res.status(403).json({
@@ -2213,7 +2253,7 @@ productRouter.delete('/:id', authMiddleware, requireInventoryWriteAccess, async 
     });
 
     // Invalidate product cache for active vendor
-    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateProducts(activeVendorOid.toString());
 
     return res.json({
       success: true,

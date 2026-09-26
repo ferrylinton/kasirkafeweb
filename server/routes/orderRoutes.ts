@@ -9,6 +9,7 @@ import { recordActivityLog } from '../activityLogger';
 import { logOrder } from '../dailyRollingLogger';
 import { IParam } from '@/src/types';
 import { serverProductCache } from '../cache/productCache';
+import { toVendorObjectId, buildVendorQuery, CENTRAL_VENDOR_ID } from '../vendorMiddleware';
 
 export const orderRouter = Router();
 
@@ -123,7 +124,8 @@ export function getTodayDateString(): string {
  */
 export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ orderNumber: string; queueNumber: number; date: string }> {
   const today = getTodayDateString();
-  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
+  const activeVendorId = vendorId || CENTRAL_VENDOR_ID;
+  const vendorOid = toVendorObjectId(activeVendorId);
   let db = getDB();
   let seq = 1;
 
@@ -134,7 +136,7 @@ export async function getNextDailyOrderSequence(vendorId?: string): Promise<{ or
   if (db) {
     try {
       const counterResult: any = await db.collection('daily_counters').findOneAndUpdate(
-        { date: today, vendorId: activeVendorId },
+        { date: today, vendorId: vendorOid },
         { $inc: { seq: 1 } },
         { upsert: true, returnDocument: 'after' }
       );
@@ -174,7 +176,8 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
   }
 
   const today = getTodayDateString();
-  const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+  const activeVendorId = req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID;
+  const vendorOid = toVendorObjectId(activeVendorId);
   const db = getDB();
   if (!db) {
     return res.status(503).json({
@@ -186,7 +189,7 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
   let currentSeq = 0;
 
   try {
-    const doc = await db.collection('daily_counters').findOne({ date: today, vendorId: activeVendorId });
+    const doc = await db.collection('daily_counters').findOne({ date: today, ...buildVendorQuery(activeVendorId) });
     if (doc && typeof doc.seq === 'number') {
       currentSeq = doc.seq;
     }
@@ -197,7 +200,7 @@ orderRouter.get('/next-queue', authMiddleware, async (req: Request, res: Respons
 
   return res.json({
     success: true,
-    vendorId: activeVendorId,
+    vendorId: vendorOid.toString(), // on node js code use 'id'
     today,
     currentQueueNumber: currentSeq,
     nextQueueNumber: nextSeq,
@@ -248,7 +251,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     const subtotal = items.reduce((acc, item) => acc + item.itemTotal, 0);
 
     // Active Vendor ID resolution
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID;
+    const vendorOid = toVendorObjectId(activeVendorId);
+    const vendorIdStr = vendorOid.toString();
 
     // 2. Calculate discounts
     let discountAmount = 0;
@@ -266,7 +271,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       }];
       freeItemsSummary = [`${discountItem.name} (${discountItem.ruleName}): Rp ${discountItem.discountedPrice.toLocaleString('id-ID')}`];
     } else if (selectedDiscountCode) {
-      const rules = await getActiveDiscountRules(activeVendorId);
+      const rules = await getActiveDiscountRules(vendorIdStr);
       const matchedRule = rules.find(r => r.code === selectedDiscountCode);
       if (matchedRule) {
         if (matchedRule.rewardType === 'PERCENTAGE') {
@@ -293,11 +298,11 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     const change = paymentMethod === 'CASH' ? Math.max(0, cashReceived - totalAmount) : 0;
 
     // Sequential order number resetting daily as queue number
-    const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence(activeVendorId);
+    const { orderNumber, queueNumber, date } = await getNextDailyOrderSequence(vendorIdStr);
     const cashierName = req.user?.name || 'Kasir KasirKafe';
 
     const orderDoc: any = {
-      vendorId: activeVendorId,
+      vendorId: vendorOid, // on table use ObjectId from table Vendor
       orderNumber,
       queueNumber,
       orderDate: date,
@@ -360,7 +365,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
         );
 
         const saleLog = {
-          vendorId: activeVendorId,
+          vendorId: vendorOid, // on table use ObjectId from table Vendor
           productId: item.productId,
           productName: item.name,
           previousStock: prevStock,
@@ -401,7 +406,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
         );
 
         const promoLog = {
-          vendorId: activeVendorId,
+          vendorId: vendorOid, // on table use ObjectId from table Vendor
           productId: discountItem.productId,
           productName: discountItem.name,
           previousStock: prevStock,
@@ -435,7 +440,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     }
 
     // Invalidate product cache so updated stock is immediately reflected in catalog
-    serverProductCache.invalidateProducts(activeVendorId);
+    serverProductCache.invalidateProducts(vendorIdStr);
 
     // Record system-wide activity log
     await recordActivityLog({
@@ -469,7 +474,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       action: 'CREATED',
       orderId,
       orderNumber,
-      vendorId: activeVendorId,
+      vendorId: vendorIdStr,
       totalAmount,
       paymentMethod,
       itemsCount: items.length,
@@ -564,7 +569,8 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       message: 'Transaksi Berhasil!',
       order: {
         id: orderId,
-        ...orderDoc
+        ...orderDoc,
+        vendorId: vendorIdStr // on Node.js code use 'id'
       },
       emailSent: emailResult?.success ?? false,
       emailError: emailResult?.error
@@ -591,7 +597,7 @@ orderRouter.get('/drafts', authMiddleware, async (req: Request, res: Response) =
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID;
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -603,9 +609,7 @@ orderRouter.get('/drafts', authMiddleware, async (req: Request, res: Response) =
     let drafts: any[] = [];
 
     try {
-      const query: any = activeVendorId === 'vnd_kasirkafe_central'
-        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-        : { vendorId: activeVendorId };
+      const query = buildVendorQuery(activeVendorId);
       drafts = await db.collection('saved_orders').find(query).sort({ updatedAt: -1, createdAt: -1 }).toArray();
     } catch (e) {}
 
@@ -613,7 +617,7 @@ orderRouter.get('/drafts', authMiddleware, async (req: Request, res: Response) =
       success: true,
       drafts: drafts.map(d => ({
         id: d._id ? d._id.toString() : d.id,
-        vendorId: d.vendorId || 'vnd_kasirkafe_central',
+        vendorId: toVendorObjectId(d.vendorId || activeVendorId).toString(), // on node js code use 'id'
         draftNumber: d.draftNumber,
         tableNameOrNote: d.tableNameOrNote || '',
         items: d.items,
@@ -672,7 +676,8 @@ orderRouter.post('/drafts', authMiddleware, async (req: Request, res: Response) 
       discountItem
     } = parsed.data;
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID;
+    const vendorOid = toVendorObjectId(activeVendorId);
     const subtotal = items.reduce((acc, it) => acc + it.itemTotal, 0);
     const discountAmount = discountItem ? discountItem.discountAmount : 0;
     const discountItemPrice = discountItem ? discountItem.discountedPrice : 0;
@@ -688,7 +693,7 @@ orderRouter.post('/drafts', authMiddleware, async (req: Request, res: Response) 
     const holdCode = `HOLD-${Math.floor(100 + Math.random() * 900)}`;
 
     const draftDoc: any = {
-      vendorId: activeVendorId,
+      vendorId: vendorOid, // on table use ObjectId from table Vendor
       draftNumber: holdCode,
       tableNameOrNote: tableNameOrNote || customerName || 'Pesanan Disimpan',
       items,
@@ -1152,7 +1157,8 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
       });
     }
 
-    const activeVendorId = req.vendorId || (req as any).user?.vendorId || existingOrder.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || existingOrder.vendorId || CENTRAL_VENDOR_ID;
+    const vendorOid = toVendorObjectId(activeVendorId);
     const now = new Date();
     const cashierName = (req as any).user?.name || 'Kasir';
     const refundAmount = existingOrder.totalAmount || 0;
@@ -1181,7 +1187,7 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
               { upsert: true }
             );
             await db.collection('inventory_logs').insertOne({
-              vendorId: activeVendorId,
+              vendorId: vendorOid, // on table use ObjectId from table Vendor
               productId: item.productId,
               productName: item.name || 'Produk',
               change: item.quantity || 1,
@@ -1263,7 +1269,7 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
     const isAdmin = req.user?.role === 'ADMIN';
     const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
     const requestedVendor = (req.query.vendorId as string) || '';
-    const activeVendorId = req.vendorId || 'vnd_kasirkafe_central';
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID;
     const db = getDB();
     if (!db) {
       return res.status(503).json({
@@ -1279,13 +1285,9 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
       if (isAllVendors) {
         query = {};
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        query = requestedVendor === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: requestedVendor };
+        query = buildVendorQuery(requestedVendor);
       } else {
-        query = activeVendorId === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId };
+        query = buildVendorQuery(activeVendorId);
       }
       orders = await db.collection('orders').find(query).sort({ createdAt: -1 }).limit(200).toArray();
     } catch (e) {}
@@ -1296,7 +1298,7 @@ orderRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
       isAllVendors,
       orders: orders.map(o => ({
         id: o._id ? o._id.toString() : o.id,
-        vendorId: o.vendorId || 'vnd_kasirkafe_central',
+        vendorId: o.vendorId ? toVendorObjectId(o.vendorId).toString() : CENTRAL_VENDOR_ID,
         orderNumber: o.orderNumber,
         queueNumber: o.queueNumber,
         items: o.items,
