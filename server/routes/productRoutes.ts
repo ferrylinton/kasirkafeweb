@@ -2018,11 +2018,7 @@ productRouter.get('/:id', async (req: Request, res: Response) => {
       return res.status(503).json({ success: false, error: 'can not connect to db' });
     }
 
-    const query = ObjectId.isValid(id)
-      ? { $or: [{ _id: new ObjectId(id) }, { id }, { _id: id }] }
-      : { $or: [{ id }, { _id: id }] };
-
-    const p = await db.collection('products').findOne(query);
+    const p = await db.collection('products').findOne({ _id: new ObjectId(id) });
     if (!p) {
       return res.status(404).json({ success: false, error: 'Produk tidak ditemukan' });
     }

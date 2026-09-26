@@ -571,11 +571,6 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 <h1 className="text-xl sm:text-2xl font-black font-heading text-stone-900 dark:text-stone-100">
                   {allVendorsMode ? 'Katalog Produk Lintas Vendor' : 'Manajemen Produk'}
                 </h1>
-                {user?.vendorName && !allVendorsMode && (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200/80 dark:border-orange-900/60">
-                    {user.vendorName}
-                  </span>
-                )}
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 {allVendorsMode
@@ -1519,11 +1514,6 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                         ? 'Duplikasi Produk Baru'
                         : 'Tambah Produk Baru'}
                     </span>
-                    {user?.vendorName && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-accent">
-                        {user.vendorName}
-                      </span>
-                    )}
                   </h3>
                   <p className="text-[11px] text-stone-400">
                     Data produk tersimpan di tabel <code className="font-mono">products</code>, dan stok dialokasikan ke tabel relasional <code className="font-mono">product_stocks</code>

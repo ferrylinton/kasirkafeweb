@@ -104,8 +104,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_${Date.now()}_0`,
         name: 'Ukuran Cup',
-        type: 'SINGLE_SELECT',
-        required: true,
         options: [
           { id: `opt_${Date.now()}_0`, name: 'Regular 12oz', extraPrice: 0, isDefault: true },
           { id: `opt_${Date.now()}_1`, name: 'Large 16oz', extraPrice: 5000 },
@@ -115,8 +113,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_${Date.now()}_1`,
         name: 'Level Es',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_${Date.now()}_3`, name: 'Normal Ice', extraPrice: 0, isDefault: true },
           { id: `opt_${Date.now()}_4`, name: 'Less Ice', extraPrice: 0 },
@@ -126,8 +122,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_${Date.now()}_2`,
         name: 'Tingkat Gula',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_${Date.now()}_6`, name: '100% Normal', extraPrice: 0, isDefault: true },
           { id: `opt_${Date.now()}_7`, name: '50% Less Sugar', extraPrice: 0 },
@@ -152,8 +146,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_ukuran_${Date.now()}`,
         name: 'Ukuran Cup',
-        type: 'SINGLE_SELECT',
-        required: true,
         options: [
           { id: `opt_reg_${Date.now()}`, name: 'Regular 12oz', extraPrice: 0, isDefault: true },
           { id: `opt_lrg_${Date.now()}`, name: 'Large 16oz', extraPrice: 5000 },
@@ -163,8 +155,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_es_${Date.now()}`,
         name: 'Level Es',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_norm_ice_${Date.now()}`, name: 'Normal Ice', extraPrice: 0, isDefault: true },
           { id: `opt_less_ice_${Date.now()}`, name: 'Less Ice', extraPrice: 0 },
@@ -174,8 +164,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_gula_${Date.now()}`,
         name: 'Tingkat Gula',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_norm_sug_${Date.now()}`, name: '100% Normal', extraPrice: 0, isDefault: true },
           { id: `opt_less_sug_${Date.now()}`, name: '50% Less Sugar', extraPrice: 0 },
@@ -185,8 +173,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_shot_${Date.now()}`,
         name: 'Espresso Shot',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_norm_shot_${Date.now()}`, name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
           { id: `opt_extra1_shot_${Date.now()}`, name: '+1 Extra Shot', extraPrice: 5000 },
@@ -202,8 +188,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_ukuran_${Date.now()}`,
         name: 'Ukuran Cup',
-        type: 'SINGLE_SELECT',
-        required: true,
         options: [
           { id: `opt_reg_${Date.now()}`, name: 'Regular 12oz', extraPrice: 0, isDefault: true },
           { id: `opt_lrg_${Date.now()}`, name: 'Large 16oz', extraPrice: 5000 },
@@ -213,8 +197,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_es_${Date.now()}`,
         name: 'Level Es',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_norm_ice_${Date.now()}`, name: 'Normal Ice', extraPrice: 0, isDefault: true },
           { id: `opt_less_ice_${Date.now()}`, name: 'Less Ice', extraPrice: 0 },
@@ -224,8 +206,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
       {
         id: `var_gula_${Date.now()}`,
         name: 'Tingkat Gula',
-        type: 'SINGLE_SELECT',
-        required: false,
         options: [
           { id: `opt_norm_sug_${Date.now()}`, name: '100% Normal', extraPrice: 0, isDefault: true },
           { id: `opt_less_sug_${Date.now()}`, name: '50% Less Sugar', extraPrice: 0 },
@@ -246,8 +226,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
     const newVar: CategoryVariation = {
       id: `var_${Date.now()}`,
       name: 'Variasi Baru',
-      type: 'SINGLE_SELECT',
-      required: false,
       options: [
         { id: `opt_${Date.now()}_0`, name: 'Pilihan Standar', extraPrice: 0, isDefault: true }
       ]
@@ -590,9 +568,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="font-bold text-stone-800 dark:text-stone-200">
                                 {vIdx + 1}. {v.name}
-                              </span>
-                              <span className="text-[10px] text-stone-400">
-                                {v.required ? 'Wajib Pilih' : 'Opsional'}
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">

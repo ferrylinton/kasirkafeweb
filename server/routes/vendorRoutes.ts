@@ -983,7 +983,6 @@ vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (
       reason,
       requestedByEmail: user.email,
       requestedByName: user.name,
-      requestedByRole: 'MANAGER' as const,
       status: 'PENDING' as const,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -1125,7 +1124,6 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
       reason,
       requestedByEmail: managerUser.email,
       requestedByName: managerUser.name,
-      requestedByRole: 'MANAGER' as const,
       status: 'PENDING' as const,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

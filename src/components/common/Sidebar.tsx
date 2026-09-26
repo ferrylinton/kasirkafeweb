@@ -645,7 +645,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     <button
                       type="button"
                       id="nav-admin-variasi-kategori-btn"
-                      onClick={() => handleNavClick('variasi-kategori')}
+                      onClick={() => handleNavClick('category-variations')}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'variasi-kategori' || currentTab === 'category-variations'
                           ? 'bg-purple-600 text-white shadow-xs font-bold'
                           : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'

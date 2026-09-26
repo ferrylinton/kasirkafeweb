@@ -4,11 +4,13 @@ export interface IParam {
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 
+export type VendorStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
+
 export interface Vendor {
   id: string;
   name: string;
   address?: string;
-  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
+  status: VendorStatus;
   currency?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -22,7 +24,6 @@ export interface VendorStatusRequest {
   reason: string;
   requestedByEmail: string;
   requestedByName: string;
-  requestedByRole: 'MANAGER';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   adminNotes?: string;
   reviewedBy?: string;
@@ -34,7 +35,6 @@ export interface VendorStatusRequest {
 export interface User {
   id: string;
   vendorId?: string;
-  vendorName?: string;
   email: string;
   name: string;
   role: UserRole;
@@ -53,8 +53,6 @@ export interface CategoryVariation {
   id: string;
   vendorId?: string;
   name: string;
-  type?: 'SINGLE_SELECT' | 'MULTI_SELECT' | 'RADIO' | 'CHECKBOX';
-  required?: boolean;
   options: VariationOption[];
   usedInCategoriesCount?: number;
   categoryNames?: string[];

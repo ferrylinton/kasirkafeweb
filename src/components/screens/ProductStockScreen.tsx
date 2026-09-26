@@ -457,11 +457,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                 <h1 className="text-xl sm:text-2xl font-black font-heading text-stone-900 dark:text-stone-100">
                   {allVendorsMode ? 'Stok Produk Seluruh Vendor' : 'Stok Produk'}
                 </h1>
-                {user?.vendorName && !allVendorsMode && (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 dark:bg-orange-950/60 text-accent border border-orange-200/80 dark:border-orange-900/60">
-                    {user.vendorName}
-                  </span>
-                )}
+
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 {allVendorsMode

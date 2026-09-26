@@ -1587,7 +1587,7 @@ export async function seedDatabase() {
       if (historyCount === 0) {
         await db.collection('login_history').insertMany(initialLoginHistory.map(h => ({
           ...h,
-          vendorId: h.vendorId instanceof ObjectId ? h.vendorId : (legacyVendorMapping[(h as any).vendorId] || CENTRAL_VENDOR_OID)
+          vendorId: CENTRAL_VENDOR_OID
         })));
         console.log('[Seeder] Login history seeded in MongoDB successfully.');
       }
@@ -1597,7 +1597,7 @@ export async function seedDatabase() {
       if (activityCount === 0) {
         await db.collection('activity_logs').insertMany(initialActivityLogs.map(a => ({
           ...a,
-          vendorId: a.vendorId instanceof ObjectId ? a.vendorId : (legacyVendorMapping[(a as any).vendorId] || CENTRAL_VENDOR_OID)
+          vendorId: CENTRAL_VENDOR_OID
         })));
         console.log('[Seeder] Activity logs seeded in MongoDB successfully.');
       }

@@ -107,8 +107,6 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
   const openCreateModal = () => {
     setEditingVariation(null);
     setFormName('');
-    setFormType('SINGLE_SELECT');
-    setFormRequired(false);
     setFormOptions([
       { id: `opt_${Date.now()}_0`, name: 'Pilihan 1', extraPrice: 0, isDefault: true },
       { id: `opt_${Date.now()}_1`, name: 'Pilihan 2', extraPrice: 5000, isDefault: false }
@@ -121,8 +119,6 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
   const openEditModal = (variation: CategoryVariation) => {
     setEditingVariation(variation);
     setFormName(variation.name);
-    setFormType(variation.type || 'SINGLE_SELECT');
-    setFormRequired(!!variation.required);
     setFormOptions(
       Array.isArray(variation.options) && variation.options.length > 0
         ? JSON.parse(JSON.stringify(variation.options))
@@ -149,8 +145,6 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
   const duplicateVariation = (variation: CategoryVariation) => {
     setEditingVariation(null);
     setFormName(`${variation.name} (Salinan)`);
-    setFormType(variation.type || 'SINGLE_SELECT');
-    setFormRequired(!!variation.required);
     setFormOptions(
       variation.options.map(opt => ({
         ...opt,
@@ -380,7 +374,7 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
         v.options.some(opt => opt.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (v.categoryNames && v.categoryNames.some(cName => cName.toLowerCase().includes(searchQuery.toLowerCase())));
 
-      const matchesType = typeFilter === 'ALL' || v.type === typeFilter;
+      const matchesType = typeFilter === 'ALL';
       return matchesSearch && matchesType;
     });
   }, [variations, searchQuery, typeFilter]);
@@ -388,12 +382,11 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
   // Summary Metrics
   const metrics = useMemo(() => {
     const total = variations.length;
-    const requiredCount = variations.filter(v => v.required).length;
     const totalOptions = variations.reduce((acc, curr) => acc + (curr.options?.length || 0), 0);
     const avgOptions = total > 0 ? (totalOptions / total).toFixed(1) : '0';
     const totalLinkedCategories = variations.reduce((acc, curr) => acc + (curr.usedInCategoriesCount || 0), 0);
 
-    return { total, requiredCount, totalOptions, avgOptions, totalLinkedCategories };
+    return { total, totalOptions, avgOptions, totalLinkedCategories };
   }, [variations]);
 
   return (
@@ -520,9 +513,6 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
             <span className="text-xs font-medium">Variasi Wajib</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-black text-stone-900 dark:text-stone-100">
-            {metrics.requiredCount}
-          </div>
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Mandatori kasir</span>
         </div>
 
@@ -627,7 +617,7 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVariations.map(variation => {
-            const isSingle = variation.type === 'SINGLE_SELECT' || variation.type === 'RADIO';
+
             return (
               <div
                 key={variation.id}
@@ -637,28 +627,7 @@ export const CategoryVariationManagementScreen: React.FC<CategoryVariationManage
                   {/* Top Badges & Actions */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                            isSingle
-                              ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
-                              : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
-                          }`}
-                        >
-                          {variation.type || 'SINGLE_SELECT'}
-                        </span>
 
-                        {variation.required ? (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            Wajib Dipilih
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
-                            Opsional
-                          </span>
-                        )}
-                      </div>
 
                       <h3 className="text-base font-extrabold text-stone-900 dark:text-stone-100 mt-2 font-heading tracking-tight truncate">
                         {variation.name}

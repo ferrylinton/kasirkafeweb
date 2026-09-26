@@ -75,8 +75,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     const standardSize: CategoryVariation = {
       id: 'var_ukuran',
       name: 'Ukuran Cup',
-      type: 'SINGLE_SELECT',
-      required: true,
       options: [
         { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
         { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
@@ -87,8 +85,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     const standardIce: CategoryVariation = {
       id: 'var_es',
       name: 'Level Es',
-      type: 'SINGLE_SELECT',
-      required: false,
       options: [
         { id: 'opt_norm_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
         { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
@@ -99,8 +95,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     const standardSugar: CategoryVariation = {
       id: 'var_gula',
       name: 'Tingkat Gula',
-      type: 'SINGLE_SELECT',
-      required: false,
       options: [
         { id: 'opt_norm_sug', name: '100% Normal', extraPrice: 0, isDefault: true },
         { id: 'opt_less_sug', name: '50% Less Sugar', extraPrice: 0 },
@@ -111,8 +105,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     const standardShot: CategoryVariation = {
       id: 'var_shot',
       name: 'Espresso Shot',
-      type: 'SINGLE_SELECT',
-      required: false,
       options: [
         { id: 'opt_norm_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
         { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
@@ -346,9 +338,6 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
                           <span>
                             {vIdx + 1}. {v.name}
                           </span>
-                          {v.required && (
-                            <span className="text-[10px] text-accent font-semibold">{t('requiredSelect1')}</span>
-                          )}
                         </label>
                         <span className="text-[10px] text-stone-400">Pilih 1</span>
                       </div>
