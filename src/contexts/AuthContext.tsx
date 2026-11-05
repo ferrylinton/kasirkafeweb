@@ -28,6 +28,7 @@ export interface LoginResult {
   isSelfManager?: boolean;
   vendorDeactivated?: boolean;
   vendorName?: string;
+  isCaptchaError?: boolean;
   user?: {
     id: string;
     name: string;
@@ -74,7 +75,7 @@ interface AuthContextType {
   clearSessionRevoked: () => void;
   resetIdleTimer: () => void;
   refreshAccessToken: () => Promise<string | null>;
-  loginWithPassword: (email: string, password: string, forceLogout?: boolean) => Promise<LoginResult>;
+  loginWithPassword: (email: string, password: string, forceLogout?: boolean, captchaToken?: string, captchaAnswer?: string) => Promise<LoginResult>;
   forceLogoutUser: (params: { targetEmail?: string; sessionId?: string; managerEmail?: string; managerPassword?: string; reason?: string }) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   updateUserProfile: (data: { name?: string; avatar?: string; currentPassword?: string; newPassword?: string }) => Promise<{ success: boolean; message?: string }>;
@@ -528,7 +529,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
-  const loginWithPassword = async (email: string, password: string, forceLogout?: boolean) => {
+  const loginWithPassword = async (
+    email: string,
+    password: string,
+    forceLogout?: boolean,
+    captchaToken?: string,
+    captchaAnswer?: string
+  ) => {
     try {
       const metadata = getDeviceMetadata();
       const res = await fetch('/api/auth/login', {
@@ -542,7 +549,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email,
           password,
           deviceFingerprint: metadata.fingerprint,
-          ...(forceLogout ? { forceLogout: true } : {})
+          ...(forceLogout ? { forceLogout: true } : {}),
+          ...(captchaToken ? { captchaToken } : {}),
+          ...(captchaAnswer ? { captchaAnswer } : {})
         })
       });
       const data = await res.json();

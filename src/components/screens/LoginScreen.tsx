@@ -10,7 +10,6 @@ import {
   UserCheck,
   Users,
   Shield,
-  Sparkles,
   ShieldAlert,
   AlertTriangle,
   Clock,
@@ -27,13 +26,16 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
-import { SelectUserModal, SelectableUser } from '../modals/SelectUserModal';
+import { SelectUserModal, SelectableUser, FALLBACK_USERS } from '../modals/SelectUserModal';
 import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
 import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
+import { UserRadixSelect } from '../common/UserRadixSelect';
+import { LanguageSelect } from '../common/LanguageSelect';
 import { VendorRegisterScreen } from './VendorRegisterScreen';
 import { VendorReactivationScreen } from './VendorReactivationScreen';
 import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
+import { CaptchaBox, CaptchaBoxRef } from '../common/CaptchaBox';
 import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
 interface VendorItem {
@@ -131,7 +133,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
 
   // Vendor management state
   const [vendors, setVendors] = useState<VendorItem[]>(DEFAULT_VENDORS);
-  const [allUsers, setAllUsers] = useState<SelectableUser[]>([]);
+  const [allUsers, setAllUsers] = useState<SelectableUser[]>(FALLBACK_USERS);
   const [selectedVendorId, setSelectedVendorId] = useState<string>(() => {
     try {
       const savedVendor = localStorage.getItem('kasirkafe_selected_vendor');
@@ -148,16 +150,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     } catch (e) {}
     return selectedUser.email || 'manager@beverage.com';
   });
-  const [password, setPassword] = useState<string>('');
+  const [password, setPassword] = useState<string>('Password123!');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [rememberMe, setRememberMe] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('kasirkafe_remember_me') !== 'false';
-    } catch (e) {
-      return true;
-    }
-  });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [captchaToken, setCaptchaToken] = useState<string>('');
+  const [captchaAnswer, setCaptchaAnswer] = useState<string>('');
+  const [isCaptchaValidLength, setIsCaptchaValidLength] = useState<boolean>(false);
+  const captchaRef = React.useRef<CaptchaBoxRef>(null);
+
+  const handleCaptchaChange = useCallback(({ token: t, answer: a, isValidLength: v }: { token: string; answer: string; isValidLength: boolean }) => {
+    setCaptchaToken(t);
+    setCaptchaAnswer(a);
+    setIsCaptchaValidLength(v);
+  }, []);
 
   // Fetch selectable users & vendors from backend API
   useEffect(() => {
@@ -362,14 +367,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
       } catch (e) {}
     }
+    // Langsung isi email dan kata sandi sesuai permintaan pengguna
     setEmail(updatedUser.email);
-    setPassword('');
+    setPassword('Password123!');
     try {
       localStorage.setItem('kasirkafe_selected_user', JSON.stringify(updatedUser));
+      localStorage.setItem('kasirkafe_saved_email', updatedUser.email);
     } catch (e) {}
     checkLockoutStatus(updatedUser.email);
     const roleBadge = updatedUser.role.toUpperCase() === 'ADMIN' ? 'Admin' : updatedUser.role.toUpperCase() === 'MANAGER' ? 'Manager' : 'Kasir';
-    showToast(`${updatedUser.name} (${roleBadge}) dipilih!`, 'success');
+    showToast(`Akun ${updatedUser.name} (${roleBadge}) dipilih! Email & kata sandi otomatis terisi.`, 'success');
   };
 
   const attemptPasswordLogin = async (e?: React.FormEvent) => {
@@ -386,6 +393,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       showToast('Silakan masukkan kata sandi akun Anda.', 'error');
       return;
     }
+    if (!captchaAnswer.trim()) {
+      showToast('Silakan masukkan kode captcha terlebih dahulu.', 'error');
+      captchaRef.current?.focus();
+      return;
+    }
 
     if (isLocked) {
       showToast(`Akun sedang terkunci. Coba lagi dalam ${formatLockoutTimer(remainingSeconds)}.`, 'error');
@@ -394,8 +406,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
 
     const storageKey = getLockoutStorageKey(cleanEmail);
     setIsSubmitting(true);
-    const result = await loginWithPassword(cleanEmail, cleanPassword);
+    const result = await loginWithPassword(cleanEmail, cleanPassword, false, captchaToken, captchaAnswer);
     setIsSubmitting(false);
+
+    if (!result.success) {
+      captchaRef.current?.reload();
+    }
 
     if (result.success) {
       setFailedAttempts(0);
@@ -404,13 +420,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       setAlreadyLoggedInData(null);
       try {
         localStorage.removeItem(storageKey);
-        if (rememberMe) {
-          localStorage.setItem('kasirkafe_saved_email', cleanEmail);
-          localStorage.setItem('kasirkafe_remember_me', 'true');
-        } else {
-          localStorage.removeItem('kasirkafe_saved_email');
-          localStorage.setItem('kasirkafe_remember_me', 'false');
-        }
+        localStorage.setItem('kasirkafe_saved_email', cleanEmail);
       } catch (e) {}
       if (result.previousSessionsTerminated) {
         showToast(`Selamat datang, ${selectedUser.name}! Sesi di browser lain telah otomatis dikeluarkan.`, 'info');
@@ -589,7 +599,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
 
   return (
     <div
-      className="min-h-screen w-full bg-[#f8f5f2] dark:bg-[#1a1412] text-stone-900 dark:text-stone-100 flex flex-col justify-between p-4 sm:p-6 transition-colors font-sans"
+      className="min-h-screen w-full bg-theme-app text-theme-primary flex flex-col justify-between p-4 sm:p-6 transition-colors font-sans"
       style={{
         paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
         paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))',
@@ -637,47 +647,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
       />
 
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between w-full max-w-md mx-auto">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 overflow-hidden shadow-xs shrink-0 border border-orange-200/70 dark:border-orange-800/70 flex items-center justify-center p-0.5">
-            <img
-              src={kasirKafeLogo}
-              alt="KasirKafe Logo"
-              className="w-full h-full object-cover rounded-[14px]"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-base font-heading">KasirKafe</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-                {t('online')}
-              </span>
-            </div>
-            {/* Selected Vendor Name */}
-            <div
-              id="top-bar-selected-vendor"
-              className="flex items-center gap-1 text-[11px] text-stone-600 dark:text-stone-300 mt-0.5 min-w-0"
-              title={currentVendorData ? `Vendor Aktif: ${currentVendorData.name}` : undefined}
-            >
-              <Store className="w-3 h-3 text-accent shrink-0" />
-              <span className="truncate max-w-[140px] sm:max-w-[180px] font-medium text-stone-700 dark:text-stone-300">
-                {currentVendorData?.name || 'KasirKafe Coffee & Boba'}
-              </span>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex items-center justify-end w-full max-w-md mx-auto">
         <div className="flex items-center gap-2">
-          {/* Quick Select User Header Button */}
-   
 
-          <button
-            onClick={() => setLanguage(language === 'id' ? 'en' : 'id')}
-            className="px-2.5 py-1.5 rounded-xl bg-stone-200/60 dark:bg-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300 transition-colors"
-          >
-            {language.toUpperCase()}
-          </button>
+          <LanguageSelect />
           <button
             onClick={toggleDarkMode}
             className="w-9 h-9 rounded-xl bg-stone-200/60 dark:bg-stone-800 flex items-center justify-center text-stone-700 dark:text-stone-300 transition-colors"
@@ -783,101 +756,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             </div>
           </div>
           <h1 className="text-2xl font-black font-heading text-stone-900 dark:text-stone-100 tracking-tight">
-            KasirKafe POS
+            KasirKafe
           </h1>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            Sistem Kasir Minuman &amp; Snack Multi-Vendor
-          </p>
         </div>
 
-        {/* Selected User Profile Header (Foto Profil & Nama yang dipilih) */}
-        <div className="flex flex-col items-center text-center mb-6 w-full">
-          {/* Clickable Profile Photo */}
-          <div
-            onClick={() => setIsSelectModalOpen(true)}
-            className="relative mb-3 group cursor-pointer"
-            title="Klik untuk memilih pengguna lain"
-          >
-            <div
-              className={`w-22 h-22 rounded-full overflow-hidden border-3 p-0.5 bg-stone-200 dark:bg-stone-800 shadow-md transition-all group-hover:scale-105 group-hover:shadow-lg ${
-                isAdminRole
-                  ? 'border-purple-500 ring-2 ring-purple-500/20'
-                  : isManagerRole
-                  ? 'border-amber-400 dark:border-amber-500 ring-2 ring-amber-400/20'
-                  : 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/20'
-              }`}
-            >
-              <img
-                src={
-                  selectedUser.avatar ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
-                }
-                alt={selectedUser.name}
-                className="w-full h-full object-cover rounded-full"
-                onError={e => {
-                  (e.target as HTMLImageElement).src =
-                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
-                }}
-              />
-            </div>
-
-            {/* Hover Swap Indicator */}
-            <div className="absolute inset-0 rounded-full bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
-              <Users className="w-5 h-5 mb-0.5" />
-              <span>Ganti</span>
-            </div>
-
-            {/* Role Icon Overlay Badge */}
-            <div
-              className={`absolute bottom-0 right-0 w-7 h-7 rounded-full border-2 border-white dark:border-stone-900 flex items-center justify-center text-white shadow-xs ${
-                isAdminRole ? 'bg-purple-600' : isManagerRole ? 'bg-amber-500' : 'bg-emerald-500'
-              }`}
-            >
-              {isAdminRole ? (
-                <ShieldCheck className="w-3.5 h-3.5" />
-              ) : isManagerRole ? (
-                <Shield className="w-3.5 h-3.5" />
-              ) : (
-                <Coffee className="w-3.5 h-3.5" />
-              )}
-            </div>
-          </div>
-
-          {/* User Name & Role Badge */}
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <h2 className="text-xl font-bold font-heading text-stone-900 dark:text-stone-100">
-              {selectedUser.name}
-            </h2>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                isAdminRole
-                  ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800/60'
-                  : isManagerRole
-                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/60'
-                  : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60'
-              }`}
-            >
-              {isAdminRole ? 'ADMIN' : isManagerRole ? t('roleManager') : t('roleCashier')}
-            </span>
-          </div>
-
-          {/* Vendor Affiliation Badge */}
-          {currentVendorData && (
-            <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200/80 dark:border-stone-700">
-              <Store className="w-3 h-3 text-accent shrink-0" />
-              <span className="truncate max-w-[200px]">{currentVendorData.name}</span>
-            </div>
-          )}
-
-          {/* Explicit "Ganti Pengguna" Trigger Button */}
-          <button
-            type="button"
-            onClick={() => setIsSelectModalOpen(true)}
-            className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-[#251e1c] hover:bg-orange-50 dark:hover:bg-orange-950/40 border border-stone-200/90 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:text-accent text-xs font-semibold shadow-2xs transition-all active:scale-95"
-          >
-            <Users className="w-3.5 h-3.5 text-accent" />
-            <span>{t('switchUserBtn')}</span>
-          </button>
+        {/* Radix UI Select User Picker (Auto-fills email & password) */}
+        <div className="w-full mb-5 max-w-sm">
+          <UserRadixSelect
+            id="login-user-radix-select"
+            users={allUsers.length > 0 ? allUsers : FALLBACK_USERS}
+            selectedUserId={selectedUser.id}
+            onSelectUser={handleSelectUser}
+            disabled={isSubmitting || isLocked}
+          />
         </div>
 
         {/* Deactivated Vendor Alert (When vendor status is DEACTIVATE) */}
@@ -1018,7 +909,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
               <span>{t('loginBtn') || 'Masuk ke Sistem POS'}</span>
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              Silakan masukkan alamat email dan kata sandi akun Anda
+              Silakan periksa email dan kata sandi akun Anda di bawah ini
             </p>
           </div>
 
@@ -1087,44 +978,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
             </div>
           </div>
 
-          {/* Quick Demo Credentials helper */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-stone-100/80 dark:bg-stone-900/60 border border-stone-200/60 dark:border-stone-800 text-xs">
-            <span className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
-              <span>Password Default:</span>
-            </span>
-            <button
-              type="button"
-              id="quick-demo-password-btn"
-              onClick={() => {
-                setPassword('Password123!');
-                showToast('Password demo berhasil diisi: Password123!', 'info');
-              }}
-              className="px-2.5 py-1 rounded-xl bg-white dark:bg-[#201918] border border-stone-200 dark:border-stone-700 hover:border-accent text-stone-700 dark:text-stone-300 hover:text-accent font-semibold text-[11px] transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-            >
-              <KeyRound className="w-3 h-3 text-accent" />
-              <span>Isi Password123!</span>
-            </button>
-          </div>
-
-          {/* Remember Me Checkbox */}
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-stone-600 dark:text-stone-400">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-stone-300 text-accent focus:ring-accent accent-orange-600"
-              />
-              <span>Ingat Alamat Email</span>
-            </label>
-          </div>
+          {/* Captcha Verification Box (Alphanumeric uppercase, 5 min TTL, reloadable) */}
+          <CaptchaBox
+            ref={captchaRef}
+            disabled={isSubmitting || isLocked}
+            onCaptchaChange={handleCaptchaChange}
+          />
 
           {/* Submit Button */}
           <button
             id="login-submit-btn"
             type="submit"
-            disabled={isSubmitting || isLocked || !email.trim() || !password}
+            disabled={isSubmitting || isLocked || !email.trim() || !password || !captchaAnswer.trim()}
             className="w-full mt-1 py-3.5 px-5 rounded-2xl bg-accent hover:bg-accent/90 text-white font-bold text-sm shadow-md hover:shadow-lg active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             {isLocked ? (

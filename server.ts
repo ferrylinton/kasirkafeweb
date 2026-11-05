@@ -19,6 +19,7 @@ import { vendorRouter } from './server/routes/vendorRoutes';
 import { adminVendorRouter } from './server/routes/adminVendorRoutes';
 import { adminAnalyticsRouter } from './server/routes/adminAnalyticsRoutes';
 import { managerAnalyticsRouter } from './server/routes/managerAnalyticsRoutes';
+import { rawMaterialRouter } from './server/routes/rawMaterialRoutes';
 import { systemLogRouter } from './server/routes/systemLogRoutes';
 import { housekeepingRouter } from './server/routes/housekeepingRoutes';
 import { vendorMiddleware } from './server/vendorMiddleware';
@@ -117,6 +118,7 @@ async function startServer() {
   app.use('/api/admin/vendors', adminVendorRouter);
   app.use('/api/admin/analytics', adminAnalyticsRouter);
   app.use('/api/manager/analytics', managerAnalyticsRouter);
+  app.use('/api/raw-materials', rawMaterialRouter);
   app.use('/api/admin/system-logs', systemLogRouter);
   app.use('/api/admin/housekeeping', housekeepingRouter);
 
@@ -163,8 +165,13 @@ async function startServer() {
     });
   }
 
-  // Populate in-memory database immediately so all endpoints have data from moment one
-  await seedDatabase();
+  // Connect to MongoDB and seed initial collections if needed
+  try {
+    await connectDB();
+    await seedDatabase();
+  } catch (err: any) {
+    console.warn('[Bootstrap] Database connect / seed error:', err.message);
+  }
 
   // Initialize automated 3-month data retention background scheduler
   initRetentionScheduler();
@@ -194,13 +201,6 @@ async function startServer() {
       message: `KasirKafe POS Server berhasil dijalankan pada port ${PORT} (PID: ${process.pid})`
     }).catch(() => {});
   });
-
-  // Connect to MongoDB or establish resilient in-memory mode
-  connectDB()
-    .then(() => seedDatabase())
-    .catch((err: any) => {
-      console.warn('[Bootstrap] Database setup warning:', err.message);
-    });
 }
 
 startServer().catch(err => {

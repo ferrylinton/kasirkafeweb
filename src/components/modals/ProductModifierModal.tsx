@@ -440,11 +440,15 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
             {/* Add to Order Button */}
             <button
               type="button"
-              disabled={product.stock <= 0}
+              disabled={product.stock <= 0 || product.isAvailable === false || product.rawMaterialAvailable === false}
               onClick={handleAdd}
-              className="flex-1 py-3.5 px-4 rounded-2xl bg-accent text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-98 transition-all flex items-center justify-between disabled:opacity-50 cursor-pointer"
+              className="flex-1 py-3.5 px-4 rounded-2xl bg-accent text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-98 transition-all flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              <span>{t('addToOrder')}</span>
+              <span>
+                {product.rawMaterialAvailable === false || product.isAvailable === false
+                  ? 'Bahan Habis (Tidak Tersedia)'
+                  : t('addToOrder')}
+              </span>
               <span>Rp {totalPrice.toLocaleString('id-ID')}</span>
             </button>
           </div>

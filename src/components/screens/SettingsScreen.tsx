@@ -458,6 +458,61 @@ export const SettingsScreen: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* CSS Design Tokens Status & Theme Awareness Box */}
+        <div className="mt-4 p-4 rounded-2xl bg-stone-50/80 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent" />
+              <span className="text-xs font-bold text-stone-900 dark:text-stone-100 font-heading">
+                Status Token Variabel CSS (Theme Awareness)
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent/15 text-accent">
+              Active: {isDarkMode ? 'dark' : 'light'}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+            Semua elemen UI terhubung ke CSS Tokens (<code className="text-accent font-semibold">var(--bg-app)</code>, <code className="text-accent font-semibold">var(--bg-surface)</code>, <code className="text-accent font-semibold">var(--text-primary)</code>, dll). Perpindahan tema langsung mengubah variabel global tanpa reload.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+            <div className="p-2.5 rounded-xl bg-theme-surface border border-theme flex flex-col gap-1">
+              <span className="text-[10px] text-theme-muted font-bold">Surface Card</span>
+              <span className="font-semibold text-theme-primary">--bg-surface</span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-theme-subtle border border-theme-subtle flex flex-col gap-1">
+              <span className="text-[10px] text-theme-muted font-bold">Subtle Box</span>
+              <span className="font-semibold text-theme-secondary">--bg-subtle</span>
+            </div>
+            <div className="p-2.5 rounded-xl border border-theme flex flex-col gap-1 bg-theme-input">
+              <span className="text-[10px] text-theme-muted font-bold">Form Input</span>
+              <span className="font-semibold text-theme-primary">--bg-input</span>
+            </div>
+            <div className="p-2.5 rounded-xl border border-theme flex flex-col gap-1 bg-theme-header">
+              <span className="text-[10px] text-theme-muted font-bold">Top Header</span>
+              <span className="font-semibold text-theme-primary">--bg-header</span>
+            </div>
+          </div>
+
+          {/* Semantic Status Badges Preview */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-stone-200/60 dark:border-stone-800">
+            <span className="text-[10px] font-bold text-stone-400">Semantic Tokens:</span>
+            <span className="badge-success-theme text-[10px] font-bold px-2 py-0.5 rounded-md">
+              Sukses
+            </span>
+            <span className="badge-warning-theme text-[10px] font-bold px-2 py-0.5 rounded-md">
+              Peringatan
+            </span>
+            <span className="badge-danger-theme text-[10px] font-bold px-2 py-0.5 rounded-md">
+              Bahaya
+            </span>
+            <span className="badge-info-theme text-[10px] font-bold px-2 py-0.5 rounded-md">
+              Info
+            </span>
+          </div>
+        </div>
       </section>
 
       {/* 5. Session Security & Idle Timeout Section */}

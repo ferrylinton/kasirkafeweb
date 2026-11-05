@@ -5,18 +5,195 @@
 :root {
   --font-display: 'Plus Jakarta Sans', sans-serif;
   --font-body: 'Inter', sans-serif;
-  --accent-color: #ae3115;
-  --accent-rgb: 174, 49, 21;
+  
+  /* Brand Accent Tokens (Dynamic via ThemeContext) */
+  --accent-color: #fd7e14;
+  --accent-rgb: 253, 126, 20;
+  --accent-hover: #e36a07;
+  --accent-light: #fff3e8;
+  --accent-subtle: rgba(253, 126, 20, 0.12);
+  --accent-border: rgba(253, 126, 20, 0.35);
+
   color-scheme: light;
-  /* CSS Safe Area Inset Variables */
+
+  /* Safe Area Insets */
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+
+  /* Backgrounds & Surfaces (Light) */
+  --bg-app: #fff8f6;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fcf6f3;
+  --bg-subtle: #fafaf9;
+  --bg-muted: #f3ece6;
+  --bg-header: rgba(255, 248, 246, 0.92);
+  --bg-sidebar: #fff8f6;
+  --bg-sidebar-bottom: #fff4f0;
+  --bg-sidebar-hover: #f7ede8;
+  --bg-input: #ffffff;
+  --bg-input-focus: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-overlay: rgba(28, 25, 23, 0.5);
+  --bg-table-header: #f7f2ed;
+  --bg-table-hover: #fcf8f5;
+
+  /* Text & Foreground (Light) */
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #78716c;
+  --text-subtle: #a8a29e;
+  --text-inverse: #ffffff;
+
+  /* Borders (Light) */
+  --border-subtle: #ede5df;
+  --border-default: #e7e5e4;
+  --border-strong: #d6d3d1;
+  --border-divider: #f5eee8;
+
+  /* Shadows (Light) */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-popover: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-floating: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+
+  /* Semantic Status Tokens (Light) */
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: #bbf7d0;
+  --color-success-text: #15803d;
+
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-text: #b45309;
+
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-text: #b91c1c;
+
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+  --color-info-border: #bfdbfe;
+  --color-info-text: #1d4ed8;
 }
 
 .dark {
   color-scheme: dark;
+
+  /* Dynamic Accent Variations in Dark Mode */
+  --accent-light: rgba(253, 126, 20, 0.22);
+  --accent-subtle: rgba(253, 126, 20, 0.16);
+  --accent-border: rgba(253, 126, 20, 0.45);
+
+  /* Backgrounds & Surfaces - Dark Coffee Roast Palette */
+  --bg-app: #181311;
+  --bg-surface: #201917;
+  --bg-card: #251e1c;
+  --bg-card-hover: #2e2422;
+  --bg-subtle: #1c1715;
+  --bg-muted: #2d2320;
+  --bg-header: rgba(26, 20, 18, 0.94);
+  --bg-sidebar: #1a1412;
+  --bg-sidebar-bottom: #16100e;
+  --bg-sidebar-hover: #271f1c;
+  --bg-input: #1c1715;
+  --bg-input-focus: #241d1a;
+  --bg-popover: #251e1c;
+  --bg-overlay: rgba(0, 0, 0, 0.75);
+  --bg-table-header: #201917;
+  --bg-table-hover: #28201d;
+
+  /* Text & Foreground - Dark */
+  --text-primary: #f7f4f2;
+  --text-secondary: #d6cec9;
+  --text-muted: #a89f99;
+  --text-subtle: #736b66;
+  --text-inverse: #181311;
+
+  /* Borders - Dark */
+  --border-subtle: #2d2421;
+  --border-default: #382d2a;
+  --border-strong: #4a3c37;
+  --border-divider: #261f1c;
+
+  /* Shadows - Dark */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -2px rgba(0, 0, 0, 0.25);
+  --shadow-popover: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-floating: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+
+  /* Semantic Status Tokens - Dark */
+  --color-success: #4ade80;
+  --color-success-bg: #052e16;
+  --color-success-border: #166534;
+  --color-success-text: #86efac;
+
+  --color-warning: #fbbf24;
+  --color-warning-bg: #451a03;
+  --color-warning-border: #78350f;
+  --color-warning-text: #fde047;
+
+  --color-danger: #f87171;
+  --color-danger-bg: #450a0a;
+  --color-danger-border: #7f1d1d;
+  --color-danger-text: #fca5a5;
+
+  --color-info: #60a5fa;
+  --color-info-bg: #172554;
+  --color-info-border: #1e40af;
+  --color-info-text: #93c5fd;
+}
+
+/* Theme Awareness Utility Classes */
+.bg-theme-app { background-color: var(--bg-app) !important; }
+.bg-theme-surface { background-color: var(--bg-surface) !important; }
+.bg-theme-card { background-color: var(--bg-card) !important; }
+.bg-theme-subtle { background-color: var(--bg-subtle) !important; }
+.bg-theme-muted { background-color: var(--bg-muted) !important; }
+.bg-theme-header { background-color: var(--bg-header) !important; }
+.bg-theme-sidebar { background-color: var(--bg-sidebar) !important; }
+.bg-theme-input { background-color: var(--bg-input) !important; }
+.bg-theme-popover { background-color: var(--bg-popover) !important; }
+
+.text-theme-primary { color: var(--text-primary) !important; }
+.text-theme-secondary { color: var(--text-secondary) !important; }
+.text-theme-muted { color: var(--text-muted) !important; }
+.text-theme-subtle { color: var(--text-subtle) !important; }
+.text-theme-inverse { color: var(--text-inverse) !important; }
+
+.border-theme { border-color: var(--border-default) !important; }
+.border-theme-subtle { border-color: var(--border-subtle) !important; }
+.border-theme-strong { border-color: var(--border-strong) !important; }
+.border-theme-divider { border-color: var(--border-divider) !important; }
+
+.shadow-theme-card { box-shadow: var(--shadow-card) !important; }
+.shadow-theme-popover { box-shadow: var(--shadow-popover) !important; }
+.shadow-theme-floating { box-shadow: var(--shadow-floating) !important; }
+
+/* Status Badges */
+.badge-success-theme {
+  background-color: var(--color-success-bg) !important;
+  color: var(--color-success-text) !important;
+  border: 1px solid var(--color-success-border) !important;
+}
+.badge-warning-theme {
+  background-color: var(--color-warning-bg) !important;
+  color: var(--color-warning-text) !important;
+  border: 1px solid var(--color-warning-border) !important;
+}
+.badge-danger-theme {
+  background-color: var(--color-danger-bg) !important;
+  color: var(--color-danger-text) !important;
+  border: 1px solid var(--color-danger-border) !important;
+}
+.badge-info-theme {
+  background-color: var(--color-info-bg) !important;
+  color: var(--color-info-text) !important;
+  border: 1px solid var(--color-info-border) !important;
 }
 
 /* Safe Area Inset Utilities */
@@ -78,8 +255,11 @@
 
 body {
   font-family: var(--font-body);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 h1, h2, h3, h4, h5, h6, .font-heading {

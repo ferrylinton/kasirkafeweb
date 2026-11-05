@@ -20,8 +20,10 @@ export type ActivityEntity =
   | 'ORDER'
   | 'EMAIL_TEMPLATE'
   | 'CATEGORY'
-  | 'CATEGORY_VARIATION'
-  | 'VENDOR';
+  | 'VENDOR'
+  | 'RAW_MATERIAL'
+  | 'RAW_MATERIAL_PURCHASE'
+  | 'PRODUCT_RECIPE';
 
 export interface PerformedByUser {
   id: string;

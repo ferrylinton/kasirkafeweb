@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Store,
   ShieldCheck,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
+import { CaptchaBox, CaptchaBoxRef } from '../common/CaptchaBox';
 
 export interface VendorReactivationScreenProps {
   initialEmail?: string;
@@ -29,6 +30,14 @@ export const VendorReactivationScreen: React.FC<VendorReactivationScreenProps> =
   const [email, setEmail] = useState<string>(initialEmail);
   const [password, setPassword] = useState<string>('');
   const [reason, setReason] = useState<string>('');
+  const [captchaToken, setCaptchaToken] = useState<string>('');
+  const [captchaAnswer, setCaptchaAnswer] = useState<string>('');
+  const captchaRef = React.useRef<CaptchaBoxRef>(null);
+
+  const handleCaptchaChange = useCallback(({ token: t, answer: a }: { token: string; answer: string }) => {
+    setCaptchaToken(t);
+    setCaptchaAnswer(a);
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{
@@ -61,6 +70,12 @@ export const VendorReactivationScreen: React.FC<VendorReactivationScreenProps> =
       setErrorMsg('Alasan permohonan aktivasi maksimal 200 karakter.');
       return;
     }
+    if (!captchaAnswer.trim()) {
+      setErrorMsg('Kode captcha harus diisi.');
+      showToast('Silakan isi kode captcha terlebih dahulu.', 'error');
+      captchaRef.current?.focus();
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -70,7 +85,9 @@ export const VendorReactivationScreen: React.FC<VendorReactivationScreenProps> =
         body: JSON.stringify({
           email: email.trim(),
           password,
-          reason: reason.trim()
+          reason: reason.trim(),
+          captchaToken,
+          captchaAnswer
         })
       });
 
@@ -86,10 +103,12 @@ export const VendorReactivationScreen: React.FC<VendorReactivationScreenProps> =
       } else {
         setErrorMsg(data.message || 'Gagal mengajukan permohonan aktivasi.');
         showToast(data.message || 'Gagal mengajukan aktivasi.', 'error');
+        captchaRef.current?.reload();
       }
     } catch (err: any) {
       setErrorMsg('Terjadi kesalahan jaringan. Pastikan koneksi server aktif.');
       showToast('Koneksi ke server gagal.', 'error');
+      captchaRef.current?.reload();
     } finally {
       setIsSubmitting(false);
     }
@@ -264,12 +283,19 @@ export const VendorReactivationScreen: React.FC<VendorReactivationScreenProps> =
                 </div>
               </div>
 
+              {/* Captcha Verification Box (Alphanumeric uppercase, 5 min TTL, reloadable) */}
+              <CaptchaBox
+                ref={captchaRef}
+                disabled={isSubmitting}
+                onCaptchaChange={handleCaptchaChange}
+              />
+
               {/* Actions */}
               <div className="space-y-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !isLengthValid || !email.trim() || !password}
-                  className="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                  disabled={isSubmitting || !isLengthValid || !email.trim() || !password || !captchaAnswer.trim()}
+                  className="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>

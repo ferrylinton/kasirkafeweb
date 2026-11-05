@@ -13,6 +13,7 @@ import { revokeAllSessionsForVendor } from './authRoutes';
 import { recordActivityLog } from '../activityLogger';
 import { sendVendorConfirmationEmail } from '../mail';
 import { writeDailyLog } from '../dailyRollingLogger';
+import { verifyCaptcha } from '../captcha';
 import { IParam } from '@/src/types';
 
 export const vendorRouter = Router();
@@ -377,7 +378,9 @@ const vendorRegisterSchema = z.object({
     .string()
     .trim()
     .email('Format email tidak valid'),
-  currency: z.string().default('IDR')
+  currency: z.string().default('IDR'),
+  captchaToken: z.string().optional(),
+  captchaAnswer: z.string().optional()
 });
 
 /**
@@ -480,7 +483,19 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    const { vendorName, managerName, password, email, currency } = parseResult.data;
+    const { vendorName, managerName, password, email, currency, captchaToken, captchaAnswer } = parseResult.data;
+
+    // Server-side Captcha Validation
+    const captchaCheck = await verifyCaptcha(captchaToken, captchaAnswer);
+    if (!captchaCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        field: 'captcha',
+        error: 'CaptchaError',
+        message: captchaCheck.message || 'Kode captcha tidak valid atau telah kadaluwarsa.'
+      });
+    }
+
     const cleanEmail = email.toLowerCase().trim();
     const rawPassword = password || 'Password123!';
 
@@ -1032,6 +1047,17 @@ vendorRouter.post('/request-reactivate', async (req: Request, res: Response) => 
       return res.status(400).json({
         success: false,
         message: 'Alasan aktivasi harus minimal 5 karakter dan maksimal 200 karakter.'
+      });
+    }
+
+    // Server-side Captcha Validation
+    const captchaCheck = await verifyCaptcha(req.body.captchaToken, req.body.captchaAnswer);
+    if (!captchaCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'CaptchaError',
+        isCaptchaError: true,
+        message: captchaCheck.message || 'Kode captcha tidak valid atau telah kadaluwarsa.'
       });
     }
 

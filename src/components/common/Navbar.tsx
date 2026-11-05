@@ -1,7 +1,8 @@
 import React from 'react';
-import { Coffee, ArrowRight, Menu, PanelLeft, Globe } from 'lucide-react';
+import { Coffee, ArrowRight, Menu, PanelLeft, Globe, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 
 interface NavbarProps {
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { user } = useAuth();
   const { t, language, setLanguage } = useLanguage();
+  const { isDarkMode, toggleDarkMode } = useTheme();
   const { totalItemsCount, subtotal } = useCart();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
@@ -159,6 +161,28 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right Side: Quick Language Switcher & Cart Summary */}
       <div className="flex items-center gap-2 shrink-0 ml-auto">
+        {/* Quick Dark Mode / Theme Mode Toggle */}
+        <button
+          type="button"
+          id="navbar-theme-toggle-btn"
+          onClick={toggleDarkMode}
+          className="h-9 px-2.5 sm:px-3 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-accent/40 hover:text-accent flex items-center gap-1.5 text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+          title={isDarkMode ? 'Beralih ke Mode Terang (Light Mode)' : 'Beralih ke Mode Gelap (Dark Mode)'}
+          aria-label="Ganti mode tema gelap/terang"
+        >
+          {isDarkMode ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline text-[11px] font-semibold">Terang</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-stone-600 dark:text-stone-300" />
+              <span className="hidden sm:inline text-[11px] font-semibold">Gelap</span>
+            </>
+          )}
+        </button>
+
         {/* Quick Language Toggle */}
         <button
           type="button"

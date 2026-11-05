@@ -86,6 +86,71 @@ export interface Product {
   image?: string;
   isAvailable?: boolean;
   temporaryUnavailableReason?: string;
+  rawMaterialAvailable?: boolean;
+  rawMaterialReason?: string;
+  maxServingsPossible?: number;
+  hasRecipe?: boolean;
+  updatedAt?: string;
+}
+
+export interface RawMaterial {
+  id: string;
+  vendorId: string;
+  name: string;
+  category: string;
+  unit: 'gram' | 'ml' | 'shot' | 'pcs' | 'lembar' | 'pack' | 'kg' | 'liter' | string;
+  stock: number;
+  minimumStock: number;
+  avgCostPerUnit: number;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RawMaterialPurchaseItem {
+  materialId: string;
+  materialName: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface RawMaterialPurchase {
+  id: string;
+  vendorId: string;
+  purchaseNumber: string;
+  supplierName: string;
+  purchaseDate: string;
+  invoiceNumber?: string;
+  paymentMethod: 'TRANSFER' | 'CASH' | 'TEMPO' | string;
+  totalAmount: number;
+  items: RawMaterialPurchaseItem[];
+  notes?: string;
+  createdBy?: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  createdAt?: string;
+}
+
+export interface ProductRecipeItem {
+  materialId: string;
+  materialName: string;
+  quantityNeeded: number;
+  unit: string;
+}
+
+export interface ProductRecipe {
+  id?: string;
+  vendorId: string;
+  productId: string;
+  productName: string;
+  category?: string;
+  ingredients: ProductRecipeItem[];
+  instructions?: string;
+  isAutoDeduct: boolean;
   updatedAt?: string;
 }
 

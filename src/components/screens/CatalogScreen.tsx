@@ -116,6 +116,13 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
   };
 
   const handleProductCardClick = (product: Product) => {
+    if (product.isAvailable === false || product.rawMaterialAvailable === false) {
+      showToast(
+        product.rawMaterialReason || `${product.name} tidak tersedia karena bahan baku racikan habis! Harap infokan Manager untuk restock bahan.`,
+        'warning'
+      );
+      return;
+    }
     if (product.stock <= 0) {
       showToast(`${product.name} saat ini sedang habis (stok 0)!`, 'warning');
       return;
@@ -257,8 +264,9 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {products.map(product => {
             const threshold = product.lowStockThreshold || 10;
-            const isOutOfStock = product.stock <= 0;
-            const isLowStock = product.stock > 0 && product.stock <= threshold;
+            const isRawMaterialDepleted = product.rawMaterialAvailable === false || product.isAvailable === false;
+            const isOutOfStock = product.stock <= 0 || isRawMaterialDepleted;
+            const isLowStock = !isOutOfStock && product.stock > 0 && product.stock <= threshold;
 
             return (
               <div
@@ -291,9 +299,9 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
 
                     {/* Stock badge */}
                     {isOutOfStock ? (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 text-center">
                         <span className="px-2.5 py-1 rounded-xl bg-red-600 text-white text-[11px] font-black tracking-wider uppercase shadow-md">
-                          {t('outOfStockBadge')}
+                          {isRawMaterialDepleted ? 'Bahan Habis (Tidak Tersedia)' : t('outOfStockBadge')}
                         </span>
                       </div>
                     ) : isLowStock ? (

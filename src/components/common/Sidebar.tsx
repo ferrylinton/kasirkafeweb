@@ -23,9 +23,14 @@ import {
   UserX,
   X,
   Layers,
-  SlidersHorizontal
+  PackagePlus,
+  FlaskConical,
+  ChevronRight,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -42,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const { t } = useLanguage();
   const { totalItemsCount } = useCart();
   const { user, token, logout } = useAuth();
+  const { isDarkMode, toggleDarkMode } = useTheme();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
@@ -50,16 +56,78 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [alertCount, setAlertCount] = useState<number>(0);
 
-  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori', 'kategori', 'variasi-kategori', 'category-variations'];
-  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'stok-produk', 'inventaris', 'kategori', 'variasi-kategori', 'category-variations', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-stock', 'admin-inventory', 'admin-inventaris', 'kategori', 'variasi-kategori', 'category-variations', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
+  // Floating Submenu State for Pembelian Bahan Baku
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(false);
+  const [submenuPos, setSubmenuPos] = useState<{ top: number; left: number }>({ top: 180, left: 264 });
+  const rawMaterialsBtnRef = React.useRef<HTMLDivElement | null>(null);
+  const closeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const activeSubTab = searchParams.get('tab') || 'pembelian-baru';
+
+  const updateSubmenuPosition = () => {
+    if (rawMaterialsBtnRef.current) {
+      const rect = rawMaterialsBtnRef.current.getBoundingClientRect();
+      const leftPos = rect.right + 8;
+      const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+      const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
+      const safeLeft = leftPos + 290 > windowWidth ? Math.max(16, rect.left - 296) : leftPos;
+      const safeTop = Math.min(rect.top - 6, windowHeight - 310);
+      setSubmenuPos({ top: Math.max(16, safeTop), left: safeLeft });
+    }
+  };
+
+  const handleSubmenuMouseEnter = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    updateSubmenuPosition();
+    setIsSubmenuOpen(true);
+  };
+
+  const handleSubmenuMouseLeave = () => {
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsSubmenuOpen(false);
+    }, 250);
+  };
+
+  const handleToggleSubmenu = () => {
+    updateSubmenuPosition();
+    setIsSubmenuOpen(prev => !prev);
+    handleNavClick('pembelian-bahan');
+  };
+
+  const handleSubmenuItemClick = (subTabKey: string) => {
+    setIsSubmenuOpen(false);
+    handleNavClick(`pembelian-bahan?tab=${subTabKey}`);
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (rawMaterialsBtnRef.current && !rawMaterialsBtnRef.current.contains(e.target as Node)) {
+        setIsSubmenuOpen(false);
+      }
+    };
+    if (isSubmenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isSubmenuOpen]);
+
+  const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
+  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'stok-produk', 'inventaris', 'kategori', 'pembelian-bahan', 'bahan-baku', 'resep-minuman', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-stock', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
+    const baseTab = tab.split('?')[0];
     // Role protection guard
-    if (isAdmin && !adminTabs.includes(tab) && !accountTabs.includes(tab)) return;
-    if (isManager && !cashierTabs.includes(tab) && !managerTabs.includes(tab) && !accountTabs.includes(tab)) return;
-    if (isCashier && !cashierTabs.includes(tab) && !accountTabs.includes(tab)) return;
+    if (isAdmin && !adminTabs.includes(baseTab) && !accountTabs.includes(baseTab)) return;
+    if (isManager && !cashierTabs.includes(baseTab) && !managerTabs.includes(baseTab) && !accountTabs.includes(baseTab)) return;
+    if (isCashier && !cashierTabs.includes(baseTab) && !accountTabs.includes(baseTab)) return;
 
     onSelectTab(tab);
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -264,28 +332,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     <span className="truncate">{t('navHistory')}</span>
                   </div>
                 </button>
-
-                {/* Variasi Kategori (Kasir Read-Only) */}
-                {isCashier && (
-                  <button
-                    type="button"
-                    id="nav-cashier-variasi-kategori-btn"
-                    onClick={() => handleNavClick('variasi-kategori')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-                      currentTab === 'variasi-kategori' || currentTab === 'category-variations'
-                        ? 'bg-accent text-white shadow-xs font-bold'
-                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <SlidersHorizontal className="w-4 h-4 shrink-0 text-amber-500" />
-                      <span className="truncate">Variasi Kategori</span>
-                    </div>
-                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
-                      Menu
-                    </span>
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -371,7 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   )}
                 </button>
 
-                {/* Kategori Menu */}
+                {/* Kategori & Variasi */}
                 <button
                   type="button"
                   id="nav-kategori-btn"
@@ -383,31 +429,140 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Layers className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Kategori Menu</span>
+                    <span className="truncate">Kategori & Variasi</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300">
                     Menu
                   </span>
                 </button>
 
-                {/* Variasi Kategori (Master Table) */}
-                <button
-                  type="button"
-                  id="nav-variasi-kategori-btn"
-                  onClick={() => handleNavClick('variasi-kategori')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'variasi-kategori' || currentTab === 'category-variations'
-                      ? 'bg-accent text-white shadow-xs font-bold'
-                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                    }`}
+                {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) dengan Float Sub-Menu ke Kanan */}
+                <div
+                  ref={rawMaterialsBtnRef}
+                  className="relative"
+                  onMouseEnter={handleSubmenuMouseEnter}
+                  onMouseLeave={handleSubmenuMouseLeave}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <SlidersHorizontal className="w-4 h-4 shrink-0 text-amber-500" />
-                    <span className="truncate">Variasi Kategori</span>
-                  </div>
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-                    Master
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    id="nav-pembelian-bahan-btn"
+                    onClick={handleToggleSubmenu}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                      currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman'
+                        ? 'bg-accent text-white shadow-xs font-bold'
+                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <PackagePlus className="w-4 h-4 shrink-0 text-emerald-500" />
+                      <span className="truncate">Pembelian Bahan Baku</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                        Racikan
+                      </span>
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-90 lg:rotate-0 text-white' : 'opacity-60'}`} />
+                    </div>
+                  </button>
+
+                  {/* Floating Sub Menu di Sebelah Kanan */}
+                  {isSubmenuOpen && (
+                    <div
+                      className="fixed z-50 w-72 bg-white/95 dark:bg-[#251e1c]/95 backdrop-blur-md rounded-3xl border border-stone-200/90 dark:border-stone-800 p-2.5 shadow-2xl space-y-1 animate-in fade-in zoom-in-95 duration-150 transition-all select-none"
+                      style={{
+                        top: `${submenuPos.top}px`,
+                        left: `${submenuPos.left}px`
+                      }}
+                      onMouseEnter={handleSubmenuMouseEnter}
+                      onMouseLeave={handleSubmenuMouseLeave}
+                    >
+                      <div className="px-3 py-1.5 border-b border-stone-100 dark:border-stone-800/80 mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                          Sub Menu Bahan Baku
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-100 dark:bg-orange-950 text-accent">
+                          Float
+                        </span>
+                      </div>
+
+                      {/* 1. Faktur Pembelian Baru */}
+                      <button
+                        type="button"
+                        onClick={() => handleSubmenuItemClick('pembelian-baru')}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'pembelian-baru'
+                            ? 'bg-orange-50 dark:bg-orange-950/60 text-accent font-bold ring-1 ring-accent/30'
+                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0">
+                          <PackagePlus className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Faktur Pembelian Baru</div>
+                          <div className="text-[10px] text-stone-400 truncate">Input nota beli & tambah stok</div>
+                        </div>
+                      </button>
+
+                      {/* 2. Riwayat Pembelian */}
+                      <button
+                        type="button"
+                        onClick={() => handleSubmenuItemClick('riwayat-pembelian')}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'riwayat-pembelian'
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold ring-1 ring-blue-500/30'
+                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                          <Receipt className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Riwayat Pembelian</div>
+                          <div className="text-[10px] text-stone-400 truncate">Arsip faktur pengeluaran supplier</div>
+                        </div>
+                      </button>
+
+                      {/* 3. Master Stok Bahan Baku */}
+                      <button
+                        type="button"
+                        onClick={() => handleSubmenuItemClick('stok-bahan')}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'stok-bahan'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold ring-1 ring-emerald-500/30'
+                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                          <Boxes className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Master Stok Bahan Baku</div>
+                          <div className="text-[10px] text-stone-400 truncate">Pantau stok aman & indikator habis</div>
+                        </div>
+                      </button>
+
+                      {/* 4. Resep Racikan Minuman (BOM) */}
+                      <button
+                        type="button"
+                        onClick={() => handleSubmenuItemClick('resep-minuman')}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'resep-minuman'
+                            ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-bold ring-1 ring-purple-500/30'
+                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <FlaskConical className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Resep Racikan Minuman</div>
+                          <div className="text-[10px] text-stone-400 truncate">Formula BOM & sinkronisasi kasir</div>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Manajemen User */}
                 <button
@@ -619,44 +774,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       </div>
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                         SEMUA
-                      </span>
-                    </button>
-
-                    {/* Kategori Menu (Admin) */}
-                    <button
-                      type="button"
-                      id="nav-admin-kategori-btn"
-                      onClick={() => handleNavClick('kategori')}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'kategori'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Layers className="w-4 h-4 shrink-0 text-purple-500" />
-                        <span className="truncate">Kategori Menu</span>
-                      </div>
-                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                        MENU
-                      </span>
-                    </button>
-
-                    {/* Variasi Kategori (Admin) */}
-                    <button
-                      type="button"
-                      id="nav-admin-variasi-kategori-btn"
-                      onClick={() => handleNavClick('category-variations')}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'variasi-kategori' || currentTab === 'category-variations'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <SlidersHorizontal className="w-4 h-4 shrink-0 text-amber-500" />
-                        <span className="truncate">Variasi Kategori</span>
-                      </div>
-                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                        MASTER
                       </span>
                     </button>
 
@@ -874,8 +991,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           </div>
         </div>
 
-        {/* Bottom: Logout & POS Version Info */}
+        {/* Bottom: Theme Mode, Logout & POS Version Info */}
         <div className="p-4 border-t border-stone-200/60 dark:border-stone-800/60 space-y-3 bg-[#fffaf8] dark:bg-[#1c1715]">
+          {/* Quick Theme Switcher */}
+          <div className="flex items-center justify-between p-2 rounded-2xl bg-stone-100/90 dark:bg-stone-900/90 border border-stone-200/70 dark:border-stone-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300 pl-1">
+              {isDarkMode ? (
+                <Moon className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+              )}
+              <span className="text-[11px]">{isDarkMode ? 'Mode Gelap' : 'Mode Terang'}</span>
+            </div>
+            <button
+              type="button"
+              id="sidebar-theme-toggle-btn"
+              onClick={toggleDarkMode}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-stone-800 text-[10px] font-bold text-stone-800 dark:text-stone-200 shadow-2xs border border-stone-200 dark:border-stone-750 hover:text-accent cursor-pointer transition-all active:scale-95"
+            >
+              {isDarkMode ? 'Ganti Terang' : 'Ganti Gelap'}
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setShowLogoutConfirm(true)}

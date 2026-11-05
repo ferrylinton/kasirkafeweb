@@ -26,7 +26,13 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('kasirkafe_theme_dark');
-    return saved === 'true';
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
   });
 
   const [accent, setAccentState] = useState<ThemeAccent>(() => {
@@ -41,10 +47,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isDarkMode) {
       root.classList.add('dark');
       body.classList.add('dark');
+      root.style.colorScheme = 'dark';
       localStorage.setItem('kasirkafe_theme_dark', 'true');
     } else {
       root.classList.remove('dark');
       body.classList.remove('dark');
+      root.style.colorScheme = 'light';
       localStorage.setItem('kasirkafe_theme_dark', 'false');
     }
   }, [isDarkMode]);
@@ -53,8 +61,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const root = document.documentElement;
     root.style.setProperty('--accent-color', accent.hex);
     root.style.setProperty('--accent-rgb', accent.rgb);
+    root.style.setProperty('--accent-light', `rgba(${accent.rgb}, ${isDarkMode ? 0.22 : 0.12})`);
+    root.style.setProperty('--accent-subtle', `rgba(${accent.rgb}, ${isDarkMode ? 0.16 : 0.08})`);
+    root.style.setProperty('--accent-border', `rgba(${accent.rgb}, ${isDarkMode ? 0.45 : 0.35})`);
     localStorage.setItem('kasirkafe_accent_id', accent.id);
-  }, [accent]);
+  }, [accent, isDarkMode]);
 
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);
   const setAccent = (newAccent: ThemeAccent) => setAccentState(newAccent);

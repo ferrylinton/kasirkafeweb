@@ -51,7 +51,7 @@ const FALLBACK_VENDORS: ModalVendor[] = [
   { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', status: 'ACTIVE' }
 ];
 
-const FALLBACK_USERS: SelectableUser[] = [
+export const FALLBACK_USERS: SelectableUser[] = [
   {
     id: 'admin_1',
     name: 'Radit Admin Sistem',

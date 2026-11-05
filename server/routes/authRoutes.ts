@@ -20,8 +20,32 @@ import {
   LOCKOUT_DURATION_MS
 } from '../lockoutStore';
 import { getRedisClient } from '../redis';
+import { createCaptcha, verifyCaptcha } from '../captcha';
 
 export const authRouter = Router();
+
+/**
+ * GET /api/auth/captcha
+ * Generates an uppercase alphanumeric Captcha with 5-minute validity
+ */
+authRouter.get('/captcha', async (req: Request, res: Response) => {
+  try {
+    const captcha = await createCaptcha();
+    return res.json({
+      success: true,
+      token: captcha.token,
+      image: captcha.image,
+      expiresAt: captcha.expiresAt,
+      expiresInSeconds: captcha.expiresInSeconds
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'CaptchaGenerationError',
+      message: 'Gagal membuat kode captcha.'
+    });
+  }
+});
 
 const loginSchema = z.object({
   email: z.string().email('Format email tidak valid'),
@@ -29,7 +53,9 @@ const loginSchema = z.object({
   forceLogout: z.boolean().optional(),
   managerEmail: z.string().email('Format email manager tidak valid').optional(),
   managerPassword: z.string().optional(),
-  deviceFingerprint: z.string().optional()
+  deviceFingerprint: z.string().optional(),
+  captchaToken: z.string().optional(),
+  captchaAnswer: z.string().optional()
 });
 
 // Helper to get active sessions for a user
@@ -391,7 +417,19 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    const { email, password } = parsed.data;
+    const { email, password, captchaToken, captchaAnswer } = parsed.data;
+
+    // Server-side Captcha Validation
+    const captchaCheck = await verifyCaptcha(captchaToken, captchaAnswer);
+    if (!captchaCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'CaptchaError',
+        isCaptchaError: true,
+        message: captchaCheck.message || 'Kode captcha tidak valid atau telah kadaluwarsa.'
+      });
+    }
+
     const forwarded = req.headers['x-forwarded-for'];
     const ipAddress = typeof forwarded === 'string'
       ? forwarded.split(',')[0].trim()

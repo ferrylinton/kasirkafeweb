@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../common/Toast';
+import { CaptchaBox, CaptchaBoxRef } from '../common/CaptchaBox';
 
 interface VendorRegisterScreenProps {
   onBackToLogin: () => void;
@@ -56,6 +57,14 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
   // Submitting state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string>('');
+  const [captchaAnswer, setCaptchaAnswer] = useState<string>('');
+  const captchaRef = React.useRef<CaptchaBoxRef>(null);
+
+  const handleCaptchaChange = useCallback(({ token: t, answer: a }: { token: string; answer: string }) => {
+    setCaptchaToken(t);
+    setCaptchaAnswer(a);
+  }, []);
 
   // Success state with email confirmation link info
   const [registrationResult, setRegistrationResult] = useState<{
@@ -211,6 +220,13 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
       return;
     }
 
+    if (!captchaAnswer.trim()) {
+      setFormError('Silakan masukkan kode captcha terlebih dahulu.');
+      showToast('Silakan masukkan kode captcha.', 'error');
+      captchaRef.current?.focus();
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/vendors/register', {
@@ -223,7 +239,9 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
           email: cleanEmail,
           phone: phone.trim(),
           address: address.trim(),
-          currency: 'IDR'
+          currency: 'IDR',
+          captchaToken,
+          captchaAnswer
         })
       });
 
@@ -233,6 +251,7 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
         const errorMsg = data.message || data.error || 'Pendaftaran vendor gagal diproses.';
         setFormError(errorMsg);
         showToast(errorMsg, 'error');
+        captchaRef.current?.reload();
         return;
       }
 
@@ -253,6 +272,7 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
       const msg = err.message || 'Terjadi gangguan koneksi ke server.';
       setFormError(msg);
       showToast(msg, 'error');
+      captchaRef.current?.reload();
     } finally {
       setIsSubmitting(false);
     }
@@ -772,12 +792,19 @@ export const VendorRegisterScreen: React.FC<VendorRegisterScreenProps> = ({
             </div>
           </div>
 
+          {/* Captcha Verification Box (Alphanumeric uppercase, 5 min TTL, reloadable) */}
+          <CaptchaBox
+            ref={captchaRef}
+            disabled={isSubmitting}
+            onCaptchaChange={handleCaptchaChange}
+          />
+
           {/* Submit button */}
           <button
             id="btn-submit-vendor-register"
             type="submit"
-            disabled={isSubmitting || isCheckingUniqueness}
-            className="w-full py-3.5 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none text-white font-bold text-sm shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2"
+            disabled={isSubmitting || isCheckingUniqueness || !captchaAnswer.trim()}
+            className="w-full py-3.5 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none text-white font-bold text-sm shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             {isSubmitting ? (
               <>
