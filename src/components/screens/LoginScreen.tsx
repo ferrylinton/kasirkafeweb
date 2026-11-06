@@ -806,15 +806,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
           onSubmit={attemptPasswordLogin}
           className="w-full bg-white dark:bg-[#251e1c] rounded-3xl p-5 sm:p-6 shadow-sm border border-stone-200/80 dark:border-stone-800 flex flex-col gap-4"
         >
-          <div className="flex flex-col gap-0.5 text-left">
-            <h3 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2">
-              <Lock className="w-4 h-4 text-accent" />
-              <span>{t('loginBtn') || 'Masuk ke Sistem POS'}</span>
-            </h3>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              Silakan periksa email dan kata sandi akun Anda di bawah ini
-            </p>
-          </div>
 
           {/* Email Field */}
           <div className="flex flex-col gap-1 text-left">

@@ -204,8 +204,7 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
-      {/* 1. Header */}
-      {allVendorsMode ? (
+      {allVendorsMode && (
         <AdminAllVendorsHeader
           title={t('navAdminOrders')}
           subtitle="Pantau dan kelola seluruh riwayat transaksi pesanan kasir dari seluruh vendor jaringan"
@@ -216,35 +215,11 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
           itemCount={orders.length}
           itemLabel="Pesanan"
         />
-      ) : (
-        <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-stone-800">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100">
-              {t('salesHistoryTitle')}
-            </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-              {t('salesSubtitle')}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                fetchOrders();
-                loadSavedOrders();
-              }}
-              disabled={loading || isLoadingSavedOrders}
-              className="p-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-600 dark:text-stone-300 transition-colors cursor-pointer"
-              title="Refresh Data"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading || isLoadingSavedOrders ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
       )}
 
-      {/* Tab Switcher: Completed Orders vs Saved Orders (Hold) */}
-      <div className="flex items-center gap-2 p-1.5 bg-stone-100 dark:bg-stone-900/60 rounded-2xl w-fit border border-stone-200/80 dark:border-stone-800">
+      {/* Tab Switcher: Completed Orders vs Saved Orders (Hold) + Refresh Action */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 p-1.5 bg-stone-100 dark:bg-stone-900/60 rounded-2xl w-fit border border-stone-200/80 dark:border-stone-800">
         <button
           type="button"
           onClick={() => setHistoryTab('completed')}
@@ -281,6 +256,19 @@ export const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({
           )}
         </button>
       </div>
+
+      <button
+        onClick={() => {
+          fetchOrders();
+          loadSavedOrders();
+        }}
+        disabled={loading || isLoadingSavedOrders}
+        className="p-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-600 dark:text-stone-300 transition-colors cursor-pointer shrink-0"
+        title="Refresh Data"
+      >
+        <RefreshCw className={`w-4 h-4 ${loading || isLoadingSavedOrders ? 'animate-spin' : ''}`} />
+      </button>
+    </div>
 
       {/* 2. Metric Cards */}
       {historyTab === 'completed' ? (

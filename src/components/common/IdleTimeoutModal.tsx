@@ -40,8 +40,8 @@ export const IdleTimeoutModal: React.FC = () => {
   if (!showIdleWarning) return null;
 
   const seconds = Math.max(0, idleWarningSecondsLeft);
-  const maxWarningSec = 10;
-  const isUrgent = seconds <= 5;
+  const maxWarningSec = 30;
+  const isUrgent = seconds <= 10;
   const progressPercent = Math.min(100, Math.max(0, (seconds / maxWarningSec) * 100));
 
   // Circular progress math (r = 44, circumference = 2 * PI * 44 ≈ 276.46)

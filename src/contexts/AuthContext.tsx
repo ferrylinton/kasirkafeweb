@@ -2,10 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { User } from '../types';
 import { getDeviceMetadata } from '../utils/deviceFingerprint';
 
-// 30 seconds of inactivity idle timeout
-export const IDLE_TIMEOUT_MS = 60 * 1000;
-// 10 seconds visual countdown before forced logout
-export const IDLE_WARNING_THRESHOLD_MS = 10 * 1000;
+// 10 minutes of inactivity idle timeout
+export const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+// 30 seconds visual countdown before forced logout
+export const IDLE_WARNING_THRESHOLD_MS = 30 * 1000;
 
 export interface LoginResult {
   success: boolean;
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [showIdleWarning, setShowIdleWarning] = useState<boolean>(false);
-  const [idleWarningSecondsLeft, setIdleWarningSecondsLeft] = useState<number>(10);
+  const [idleWarningSecondsLeft, setIdleWarningSecondsLeft] = useState<number>(30);
 
   const lastActivityRef = useRef<number>(Date.now());
   const lastSessionCheckRef = useRef<number>(0);
@@ -210,7 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
-    setIdleWarningSecondsLeft(10);
+    setIdleWarningSecondsLeft(30);
     setIdleTimedOut(false);
     setSessionRevoked(false);
     setToken(null);
@@ -317,7 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
     setShowIdleWarning(false);
     showIdleWarningRef.current = false;
-    setIdleWarningSecondsLeft(10);
+    setIdleWarningSecondsLeft(30);
 
     const currentToken = localStorage.getItem('kasirkafe_token') || token;
     if (currentToken) {
@@ -337,15 +337,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const simulateIdleWarning = useCallback(() => {
     const now = Date.now();
-    // Simulate being at 9 seconds left before 30-second timeout
-    const simulatedTime = now - (IDLE_TIMEOUT_MS - 9000);
+    // Simulate being at 25 seconds left before 10-minute timeout
+    const simulatedTime = now - (IDLE_TIMEOUT_MS - 25000);
     lastActivityRef.current = simulatedTime;
     try {
       localStorage.setItem('kasirkafe_last_active', String(simulatedTime));
     } catch (e) {}
     setShowIdleWarning(true);
     showIdleWarningRef.current = true;
-    setIdleWarningSecondsLeft(9);
+    setIdleWarningSecondsLeft(25);
   }, []);
 
   useEffect(() => {
@@ -447,7 +447,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (showIdleWarningRef.current) {
           setShowIdleWarning(false);
           showIdleWarningRef.current = false;
-          setIdleWarningSecondsLeft(10);
+          setIdleWarningSecondsLeft(30);
         }
       }
 

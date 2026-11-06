@@ -335,7 +335,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   )}
                 </button>
 
-                {/* Kategori & Variasi */}
+                {/* Kategori */}
                 <button
                   type="button"
                   id="nav-kategori-btn"
@@ -347,7 +347,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Layers className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Kategori & Variasi</span>
+                    <span className="truncate">Kategori</span>
                   </div>
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300">
                     Menu

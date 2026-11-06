@@ -402,29 +402,6 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
-      {/* Sub-Navigation Switcher: Kategori Menu vs Variasi Kategori */}
-      <div className="flex items-center gap-2 border-b border-stone-200/80 dark:border-stone-800 pb-2">
-        <button
-          type="button"
-          className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white shadow-xs flex items-center gap-2 cursor-pointer"
-        >
-          <Layers className="w-4 h-4" />
-          <span>Kategori Menu</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNavigateTab ? onNavigateTab('variasi-kategori') : null}
-          className="px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-750 text-stone-600 dark:text-stone-300 transition-colors flex items-center gap-2 cursor-pointer"
-        >
-          <SlidersHorizontal className="w-4 h-4 text-amber-500" />
-          <span>Variasi Kategori (Master Table)</span>
-          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-            Master
-          </span>
-        </button>
-      </div>
-
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
         <div>
@@ -433,7 +410,7 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
               <Layers className="w-5 h-5" />
             </span>
             <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
-              Kategori & Variasi Menu
+              Kategori
             </h1>
             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
               isAdmin
@@ -446,7 +423,7 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
             </span>
           </div>
           <p className="text-xs text-stone-500 dark:text-stone-400 max-w-2xl">
-            Kelola kategori toko dan variasinya (ukuran, es, gula, shot, topping). Setiap vendor memiliki variasi tersendiri yang tersimpan di database dan langsung sinkron ke katalog kasir.
+            Kelola kategori produk dan menu toko. Setiap kategori tersimpan di database dan langsung sinkron ke katalog produk kasir.
           </p>
         </div>
 

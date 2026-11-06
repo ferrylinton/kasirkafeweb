@@ -139,22 +139,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({ onProceedToPayment, onNa
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
       {/* 1. Header Order Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-200/80 dark:border-stone-800">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-accent uppercase tracking-wider">
-              {t('orderHeader')}
-            </span>
-            <span className="text-xs text-stone-400">•</span>
-            <span className="text-xs text-stone-500 dark:text-stone-400">
-              {t('roleCashier')}: {user?.name || t('roleCashier')}
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 dark:text-stone-100 mt-0.5">
-            {t('orderedItems')} ({items.reduce((s, i) => s + i.quantity, 0)})
-          </h2>
-        </div>
-
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 pb-3 border-b border-stone-200/80 dark:border-stone-800">
         <div className="flex items-center gap-2 self-start sm:self-auto">
           {/* Saved Orders / Hold Bills Button */}
           <button

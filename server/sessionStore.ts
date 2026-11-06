@@ -15,8 +15,8 @@ export interface RedisSessionData {
   lastActive: number;
 }
 
-// 30 seconds idle timeout in seconds (matching client-side IDLE_TIMEOUT_MS = 30 * 1000)
-export const SESSION_IDLE_TIMEOUT_SECONDS = 30; // 30 seconds
+// 10 minutes idle timeout in seconds (matching client-side IDLE_TIMEOUT_MS = 10 * 60 * 1000)
+export const SESSION_IDLE_TIMEOUT_SECONDS = 10 * 60; // 600 seconds (10 minutes)
 
 // In-memory fallback session store with TTL tracking in case Redis is momentarily disconnected
 const inMemorySessions = new Map<string, { data: RedisSessionData; expiresAt: number }>();

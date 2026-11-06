@@ -1,8 +1,7 @@
 import React from 'react';
-import { Coffee, ArrowRight, Menu, PanelLeft, Globe, Sun, Moon } from 'lucide-react';
+import { Coffee, ArrowRight, Menu, PanelLeft, PackagePlus, Receipt, Boxes, FlaskConical, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 
 interface NavbarProps {
@@ -19,16 +18,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebar
 }) => {
   const { user } = useAuth();
-  const { t, language, setLanguage } = useLanguage();
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { t } = useLanguage();
   const { totalItemsCount, subtotal } = useCart();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
-
-  const toggleLanguage = () => {
-    setLanguage(language === 'id' ? 'en' : 'id');
-  };
 
   const getTabTitle = (tab: string) => {
     switch (tab) {
@@ -41,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'inventaris':
         return t('navInventory');
       case 'kategori':
-        return 'Kategori Menu';
+        return 'Kategori';
       case 'variasi-kategori':
       case 'category-variations':
         return 'Variasi Kategori';
@@ -59,6 +53,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navLoginHistory');
       case 'activity-logs':
         return t('navActivityLogs');
+      case 'pembelian-bahan':
+      case 'bahan-baku':
+      case 'resep-minuman':
+        return 'Pembelian Bahan Baku';
       case 'vendor-client':
         return 'Informasi & Profil Vendor';
       case 'manager-dashboard':
@@ -141,61 +139,57 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
           <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-heading truncate">
                 <span className="lg:hidden">{getTabTitle(currentTab)}</span>
                 <span className="hidden lg:inline">{getTabTitle(currentTab)}</span>
               </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+
+              {/* Status Sub Menu Aktif (Khusus Layar Pembelian Bahan Baku & Resep Minuman) */}
+              {(currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman') && (() => {
+                const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+                const subTab = currentTab === 'bahan-baku'
+                  ? 'stok-bahan'
+                  : currentTab === 'resep-minuman'
+                  ? 'resep-minuman'
+                  : searchParams.get('tab') || 'pembelian-baru';
+
+                return (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 dark:bg-orange-950/50 border border-orange-200/80 dark:border-orange-800/60 shadow-2xs">
+                    {subTab === 'pembelian-baru' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">
+                        <PackagePlus className="w-3.5 h-3.5" />
+                        <span>Faktur Pembelian Baru</span>
+                      </span>
+                    )}
+                    {subTab === 'riwayat-pembelian' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                        <Receipt className="w-3.5 h-3.5" />
+                        <span>Riwayat Pembelian</span>
+                      </span>
+                    )}
+                    {subTab === 'stok-bahan' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <Boxes className="w-3.5 h-3.5" />
+                        <span>Master Stok Bahan Baku</span>
+                      </span>
+                    )}
+                    {subTab === 'resep-minuman' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        <span>Resep Racikan Minuman</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
-            <span className="text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 truncate hidden xs:inline sm:inline">
-              {isAdmin
-                ? 'Administrasi Sistem Lintas Vendor'
-                : isManager
-                ? `${t('roleManager')} • Operasional & Manajemen Toko`
-                : `${t('shiftPagi')} • ${t('roleCashier')} • Operasional Kasir`} • Senopati
-            </span>
           </div>
         </div>
       </div>
 
-      {/* Right Side: Quick Language Switcher & Cart Summary */}
+      {/* Right Side: Cart Summary */}
       <div className="flex items-center gap-2 shrink-0 ml-auto">
-        {/* Quick Dark Mode / Theme Mode Toggle */}
-        <button
-          type="button"
-          id="navbar-theme-toggle-btn"
-          onClick={toggleDarkMode}
-          className="h-9 px-2.5 sm:px-3 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-accent/40 hover:text-accent flex items-center gap-1.5 text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-          title={isDarkMode ? 'Beralih ke Mode Terang (Light Mode)' : 'Beralih ke Mode Gelap (Dark Mode)'}
-          aria-label="Ganti mode tema gelap/terang"
-        >
-          {isDarkMode ? (
-            <>
-              <Sun className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline text-[11px] font-semibold">Terang</span>
-            </>
-          ) : (
-            <>
-              <Moon className="w-3.5 h-3.5 text-stone-600 dark:text-stone-300" />
-              <span className="hidden sm:inline text-[11px] font-semibold">Gelap</span>
-            </>
-          )}
-        </button>
-
-        {/* Quick Language Toggle */}
-        <button
-          type="button"
-          id="navbar-language-toggle-btn"
-          onClick={toggleLanguage}
-          className="h-9 px-2.5 sm:px-3 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-accent/40 hover:text-accent flex items-center gap-1.5 text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-          title={`Switch language / Ganti bahasa (Current: ${language.toUpperCase()})`}
-          aria-label="Language selector"
-        >
-          <Globe className="w-3.5 h-3.5 text-accent" />
-          <span className="uppercase tracking-wider font-extrabold">{language}</span>
-          <span className="text-[10px] text-stone-400 hidden sm:inline">({language === 'id' ? 'ID' : 'EN'})</span>
-        </button>
 
         {/* Cart Summary Bar - Hanya tampil untuk role yang punya akses Operasional Kasir (CASHIER & MANAGER) */}
         {isCashierOrManager && totalItemsCount > 0 && currentTab !== 'pembayaran' && (

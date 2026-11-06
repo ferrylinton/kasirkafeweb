@@ -224,7 +224,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       });
     }
 
-    const msg = req.t ? req.t('auth.sessionTimedOut') : 'Sesi Anda telah berakhir otomatis karena 30 detik tanpa aktivitas.';
+    const msg = req.t ? req.t('auth.sessionTimedOut') : 'Sesi Anda telah berakhir otomatis karena 10 menit tanpa aktivitas.';
     return res.status(401).json({
       success: false,
       error: 'SessionTimedOut',
