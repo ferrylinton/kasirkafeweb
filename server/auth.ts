@@ -1,10 +1,14 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import { ObjectId } from 'mongodb';
 import { getDB } from './db';
 import { getSessionFromRedis, removeSessionFromRedis, getActiveTokenForUser, RedisSessionData } from './sessionStore';
+import { addTokenToDenylist, isTokenDenylisted, revokeJwtToken, getDenylistStats } from './tokenDenylist';
+
+export { addTokenToDenylist, isTokenDenylisted, revokeJwtToken, getDenylistStats };
 
 dotenv.config();
 
@@ -16,6 +20,7 @@ export interface TokenPayload {
   email: string;
   role: 'ADMIN' | 'MANAGER' | 'CASHIER';
   name: string;
+  jti?: string;
   sessionId?: string;
   vendorId?: string;
   deviceFingerprint?: string;
@@ -23,6 +28,8 @@ export interface TokenPayload {
   os?: string;
   deviceInfo?: string;
   tokenType?: 'access' | 'refresh';
+  exp?: number;
+  iat?: number;
 }
 
 // In-memory set of revoked session IDs for O(1) instantaneous lookup
@@ -49,11 +56,17 @@ export async function isSessionRevoked(sessionId: string): Promise<boolean> {
 }
 
 export function signToken(payload: TokenPayload, expiresIn: string = '15m'): string {
-  return jwt.sign({ ...payload, tokenType: 'access' }, JWT_SECRET, { expiresIn: (expiresIn as any) });
+  const jti = payload.jti || crypto.randomUUID();
+  return jwt.sign({ ...payload, jti, tokenType: 'access' }, JWT_SECRET, {
+    expiresIn: (expiresIn as any)
+  });
 }
 
 export function signRefreshToken(payload: any, expiresIn: string = '7d'): string {
-  return jwt.sign({ ...payload, tokenType: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: (expiresIn as any) });
+  const jti = payload.jti || crypto.randomUUID();
+  return jwt.sign({ ...payload, jti, tokenType: 'refresh' }, JWT_REFRESH_SECRET, {
+    expiresIn: (expiresIn as any)
+  });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
@@ -126,6 +139,26 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       success: false,
       error: 'Invalid Token',
       message: msg
+    });
+  }
+
+  // Token Denylist (Blocklist) verification on EVERY incoming request
+  let isDenylisted = false;
+  if (decoded.jti) {
+    isDenylisted = await isTokenDenylisted(decoded.jti);
+  }
+  if (!isDenylisted) {
+    const legacyJti = `legacy_${crypto.createHash('sha256').update(token).digest('hex').substring(0, 32)}`;
+    isDenylisted = await isTokenDenylisted(legacyJti);
+  }
+
+  if (isDenylisted) {
+    return res.status(401).json({
+      success: false,
+      error: 'TokenDenylisted',
+      tokenRevoked: true,
+      denylisted: true,
+      message: 'Token otentikasi telah dicabut atau diblokir (Token Denylisted). Silakan login kembali.'
     });
   }
 

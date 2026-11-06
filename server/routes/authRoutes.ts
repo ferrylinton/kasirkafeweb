@@ -2,7 +2,22 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDB } from '../db';
-import { comparePassword, hashPassword, signToken, signRefreshToken, verifyRefreshToken, authMiddleware, requireAdmin, revokedSessionIds, verifyToken, isSessionRevoked } from '../auth';
+import {
+  comparePassword,
+  hashPassword,
+  signToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  authMiddleware,
+  requireAdmin,
+  revokedSessionIds,
+  verifyToken,
+  isSessionRevoked,
+  addTokenToDenylist,
+  isTokenDenylisted,
+  revokeJwtToken,
+  getDenylistStats
+} from '../auth';
 import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendPasswordResetEmail, sendAdminNewPasswordEmail } from '../mail';
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
@@ -1000,6 +1015,16 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
       });
     }
 
+    // Check Token Denylist (Blocklist) for Refresh Token
+    if (decoded.jti && await isTokenDenylisted(decoded.jti)) {
+      return res.status(401).json({
+        success: false,
+        error: 'TokenDenylisted',
+        denylisted: true,
+        message: 'Refresh token telah dicabut atau diblokir (Token Denylisted). Silakan login kembali.'
+      });
+    }
+
     const incomingFingerprint = (req.headers['x-device-fingerprint'] as string | undefined) ||
       (req.body?.deviceFingerprint as string | undefined);
 
@@ -1105,6 +1130,11 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
       deviceFingerprint: finalFingerprint
     }, '7d');
 
+    // Invalidate previous refresh token by adding its JTI to the Denylist (Blocklist)
+    if (refreshToken) {
+      await revokeJwtToken(refreshToken, 'REFRESH_ROTATION');
+    }
+
     // Update active session in Redis with 30-second idle timeout
     await saveSessionToRedis(newAccessToken, {
       sessionId: decoded.sessionId,
@@ -1171,6 +1201,9 @@ authRouter.post('/invalidate-token', async (req: Request, res: Response) => {
   const targetToken = token || bodyToken;
 
   if (targetToken) {
+    // Add token's JTI to the Denylist (Blocklist) with TTL matching expiration
+    await revokeJwtToken(targetToken, 'IDLE_TIMEOUT_INVALIDATE');
+
     const decoded = verifyToken(targetToken);
     if (decoded?.sessionId) {
       revokedSessionIds.add(decoded.sessionId);
@@ -1191,17 +1224,43 @@ authRouter.post('/invalidate-token', async (req: Request, res: Response) => {
   res.clearCookie('token');
   res.clearCookie('refreshToken');
 
-  return res.json({ success: true, message: 'Token dan sesi berhasil diinvalidasi.' });
+  return res.json({ success: true, message: 'Token dan sesi berhasil diinvalidasi dan dimasukkan ke denylist.' });
 });
 
 /**
  * POST /api/auth/logout
- * Marks current session as logged out
+ * Marks current session as logged out and adds token's JTI to the Denylist (Blocklist)
+ * with a TTL matching the token's remaining expiration
  */
 authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) => {
   const sessionId = req.user?.sessionId;
   const authHeader = req.headers.authorization;
   const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : undefined;
+  const cookieToken = req.headers.cookie
+    ?.split(';')
+    .find(c => c.trim().startsWith('token='))
+    ?.split('=')[1];
+  const targetToken = token || cookieToken;
+
+  // 1. Add Access Token's JTI to Denylist with exact TTL matching token expiration
+  if (targetToken) {
+    await revokeJwtToken(targetToken, 'USER_LOGOUT');
+  } else if (req.user?.jti) {
+    const exp = req.user.exp;
+    const ttlSeconds = exp ? Math.max(1, exp - Math.floor(Date.now() / 1000)) : 15 * 60;
+    await addTokenToDenylist(req.user.jti, ttlSeconds, 'USER_LOGOUT');
+  }
+
+  // 2. Also revoke Refresh Token's JTI if provided in body or cookies
+  const bodyRefreshToken = req.body?.refreshToken;
+  const cookieRefreshToken = req.headers.cookie
+    ?.split(';')
+    .find(c => c.trim().startsWith('refreshToken='))
+    ?.split('=')[1];
+  const targetRefreshToken = bodyRefreshToken || cookieRefreshToken;
+  if (targetRefreshToken) {
+    await revokeJwtToken(targetRefreshToken, 'USER_LOGOUT_REFRESH');
+  }
 
   if (sessionId) {
     await removeSessionFromRedis(sessionId);
@@ -1214,8 +1273,8 @@ authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) =
         );
       } catch (e) {}
     }
-  } else if (token) {
-    await removeSessionFromRedis(token);
+  } else if (targetToken) {
+    await removeSessionFromRedis(targetToken);
   }
 
   res.clearCookie('token');
@@ -1228,10 +1287,25 @@ authRouter.post('/logout', authMiddleware, async (req: Request, res: Response) =
     role: req.user?.role,
     userId: req.user?.userId,
     req,
-    details: { sessionId }
+    details: { sessionId, jti: req.user?.jti }
   }).catch(() => {});
 
-  return res.json({ success: true, message: 'Berhasil logout' });
+  return res.json({
+    success: true,
+    message: 'Berhasil logout. Token otentikasi telah dimasukkan ke daftar blokir (Token Denylist).'
+  });
+});
+
+/**
+ * GET /api/auth/denylist-stats
+ * Returns diagnostic statistics of the Token Denylist
+ */
+authRouter.get('/denylist-stats', async (req: Request, res: Response) => {
+  const stats = getDenylistStats();
+  return res.json({
+    success: true,
+    denylist: stats
+  });
 });
 
 /**

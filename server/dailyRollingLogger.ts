@@ -398,7 +398,7 @@ export async function logDatabase(params: {
  * 5. Log Redis Connection & Rate Limiter events
  */
 export async function logRedis(params: {
-  event: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'FALLBACK_MODE' | 'RATE_LIMIT_EXCEEDED';
+  event: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'FALLBACK_MODE' | 'RATE_LIMIT_EXCEEDED' | 'TOKEN_DENYLIST_ADD';
   message: string;
   ipAddress?: string;
   error?: any;

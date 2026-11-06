@@ -190,10 +190,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     const currentToken = localStorage.getItem('kasirkafe_token') || token;
+    const currentRefreshToken = localStorage.getItem('kasirkafe_refresh_token') || refreshToken;
     if (currentToken) {
       fetch('/api/auth/logout', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${currentToken}` }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentToken}`
+        },
+        body: JSON.stringify({ refreshToken: currentRefreshToken })
       }).catch(() => {});
     }
     try {
@@ -211,7 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setRefreshToken(null);
     setUser(null);
-  }, [token]);
+  }, [token, refreshToken]);
 
   /**
    * Refreshes the Access Token using the stored Refresh Token and device fingerprint
@@ -250,7 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return data.token;
       } else {
-        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
+        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch' || data.error === 'TokenDenylisted' || data.denylisted || data.tokenRevoked) {
           handleRemoteRevokedLogout();
         } else if (data.error === 'SessionTimedOut' || data.idleTimedOut) {
           handleIdleLogout();
@@ -356,7 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (res.status === 401) {
         const data = await res.json().catch(() => ({}));
-        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch') {
+        if (data.error === 'SessionRevoked' || data.error === 'DeviceMismatch' || data.error === 'TokenDenylisted' || data.denylisted || data.tokenRevoked) {
           handleRemoteRevokedLogout();
           return false;
         } else if (data.error === 'SessionTimedOut' || data.idleTimedOut) {

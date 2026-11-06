@@ -165,10 +165,37 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: false
+        hmr: false,
+        ws: { server: httpServer }
       },
       appType: 'spa'
     });
+
+    // Intercept /@vite/client so browser does not throw "WebSocket closed without opened" when HMR is disabled
+    app.use(async (req, res, next) => {
+      if (req.url === '/@vite/client' || req.url?.startsWith('/@vite/client?')) {
+        try {
+          const transformed = await vite.transformRequest(req.url);
+          if (transformed) {
+            let code = transformed.code;
+            code = code.replaceAll(
+              'reject(/* @__PURE__ */ new Error("WebSocket closed without opened."));',
+              'resolve();'
+            );
+            code = code.replaceAll(
+              'e.message.includes("WebSocket closed without opened.")',
+              'false'
+            );
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.end(code);
+          }
+        } catch (e) {
+          // Fall through to standard middlewares if transform fails
+        }
+      }
+      next();
+    });
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
