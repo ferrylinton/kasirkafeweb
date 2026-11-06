@@ -46,7 +46,21 @@ if (process.env.MONGODB_URI) {
   }
 }
 
-const PORT = 3000;
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[Process] Uncaught Exception:', error);
+});
+
+const args = process.argv.slice(2);
+function getArg(flag: string): string | undefined {
+  const index = args.indexOf(flag);
+  return index !== -1 && args[index + 1] ? args[index + 1] : undefined;
+}
+
+const PORT = Number(process.env.PORT) || (getArg('--port') ? Number(getArg('--port')) : 3000);
+const HOST = process.env.HOST || getArg('--host') || '0.0.0.0';
 
 async function startServer() {
   const app = express();
@@ -148,11 +162,10 @@ async function startServer() {
 
   // Vite Middleware / Static Serving
   if (process.env.NODE_ENV !== 'production') {
-    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: isHmrDisabled ? false : { server: httpServer }
+        hmr: false
       },
       appType: 'spa'
     });
@@ -192,9 +205,9 @@ async function startServer() {
   process.on('SIGTERM', cleanup);
   process.on('SIGINT', cleanup);
 
-  // Bind to 0.0.0.0:3000
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] KasirKafe POS running on http://0.0.0.0:${PORT}`);
+  // Bind to HOST:PORT
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`[Server] KasirKafe POS running on http://${HOST}:${PORT}`);
     writeDailyLog({
       level: 'INFO',
       category: 'SYSTEM',

@@ -429,6 +429,297 @@ productRouter.delete('/categories/:id', authMiddleware, requireInventoryWriteAcc
 });
 
 /**
+ * GET /api/products/category-variations
+ * List category variations for active vendor (or all vendors for admin)
+ */
+productRouter.get('/category-variations', async (req: Request, res: Response) => {
+  try {
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const isAdmin = (req as any).user?.role === 'ADMIN';
+    const isAllVendors = (req.query.allVendors === 'true' || req.query.vendorId === 'all') && isAdmin;
+    const requestedVendor = (req.query.vendorId as string) || '';
+    const targetVendor = isAllVendors ? 'all' : (requestedVendor || activeVendorId);
+
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not available' });
+    }
+
+    const varQuery = targetVendor === 'all'
+      ? {}
+      : (targetVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: targetVendor });
+
+    const catQuery = targetVendor === 'all'
+      ? {}
+      : (targetVendor === 'vnd_kasirkafe_central'
+          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
+          : { vendorId: targetVendor });
+
+    const [variationsDocs, categoriesDocs] = await Promise.all([
+      db.collection('category_variations').find(varQuery).toArray().catch(() => []),
+      db.collection('categories').find(catQuery).toArray().catch(() => [])
+    ]);
+
+    // Map existing variations from category_variations collection
+    const variationsMap = new Map<string, any>();
+    for (const v of variationsDocs) {
+      const vId = v.id || v._id?.toString();
+      variationsMap.set(vId, {
+        id: vId,
+        vendorId: v.vendorId || activeVendorId,
+        name: v.name,
+        type: v.type || 'SINGLE_SELECT',
+        required: !!v.required,
+        options: Array.isArray(v.options) ? v.options : [],
+        categoryIds: Array.isArray(v.categoryIds) ? v.categoryIds : [],
+        categoryNames: [],
+        usedInCategoriesCount: 0,
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt
+      });
+    }
+
+    // Also extract embedded variations from categories if not already in variationsMap
+    for (const cat of categoriesDocs) {
+      const catId = cat._id ? cat._id.toString() : cat.id;
+      const catName = cat.name;
+      if (Array.isArray(cat.variations)) {
+        for (const cv of cat.variations) {
+          const cvId = cv.id || `var_${catId}_${cv.name}`;
+          if (!variationsMap.has(cvId)) {
+            variationsMap.set(cvId, {
+              id: cvId,
+              vendorId: cat.vendorId || activeVendorId,
+              name: cv.name,
+              type: cv.type || 'SINGLE_SELECT',
+              required: !!cv.required,
+              options: Array.isArray(cv.options) ? cv.options : [],
+              categoryIds: [catId],
+              categoryNames: [catName],
+              usedInCategoriesCount: 1,
+              createdAt: cv.createdAt || cat.createdAt,
+              updatedAt: cv.updatedAt || cat.updatedAt
+            });
+          }
+        }
+      }
+    }
+
+    // Correlate usage across categories
+    const allVariations = Array.from(variationsMap.values());
+    for (const v of allVariations) {
+      const linkedCats = categoriesDocs.filter(c => {
+        const catId = c._id ? c._id.toString() : c.id;
+        const matchesCatId = Array.isArray(v.categoryIds) && v.categoryIds.includes(catId);
+        const hasEmbedded = Array.isArray(c.variations) && c.variations.some((ev: any) => ev.id === v.id || ev.name === v.name);
+        return matchesCatId || hasEmbedded;
+      });
+      v.categoryNames = linkedCats.map(c => c.name);
+      v.usedInCategoriesCount = linkedCats.length;
+    }
+
+    return res.json({
+      success: true,
+      variations: allVariations
+    });
+  } catch (err: any) {
+    console.error('Error fetching category-variations:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * POST /api/products/category-variations
+ * Create a new master category variation
+ */
+productRouter.post('/category-variations', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const { name, type, required, options, categoryIds } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Nama variasi wajib diisi' });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database tidak tersedia' });
+    }
+
+    const varId = `var_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const formattedOptions = Array.isArray(options)
+      ? options.map((opt: any, idx: number) => ({
+          id: opt.id || `opt_${Date.now()}_${idx}`,
+          name: opt.name ? opt.name.trim() : `Opsi ${idx + 1}`,
+          extraPrice: Number(opt.extraPrice || 0),
+          isDefault: !!opt.isDefault
+        }))
+      : [];
+
+    const newDoc = {
+      id: varId,
+      vendorId: activeVendorId,
+      name: name.trim(),
+      type: type || 'SINGLE_SELECT',
+      required: !!required,
+      options: formattedOptions,
+      categoryIds: Array.isArray(categoryIds) ? categoryIds : [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await db.collection('category_variations').insertOne(newDoc);
+
+    // If categories are selected, update those categories to include this variation
+    if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+      for (const catId of categoryIds) {
+        const catIdStr = String(catId);
+        const query = ObjectId.isValid(catIdStr) ? { _id: new ObjectId(catIdStr) } : { id: catIdStr };
+        const cat = await db.collection('categories').findOne(query);
+        if (cat) {
+          const existingVariations = Array.isArray(cat.variations) ? cat.variations : [];
+          if (!existingVariations.some((v: any) => v.id === varId)) {
+            existingVariations.push({
+              id: varId,
+              name: newDoc.name,
+              type: newDoc.type,
+              required: newDoc.required,
+              options: formattedOptions
+            });
+            await db.collection('categories').updateOne(
+              { _id: cat._id },
+              { $set: { variations: existingVariations, updatedAt: new Date().toISOString() } }
+            );
+          }
+        }
+      }
+    }
+
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Variasi kategori berhasil dibuat!',
+      variation: newDoc
+    });
+  } catch (err: any) {
+    console.error('Error creating category-variation:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * PUT /api/products/category-variations/:id
+ * Update a category variation
+ */
+productRouter.put('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id) as string;
+    const { name, type, required, options, categoryIds } = req.body;
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database tidak tersedia' });
+    }
+
+    const formattedOptions = Array.isArray(options)
+      ? options.map((opt: any, idx: number) => ({
+          id: opt.id || `opt_${Date.now()}_${idx}`,
+          name: opt.name ? opt.name.trim() : `Opsi ${idx + 1}`,
+          extraPrice: Number(opt.extraPrice || 0),
+          isDefault: !!opt.isDefault
+        }))
+      : [];
+
+    const updateFields: any = {
+      updatedAt: new Date().toISOString()
+    };
+    if (name) updateFields.name = name.trim();
+    if (type) updateFields.type = type;
+    if (typeof required === 'boolean') updateFields.required = required;
+    if (options) updateFields.options = formattedOptions;
+    if (categoryIds) updateFields.categoryIds = categoryIds;
+
+    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+    await db.collection('category_variations').updateOne(query, { $set: updateFields });
+
+    // Also update any categories embedding this variation
+    if (name || options) {
+      const allCats = await db.collection('categories').find({}).toArray();
+      for (const cat of allCats) {
+        if (Array.isArray(cat.variations)) {
+          let updated = false;
+          const newVars = cat.variations.map((v: any) => {
+            if (v.id === id) {
+              updated = true;
+              return {
+                ...v,
+                name: name ? name.trim() : v.name,
+                options: options ? formattedOptions : v.options
+              };
+            }
+            return v;
+          });
+          if (updated) {
+            await db.collection('categories').updateOne({ _id: cat._id }, { $set: { variations: newVars } });
+          }
+        }
+      }
+    }
+
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    return res.json({
+      success: true,
+      message: 'Variasi kategori berhasil diperbarui!'
+    });
+  } catch (err: any) {
+    console.error('Error updating category-variation:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
+ * DELETE /api/products/category-variations/:id
+ * Delete a category variation
+ */
+productRouter.delete('/category-variations/:id', authMiddleware, requireInventoryWriteAccess, async (req: Request, res: Response) => {
+  try {
+    const id = (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id) as string;
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database tidak tersedia' });
+    }
+
+    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+    await db.collection('category_variations').deleteOne(query);
+
+    // Also remove from any category referencing it
+    const allCats = await db.collection('categories').find({}).toArray();
+    for (const cat of allCats) {
+      if (Array.isArray(cat.variations) && cat.variations.some((v: any) => v.id === id)) {
+        const filteredVars = cat.variations.filter((v: any) => v.id !== id);
+        await db.collection('categories').updateOne({ _id: cat._id }, { $set: { variations: filteredVars } });
+      }
+    }
+
+    serverProductCache.invalidateCategories(activeVendorId);
+
+    return res.json({
+      success: true,
+      message: 'Variasi kategori berhasil dihapus!'
+    });
+  } catch (err: any) {
+    console.error('Error deleting category-variation:', err);
+    return res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+/**
  * GET /api/products
  * Public / Authenticated catalog with query params: ?category=kopi&search=latte (with Server Cache)
  */

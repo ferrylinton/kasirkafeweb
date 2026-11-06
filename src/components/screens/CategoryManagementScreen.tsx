@@ -71,16 +71,20 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
         })
       ]);
 
-      const data = await catRes.json();
-      if (data.success && Array.isArray(data.categories)) {
-        setCategories(data.categories);
-      } else {
-        showToast('Gagal memuat kategori vendor', 'error');
+      if (catRes.ok) {
+        const data = await catRes.json();
+        if (data && data.success && Array.isArray(data.categories)) {
+          setCategories(data.categories);
+        } else {
+          showToast('Gagal memuat kategori vendor', 'error');
+        }
       }
 
-      const varData = await varRes.json();
-      if (varData.success && Array.isArray(varData.variations)) {
-        setMasterVariations(varData.variations);
+      if (varRes.ok) {
+        const varData = await varRes.json();
+        if (varData && varData.success && Array.isArray(varData.variations)) {
+          setMasterVariations(varData.variations);
+        }
       }
     } catch (err) {
       console.error('Error fetching categories:', err);

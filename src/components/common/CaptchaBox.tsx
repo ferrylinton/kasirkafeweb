@@ -32,12 +32,19 @@ export const CaptchaBox = forwardRef<CaptchaBoxRef, CaptchaBoxProps>(({
     onCaptchaChangeRef.current = onCaptchaChange;
   }, [onCaptchaChange]);
 
+  // Safe parent state notifier deferred out of render cycle
+  const notifyParent = useCallback((data: { token: string; answer: string; isValidLength: boolean }) => {
+    queueMicrotask(() => {
+      onCaptchaChangeRef.current?.(data);
+    });
+  }, []);
+
   // Fetch captcha from backend server
   const fetchCaptcha = useCallback(async (isExpiredTrigger = false) => {
     setLoading(true);
     setError(null);
     setAnswer('');
-    onCaptchaChangeRef.current?.({ token: '', answer: '', isValidLength: false });
+    notifyParent({ token: '', answer: '', isValidLength: false });
 
     try {
       const res = await fetch('/api/auth/captcha');
@@ -47,7 +54,7 @@ export const CaptchaBox = forwardRef<CaptchaBoxRef, CaptchaBoxProps>(({
         setToken(data.token);
         setImage(data.image);
         setSecondsLeft(data.expiresInSeconds || 300);
-        onCaptchaChangeRef.current?.({ token: data.token, answer: '', isValidLength: false });
+        notifyParent({ token: data.token, answer: '', isValidLength: false });
       } else {
         setError(data.message || 'Gagal memuat captcha.');
       }
@@ -56,7 +63,7 @@ export const CaptchaBox = forwardRef<CaptchaBoxRef, CaptchaBoxProps>(({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [notifyParent]);
 
   // Stable ref for auto-reload callback
   const fetchCaptchaRef = useRef(fetchCaptcha);
@@ -92,7 +99,7 @@ export const CaptchaBox = forwardRef<CaptchaBoxRef, CaptchaBoxProps>(({
     reload: () => fetchCaptcha(false),
     clear: () => {
       setAnswer('');
-      onCaptchaChangeRef.current?.({ token, answer: '', isValidLength: false });
+      notifyParent({ token, answer: '', isValidLength: false });
     },
     focus: () => {
       inputRef.current?.focus();
@@ -103,7 +110,7 @@ export const CaptchaBox = forwardRef<CaptchaBoxRef, CaptchaBoxProps>(({
     // Force uppercase and allow only alphanumeric characters
     const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     setAnswer(clean);
-    onCaptchaChangeRef.current?.({
+    notifyParent({
       token,
       answer: clean,
       isValidLength: clean.length >= 4

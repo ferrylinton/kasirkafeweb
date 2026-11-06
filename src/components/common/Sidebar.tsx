@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Sparkles,
   Settings,
-  PanelLeftClose,
   ShieldCheck,
   ClipboardList,
   Building2,
@@ -25,16 +24,12 @@ import {
   Layers,
   PackagePlus,
   FlaskConical,
-  ChevronRight,
-  Sun,
-  Moon
+  ChevronRight
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmationModal } from './ConfirmationModal';
-import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
 interface SidebarProps {
   currentTab: string;
@@ -47,7 +42,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const { t } = useLanguage();
   const { totalItemsCount } = useCart();
   const { user, token, logout } = useAuth();
-  const { isDarkMode, toggleDarkMode } = useTheme();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
@@ -56,66 +50,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [alertCount, setAlertCount] = useState<number>(0);
 
-  // Floating Submenu State for Pembelian Bahan Baku
-  const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(false);
-  const [submenuPos, setSubmenuPos] = useState<{ top: number; left: number }>({ top: 180, left: 264 });
-  const rawMaterialsBtnRef = React.useRef<HTMLDivElement | null>(null);
-  const closeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  // Accordion Submenu (Toggle Expanded/Collapsed) for Pembelian Bahan Baku
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(() => {
+    return currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman';
+  });
 
   const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const activeSubTab = searchParams.get('tab') || 'pembelian-baru';
 
-  const updateSubmenuPosition = () => {
-    if (rawMaterialsBtnRef.current) {
-      const rect = rawMaterialsBtnRef.current.getBoundingClientRect();
-      const leftPos = rect.right + 8;
-      const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
-      const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
-      const safeLeft = leftPos + 290 > windowWidth ? Math.max(16, rect.left - 296) : leftPos;
-      const safeTop = Math.min(rect.top - 6, windowHeight - 310);
-      setSubmenuPos({ top: Math.max(16, safeTop), left: safeLeft });
+  useEffect(() => {
+    if (currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman') {
+      setIsSubmenuOpen(true);
     }
-  };
-
-  const handleSubmenuMouseEnter = () => {
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-    updateSubmenuPosition();
-    setIsSubmenuOpen(true);
-  };
-
-  const handleSubmenuMouseLeave = () => {
-    closeTimeoutRef.current = setTimeout(() => {
-      setIsSubmenuOpen(false);
-    }, 250);
-  };
+  }, [currentTab]);
 
   const handleToggleSubmenu = () => {
-    updateSubmenuPosition();
     setIsSubmenuOpen(prev => !prev);
-    handleNavClick('pembelian-bahan');
   };
 
   const handleSubmenuItemClick = (subTabKey: string) => {
-    setIsSubmenuOpen(false);
     handleNavClick(`pembelian-bahan?tab=${subTabKey}`);
   };
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (rawMaterialsBtnRef.current && !rawMaterialsBtnRef.current.contains(e.target as Node)) {
-        setIsSubmenuOpen(false);
-      }
-    };
-    if (isSubmenuOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [isSubmenuOpen]);
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
   const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'stok-produk', 'inventaris', 'kategori', 'pembelian-bahan', 'bahan-baku', 'resep-minuman', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
@@ -180,31 +135,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           paddingLeft: 'env(safe-area-inset-left, 0px)'
         }}
       >
-        {/* Top: Brand, Close Button & User Info */}
-        <div className="p-5 pb-3 border-b border-stone-200/60 dark:border-stone-800/60">
-          {/* Brand Logo, Name & Close Button */}
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-orange-100 dark:bg-orange-950/60 overflow-hidden shadow-xs shrink-0 border border-orange-200/70 dark:border-orange-800/70 p-0.5 flex items-center justify-center">
-                <img
-                  src={kasirKafeLogo}
-                  alt="KasirKafe Logo"
-                  className="w-full h-full object-cover rounded-[14px]"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-lg text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-                    KasirKafe
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded-md bg-accent/10 text-accent text-[10px] font-bold">
-                    POS
-                  </span>
+        {/* Top: User Info & Close Sidebar Button (Satu Baris) */}
+        <div className="p-3.5 border-b border-stone-200/60 dark:border-stone-800/60">
+          <div className="flex items-center gap-2">
+            {/* Logged in User Profile Card */}
+            <div
+              onClick={() => handleNavClick('profile')}
+              className={`flex-1 min-w-0 p-2.5 rounded-2xl transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                currentTab === 'profile'
+                  ? 'bg-orange-50/80 dark:bg-orange-950/40 ring-1 ring-accent/30'
+                  : 'bg-stone-50/80 dark:bg-stone-900/60 hover:bg-stone-100/80 dark:hover:bg-stone-850'
+              }`}
+              title="Klik untuk membuka Profil Akun"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 shrink-0 border border-stone-300 dark:border-stone-700">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-accent text-white font-bold text-xs">
+                      {user?.name?.[0] || 'U'}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <span className="truncate">Senopati • Online</span>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-stone-900 dark:text-stone-100 truncate">
+                    {user?.name || 'Kasir'}
+                  </div>
+                  <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                    {isAdmin
+                      ? 'Admin'
+                      : isManager
+                        ? 'Manager'
+                        : 'Kasir'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -214,58 +178,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
               type="button"
               id="close-sidebar-btn"
               onClick={onClose}
-              className="w-9 h-9 rounded-xl text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center justify-center transition-colors shrink-0 active:scale-95"
+              className="w-9 h-9 rounded-2xl bg-stone-100/90 dark:bg-stone-800/90 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 flex items-center justify-center transition-all shadow-xs active:scale-95 cursor-pointer shrink-0"
               title={t('closeSidebar')}
               aria-label={t('closeSidebar')}
             >
-              <PanelLeftClose className="w-5 h-5 hidden lg:block" />
-              <X className="w-5 h-5 lg:hidden" />
+              <X className="w-4 h-4" />
             </button>
-          </div>
-
-          {/* Logged in User Profile Card */}
-          <div
-            onClick={() => handleNavClick('profile')}
-            className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${currentTab === 'profile'
-                ? 'bg-orange-50/80 dark:bg-orange-950/40 border-accent/40 ring-1 ring-accent/30'
-                : 'bg-stone-50/80 dark:bg-stone-900/60 border-stone-200/70 dark:border-stone-800/80 hover:border-accent/40 hover:bg-stone-100/80 dark:hover:bg-stone-850'
-              }`}
-            title="Klik untuk membuka Profil Akun"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 shrink-0 border border-stone-300 dark:border-stone-700">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-accent text-white font-bold text-xs">
-                    {user?.name?.[0] || 'U'}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="font-bold text-xs text-stone-900 dark:text-stone-100 truncate">
-                  {user?.name || 'Kasir'}
-                </div>
-                <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
-                  {isAdmin
-                    ? 'Akses: Administrasi Sistem'
-                    : isManager
-                      ? 'Akses: Kasir & Toko'
-                      : 'Akses: Operasional Kasir'}
-                </div>
-              </div>
-            </div>
-
-            <span
-              className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 ${isAdmin
-                  ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800/60'
-                  : isManager
-                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/60'
-                    : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60'
-                }`}
-            >
-              {user?.role || 'Kasir'}
-            </span>
           </div>
         </div>
 
@@ -436,16 +354,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   </span>
                 </button>
 
-                {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) dengan Float Sub-Menu ke Kanan */}
-                <div
-                  ref={rawMaterialsBtnRef}
-                  className="relative"
-                  onMouseEnter={handleSubmenuMouseEnter}
-                  onMouseLeave={handleSubmenuMouseLeave}
-                >
+                {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) - Accordion Sub-Menu (Toggle Expanded/Collapsed) */}
+                <div className="space-y-1">
                   <button
                     type="button"
                     id="nav-pembelian-bahan-btn"
+                    aria-expanded={isSubmenuOpen}
                     onClick={handleToggleSubmenu}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
                       currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman'
@@ -461,103 +375,89 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                         Racikan
                       </span>
-                      <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-90 lg:rotate-0 text-white' : 'opacity-60'}`} />
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isSubmenuOpen ? 'rotate-90' : ''
+                        } ${
+                          currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman'
+                            ? 'text-white'
+                            : 'opacity-60'
+                        }`}
+                      />
                     </div>
                   </button>
 
-                  {/* Floating Sub Menu di Sebelah Kanan */}
+                  {/* Submenu Inline (Expanded / Collapsed) */}
                   {isSubmenuOpen && (
                     <div
-                      className="fixed z-50 w-72 bg-white/95 dark:bg-[#251e1c]/95 backdrop-blur-md rounded-3xl border border-stone-200/90 dark:border-stone-800 p-2.5 shadow-2xl space-y-1 animate-in fade-in zoom-in-95 duration-150 transition-all select-none"
-                      style={{
-                        top: `${submenuPos.top}px`,
-                        left: `${submenuPos.left}px`
-                      }}
-                      onMouseEnter={handleSubmenuMouseEnter}
-                      onMouseLeave={handleSubmenuMouseLeave}
+                      id="submenu-pembelian-bahan-accordion"
+                      className="ml-3 pl-3 border-l-2 border-stone-200 dark:border-stone-800 space-y-1 pt-1 pb-1 transition-all duration-200"
                     >
-                      <div className="px-3 py-1.5 border-b border-stone-100 dark:border-stone-800/80 mb-1 flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                          Sub Menu Bahan Baku
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-100 dark:bg-orange-950 text-accent">
-                          Float
-                        </span>
-                      </div>
-
                       {/* 1. Faktur Pembelian Baru */}
                       <button
                         type="button"
+                        id="subnav-pembelian-baru"
                         onClick={() => handleSubmenuItemClick('pembelian-baru')}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
                           currentTab.startsWith('pembelian-bahan') && activeSubTab === 'pembelian-baru'
-                            ? 'bg-orange-50 dark:bg-orange-950/60 text-accent font-bold ring-1 ring-accent/30'
-                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                            ? 'bg-orange-100/90 dark:bg-orange-950/80 text-accent font-bold ring-1 ring-accent/30'
+                            : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0">
-                          <PackagePlus className="w-4 h-4" />
-                        </div>
+                        <PackagePlus className="w-4 h-4 shrink-0 text-orange-500" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Faktur Pembelian Baru</div>
-                          <div className="text-[10px] text-stone-400 truncate">Input nota beli & tambah stok</div>
+                          <div className="truncate">Faktur Pembelian Baru</div>
                         </div>
                       </button>
 
                       {/* 2. Riwayat Pembelian */}
                       <button
                         type="button"
+                        id="subnav-riwayat-pembelian"
                         onClick={() => handleSubmenuItemClick('riwayat-pembelian')}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
                           currentTab.startsWith('pembelian-bahan') && activeSubTab === 'riwayat-pembelian'
-                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold ring-1 ring-blue-500/30'
-                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                            ? 'bg-blue-100/90 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 font-bold ring-1 ring-blue-500/30'
+                            : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                          <Receipt className="w-4 h-4" />
-                        </div>
+                        <Receipt className="w-4 h-4 shrink-0 text-blue-500" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Riwayat Pembelian</div>
-                          <div className="text-[10px] text-stone-400 truncate">Arsip faktur pengeluaran supplier</div>
+                          <div className="truncate">Riwayat Pembelian</div>
                         </div>
                       </button>
 
                       {/* 3. Master Stok Bahan Baku */}
                       <button
                         type="button"
+                        id="subnav-stok-bahan"
                         onClick={() => handleSubmenuItemClick('stok-bahan')}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
                           currentTab.startsWith('pembelian-bahan') && activeSubTab === 'stok-bahan'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold ring-1 ring-emerald-500/30'
-                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                            ? 'bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 font-bold ring-1 ring-emerald-500/30'
+                            : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                          <Boxes className="w-4 h-4" />
-                        </div>
+                        <Boxes className="w-4 h-4 shrink-0 text-emerald-500" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Master Stok Bahan Baku</div>
-                          <div className="text-[10px] text-stone-400 truncate">Pantau stok aman & indikator habis</div>
+                          <div className="truncate">Master Stok Bahan Baku</div>
                         </div>
                       </button>
 
                       {/* 4. Resep Racikan Minuman (BOM) */}
                       <button
                         type="button"
+                        id="subnav-resep-minuman"
                         onClick={() => handleSubmenuItemClick('resep-minuman')}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-left text-xs transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
                           currentTab.startsWith('pembelian-bahan') && activeSubTab === 'resep-minuman'
-                            ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-bold ring-1 ring-purple-500/30'
-                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                            ? 'bg-purple-100/90 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 font-bold ring-1 ring-purple-500/30'
+                            : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                          <FlaskConical className="w-4 h-4" />
-                        </div>
+                        <FlaskConical className="w-4 h-4 shrink-0 text-purple-500" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold truncate text-stone-900 dark:text-stone-100">Resep Racikan Minuman</div>
-                          <div className="text-[10px] text-stone-400 truncate">Formula BOM & sinkronisasi kasir</div>
+                          <div className="truncate">Resep Racikan Minuman</div>
                         </div>
                       </button>
                     </div>
@@ -991,42 +891,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           </div>
         </div>
 
-        {/* Bottom: Theme Mode, Logout & POS Version Info */}
-        <div className="p-4 border-t border-stone-200/60 dark:border-stone-800/60 space-y-3 bg-[#fffaf8] dark:bg-[#1c1715]">
-          {/* Quick Theme Switcher */}
-          <div className="flex items-center justify-between p-2 rounded-2xl bg-stone-100/90 dark:bg-stone-900/90 border border-stone-200/70 dark:border-stone-800">
-            <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300 pl-1">
-              {isDarkMode ? (
-                <Moon className="w-3.5 h-3.5 text-amber-400" />
-              ) : (
-                <Sun className="w-3.5 h-3.5 text-amber-500" />
-              )}
-              <span className="text-[11px]">{isDarkMode ? 'Mode Gelap' : 'Mode Terang'}</span>
-            </div>
-            <button
-              type="button"
-              id="sidebar-theme-toggle-btn"
-              onClick={toggleDarkMode}
-              className="px-2.5 py-1 rounded-xl bg-white dark:bg-stone-800 text-[10px] font-bold text-stone-800 dark:text-stone-200 shadow-2xs border border-stone-200 dark:border-stone-750 hover:text-accent cursor-pointer transition-all active:scale-95"
-            >
-              {isDarkMode ? 'Ganti Terang' : 'Ganti Gelap'}
-            </button>
-          </div>
-
+        {/* Bottom: Logout */}
+        <div className="p-4 border-t border-stone-200/60 dark:border-stone-800/60 bg-[#fffaf8] dark:bg-[#1c1715]">
           <button
             type="button"
+            id="sidebar-logout-btn"
             onClick={() => setShowLogoutConfirm(true)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold transition-colors shadow-2xs"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold transition-colors shadow-2xs cursor-pointer active:scale-98"
           >
             <LogOut className="w-4 h-4" />
             <span>{t('logout')}</span>
           </button>
-
-          <div className="text-center text-[10px] text-stone-400 dark:text-stone-500 flex items-center justify-center gap-1.5">
-            <span>KasirKafe POS v2.4</span>
-            <span>•</span>
-            <span>Enkripsi Aktif</span>
-          </div>
         </div>
       </aside>
 

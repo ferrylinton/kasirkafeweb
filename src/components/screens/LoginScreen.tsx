@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Coffee,
-  ShieldCheck,
   Sun,
   Moon,
   KeyRound,
   Lock,
   ArrowRight,
-  UserCheck,
-  Users,
-  Shield,
   ShieldAlert,
   AlertTriangle,
   Clock,
   RefreshCw,
   X,
-  Building2,
   Store,
   CheckCircle2,
   Mail,
@@ -26,10 +20,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
-import { SelectUserModal, SelectableUser, FALLBACK_USERS } from '../modals/SelectUserModal';
+import { SelectableUser, FALLBACK_USERS } from '../modals/SelectUserModal';
 import { AlreadyLoggedInModal } from '../modals/AlreadyLoggedInModal';
 import { ManagerAuthModal } from '../modals/ManagerAuthModal';
-import { RadixSelect, RadixSelectOption } from '../common/RadixSelect';
 import { UserRadixSelect } from '../common/UserRadixSelect';
 import { LanguageSelect } from '../common/LanguageSelect';
 import { VendorRegisterScreen } from './VendorRegisterScreen';
@@ -38,24 +31,10 @@ import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
 import { CaptchaBox, CaptchaBoxRef } from '../common/CaptchaBox';
 import kasirKafeLogo from '../../assets/images/kasirkafe_logo_1790154574271.jpg';
 
-interface VendorItem {
-  id: string;
-  name: string;
-  code: string;
-  status?: string;
-}
-
 export interface LoginScreenProps {
   onOpenRegister?: () => void;
   onOpenResetPassword?: (token?: string) => void;
 }
-
-const DEFAULT_VENDORS: VendorItem[] = [
-  { id: 'vnd_admin', name: 'Admin', code: 'ADMIN' },
-  { id: 'vnd_kasirkafe_central', name: 'KasirKafe Coffee & Boba (Pusat)', code: 'SIPSPOT' },
-  { id: 'vnd_kopi_kulo_kemang', name: 'Kopi Kulo & Toast (Kemang)', code: 'KULO' },
-  { id: 'vnd_tehpoci_nusantara', name: 'Teh Poci & Dimsum Nusantara (Bekasi)', code: 'TEHPOCI' }
-];
 
 interface AlreadyLoggedInInfo {
   userName: string;
@@ -65,7 +44,6 @@ interface AlreadyLoggedInInfo {
   ipAddress: string;
   timestamp: string;
   isSelfManager: boolean;
-  canManagerForceLogout: boolean;
   passwordAttempted?: string;
 }
 
@@ -79,7 +57,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     clearSessionRevoked
   } = useAuth();
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { t, language, setLanguage } = useLanguage();
+  const { t } = useLanguage();
   const { showToast } = useToast();
 
   const [internalShowRegister, setInternalShowRegister] = useState(false);
@@ -131,18 +109,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     };
   });
 
-  // Vendor management state
-  const [vendors, setVendors] = useState<VendorItem[]>(DEFAULT_VENDORS);
   const [allUsers, setAllUsers] = useState<SelectableUser[]>(FALLBACK_USERS);
-  const [selectedVendorId, setSelectedVendorId] = useState<string>(() => {
-    try {
-      const savedVendor = localStorage.getItem('kasirkafe_selected_vendor');
-      if (savedVendor) return savedVendor;
-    } catch (e) {}
-    return selectedUser.vendorId || 'vnd_kasirkafe_central';
-  });
 
-  const [isSelectModalOpen, setIsSelectModalOpen] = useState<boolean>(false);
   const [email, setEmail] = useState<string>(() => {
     try {
       const savedEmail = localStorage.getItem('kasirkafe_saved_email');
@@ -155,25 +123,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [captchaToken, setCaptchaToken] = useState<string>('');
   const [captchaAnswer, setCaptchaAnswer] = useState<string>('');
-  const [isCaptchaValidLength, setIsCaptchaValidLength] = useState<boolean>(false);
   const captchaRef = React.useRef<CaptchaBoxRef>(null);
 
-  const handleCaptchaChange = useCallback(({ token: t, answer: a, isValidLength: v }: { token: string; answer: string; isValidLength: boolean }) => {
+  const handleCaptchaChange = useCallback(({ token: t, answer: a }: { token: string; answer: string }) => {
     setCaptchaToken(t);
     setCaptchaAnswer(a);
-    setIsCaptchaValidLength(v);
   }, []);
 
-  // Fetch selectable users & vendors from backend API
+  // Fetch selectable users from backend API
   useEffect(() => {
     const fetchSelectable = async () => {
       try {
         const res = await fetch('/api/auth/selectable-users');
         const data = await res.json();
         if (data.success) {
-          if (Array.isArray(data.vendors) && data.vendors.length > 0) {
-            setVendors(data.vendors);
-          }
           if (Array.isArray(data.users) && data.users.length > 0) {
             setAllUsers(data.users);
           }
@@ -323,45 +286,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const handleVendorChange = useCallback((newVendorId: string) => {
-    setSelectedVendorId(newVendorId);
-    try {
-      localStorage.setItem('kasirkafe_selected_vendor', newVendorId);
-      document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(newVendorId)}; path=/; max-age=31536000; SameSite=Lax`;
-    } catch (e) {}
-
-    // Find the users of this vendor (from allUsers or fallback list)
-    const matchingUsers = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === newVendorId);
-    if (matchingUsers.length > 0) {
-      setSelectedUser(prev => {
-        // If currently selected user is already in this vendor, keep them!
-        if (prev && (prev.vendorId || 'vnd_kasirkafe_central') === newVendorId) {
-          return prev;
-        }
-        // Pick manager first if available, else first user
-        const preferred = matchingUsers.find(u => u.role.toUpperCase() === 'MANAGER') || matchingUsers[0];
-        setEmail(preferred.email);
-        setPassword('');
-        try {
-          localStorage.setItem('kasirkafe_selected_user', JSON.stringify(preferred));
-        } catch (e) {}
-        checkLockoutStatus(preferred.email);
-        return preferred;
-      });
-      const targetVendor = vendors.find(v => v.id === newVendorId);
-      if (targetVendor) {
-        showToast(`Vendor dialihkan ke ${targetVendor.name}`, 'info');
-      }
-    }
-  }, [allUsers, vendors, checkLockoutStatus, showToast]);
-
   const handleSelectUser = (user: SelectableUser) => {
     const updatedUser = {
       ...user
     };
     setSelectedUser(updatedUser);
     if (user.vendorId) {
-      setSelectedVendorId(user.vendorId);
       try {
         localStorage.setItem('kasirkafe_selected_vendor', user.vendorId);
         document.cookie = `kasirkafe_vendor_id=${encodeURIComponent(user.vendorId)}; path=/; max-age=31536000; SameSite=Lax`;
@@ -444,7 +374,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         ipAddress: result.activeSession?.ipAddress || '127.0.0.1',
         timestamp: result.activeSession?.timestamp || new Date().toISOString(),
         isSelfManager: result.isSelfManager ?? (selectedUser.role?.toUpperCase() === 'MANAGER'),
-        canManagerForceLogout: true,
         passwordAttempted: cleanPassword
       });
       showToast(result.message || 'Pengguna sedang aktif di browser lain. Satu akun tidak dapat digunakan bersamaan.', 'error');
@@ -551,22 +480,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
     }
   };
 
-  const isAdminRole = selectedUser.role?.toUpperCase() === 'ADMIN';
-  const isManagerRole = selectedUser.role?.toUpperCase() === 'MANAGER';
-  const currentVendorData = vendors.find(v => v.id === selectedVendorId);
-
-  const vendorSelectOptions: RadixSelectOption[] = vendors.map(v => {
-    const staffCount = allUsers.filter(u => (u.vendorId || 'vnd_kasirkafe_central') === v.id).length;
-    return {
-      value: v.id,
-      label: v.name,
-      sublabel: `${v.code}${staffCount > 0 ? ` • ${staffCount} staf` : ''}`,
-      badge: v.code,
-      badgeColor: 'bg-orange-100 dark:bg-orange-950/60 text-accent',
-      icon: <Store className="w-4 h-4 text-accent" />
-    };
-  });
-
   if (showReactivationScreen) {
     return (
       <VendorReactivationScreen
@@ -582,12 +495,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         onBackToLogin={() => setInternalShowRegister(false)}
         onRegistrationSuccess={() => {
           setInternalShowRegister(false);
-          // Refetch selectable vendors & users so the new vendor appears immediately
+          // Refetch selectable users so the new vendor appears immediately
           fetch('/api/auth/selectable-users')
             .then(res => res.json())
             .then(data => {
               if (data && data.success) {
-                if (Array.isArray(data.vendors) && data.vendors.length > 0) setVendors(data.vendors);
                 if (Array.isArray(data.users) && data.users.length > 0) setAllUsers(data.users);
               }
             })
@@ -607,15 +519,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOpenRegister, onOpen
         paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
       }}
     >
-      {/* User Selection Modal */}
-      <SelectUserModal
-        isOpen={isSelectModalOpen}
-        onClose={() => setIsSelectModalOpen(false)}
-        selectedUserId={selectedUser.id}
-        selectedVendorId={selectedVendorId}
-        onSelectUser={handleSelectUser}
-      />
-
       {/* Concurrent Login Alert Modal */}
       <AlreadyLoggedInModal
         isOpen={!!alreadyLoggedInData && !isManagerPromptOpen}
