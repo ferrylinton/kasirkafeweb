@@ -22,7 +22,7 @@ import {
   Info,
   Scale
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { RawMaterial, RawMaterialPurchase, ProductRecipe, Product, RawMaterialPurchaseItem } from '../../types';
@@ -37,33 +37,63 @@ interface SummaryStats {
   purchasesThisMonthCount: number;
 }
 
-export const RawMaterialPurchasesScreen: React.FC = () => {
+export interface RawMaterialPurchasesScreenProps {
+  defaultTab?: 'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman';
+}
+
+export const RawMaterialPurchasesScreen: React.FC<RawMaterialPurchasesScreenProps> = ({ defaultTab }) => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlTab = searchParams.get('tab') as 'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman' | null;
 
-  // Active Tab: 'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman'
-  const [activeTab, setActiveTab] = useState<'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman'>(() => {
+  // Detect active page/tab from URL pathname, query param, or defaultTab
+  const getTabFromLocation = (): 'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman' => {
+    const path = location.pathname.replace(/^\//, '').split('/')[0];
+    if (path === 'riwayat-pembelian') return 'riwayat-pembelian';
+    if (path === 'bahan-baku' || path === 'stok-bahan') return 'stok-bahan';
+    if (path === 'resep-minuman') return 'resep-minuman';
+    if (path === 'pembelian-baru') return 'pembelian-baru';
+
+    const urlTab = searchParams.get('tab');
     if (urlTab && ['pembelian-baru', 'riwayat-pembelian', 'stok-bahan', 'resep-minuman'].includes(urlTab)) {
-      return urlTab;
+      return urlTab as any;
     }
+
+    if (defaultTab) return defaultTab;
     return 'pembelian-baru';
-  });
+  };
+
+  // Active Page State
+  const [activeTab, setActiveTab] = useState<'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman'>(getTabFromLocation);
 
   useEffect(() => {
-    if (urlTab && ['pembelian-baru', 'riwayat-pembelian', 'stok-bahan', 'resep-minuman'].includes(urlTab)) {
-      setActiveTab(urlTab);
-    }
-  }, [urlTab]);
+    setActiveTab(getTabFromLocation());
+  }, [location.pathname, searchParams, defaultTab]);
 
   const handleTabChange = (newTab: 'pembelian-baru' | 'riwayat-pembelian' | 'stok-bahan' | 'resep-minuman') => {
     setActiveTab(newTab);
-    setSearchParams({ tab: newTab });
+    switch (newTab) {
+      case 'pembelian-baru':
+        navigate('/pembelian-bahan');
+        break;
+      case 'riwayat-pembelian':
+        navigate('/riwayat-pembelian');
+        break;
+      case 'stok-bahan':
+        navigate('/bahan-baku');
+        break;
+      case 'resep-minuman':
+        navigate('/resep-minuman');
+        break;
+      default:
+        setSearchParams({ tab: newTab });
+    }
   };
 
   // State
@@ -427,15 +457,12 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
   }, [products, recipeSearch]);
 
   return (
-    <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-4xl mx-auto flex flex-col gap-5">
-      {/* Tab Content */}
-
-      {/* 4. Tab Content */}
-      {/* TAB 1: FORM PEMBELIAN BARU */}
+    <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
+      {/* 1. Halaman Faktur Pembelian Baru */}
       {activeTab === 'pembelian-baru' && (
         <form onSubmit={handleSubmitPurchase} className="space-y-6">
           <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-6">
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 dark:border-stone-800 pb-4">
               <div>
                 <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2 font-heading">
                   <PackagePlus className="w-5 h-5 text-accent" />
@@ -445,26 +472,38 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
                   Setiap bahan baku yang disimpan di sini akan langsung menambah kuantiti stok bahan baku secara otomatis.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingMaterial(null);
-                  setMaterialForm({
-                    name: '',
-                    category: 'KOPI',
-                    unit: 'gram',
-                    stock: 0,
-                    minimumStock: 200,
-                    avgCostPerUnit: 0,
-                    notes: ''
-                  });
-                  setShowMaterialModal(true);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950 text-accent hover:bg-orange-100 dark:hover:bg-orange-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Bahan Baku Baru</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadData}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Segarkan data bahan"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMaterial(null);
+                    setMaterialForm({
+                      name: '',
+                      category: 'KOPI',
+                      unit: 'gram',
+                      stock: 0,
+                      minimumStock: 200,
+                      avgCostPerUnit: 0,
+                      notes: ''
+                    });
+                    setShowMaterialModal(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950 text-accent hover:bg-orange-100 dark:hover:bg-orange-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Bahan Baku Baru</span>
+                </button>
+              </div>
             </div>
 
             {/* Faktur Info Header */}
@@ -671,7 +710,7 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
         </form>
       )}
 
-      {/* TAB 2: RIWAYAT PEMBELIAN */}
+      {/* 2. Halaman Riwayat Pembelian */}
       {activeTab === 'riwayat-pembelian' && (
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -684,15 +723,27 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
               </p>
             </div>
 
-            <div className="relative min-w-[240px]">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={purchaseSearch}
-                onChange={e => setPurchaseSearch(e.target.value)}
-                placeholder="Cari Supplier, No. PO / Faktur..."
-                className="w-full pl-9 pr-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[240px]">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={purchaseSearch}
+                  onChange={e => setPurchaseSearch(e.target.value)}
+                  placeholder="Cari Supplier, No. PO / Faktur..."
+                  className="w-full pl-9 pr-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={loadData}
+                disabled={loading}
+                className="p-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors cursor-pointer shrink-0"
+                title="Refresh Data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
 
@@ -763,7 +814,7 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: STOK BAHAN BAKU */}
+      {/* 3. Halaman Master Stok Bahan Baku */}
       {activeTab === 'stok-bahan' && (
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -800,6 +851,16 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
                 <option value="TEH_BUAH">Teh & Powder</option>
                 <option value="KEMASAN">Kemasan & Cup</option>
               </select>
+
+              <button
+                type="button"
+                onClick={loadData}
+                disabled={loading}
+                className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors cursor-pointer shrink-0"
+                title="Refresh Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
 
               <button
                 type="button"
@@ -913,7 +974,7 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: RESEP RACIKAN MINUMAN & SINKRONISASI KASIR */}
+      {/* 4. Halaman Resep Racikan Minuman */}
       {activeTab === 'resep-minuman' && (
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 dark:border-stone-800 pb-4">
@@ -927,15 +988,27 @@ export const RawMaterialPurchasesScreen: React.FC = () => {
               </p>
             </div>
 
-            <div className="relative min-w-[240px]">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={recipeSearch}
-                onChange={e => setRecipeSearch(e.target.value)}
-                placeholder="Cari nama menu minuman..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:ring-2 focus:ring-accent"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[240px]">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={recipeSearch}
+                  onChange={e => setRecipeSearch(e.target.value)}
+                  placeholder="Cari nama menu minuman..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={loadData}
+                disabled={loading}
+                className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors cursor-pointer shrink-0"
+                title="Refresh Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
 

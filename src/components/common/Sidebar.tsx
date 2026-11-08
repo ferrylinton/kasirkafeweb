@@ -51,29 +51,76 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const [alertCount, setAlertCount] = useState<number>(0);
 
   // Accordion Submenu (Toggle Expanded/Collapsed) for Pembelian Bahan Baku
-  const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(() => {
-    return currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman';
-  });
+  const isPembelianActive =
+    currentTab.startsWith('pembelian-bahan') ||
+    currentTab === 'pembelian-baru' ||
+    currentTab === 'riwayat-pembelian' ||
+    currentTab === 'bahan-baku' ||
+    currentTab === 'stok-bahan' ||
+    currentTab === 'resep-minuman';
+
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(() => isPembelianActive);
 
   const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-  const activeSubTab = searchParams.get('tab') || 'pembelian-baru';
+  const getActiveSubTab = () => {
+    if (currentTab === 'bahan-baku' || currentTab === 'stok-bahan') return 'stok-bahan';
+    if (currentTab === 'resep-minuman') return 'resep-minuman';
+    if (currentTab === 'riwayat-pembelian') return 'riwayat-pembelian';
+    return searchParams.get('tab') || 'pembelian-baru';
+  };
+  const activeSubTab = getActiveSubTab();
 
   useEffect(() => {
-    if (currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman') {
+    if (isPembelianActive) {
       setIsSubmenuOpen(true);
     }
-  }, [currentTab]);
+  }, [currentTab, isPembelianActive]);
 
   const handleToggleSubmenu = () => {
     setIsSubmenuOpen(prev => !prev);
   };
 
   const handleSubmenuItemClick = (subTabKey: string) => {
-    handleNavClick(`pembelian-bahan?tab=${subTabKey}`);
+    switch (subTabKey) {
+      case 'pembelian-baru':
+        handleNavClick('pembelian-bahan');
+        break;
+      case 'riwayat-pembelian':
+        handleNavClick('riwayat-pembelian');
+        break;
+      case 'stok-bahan':
+        handleNavClick('bahan-baku');
+        break;
+      case 'resep-minuman':
+        handleNavClick('resep-minuman');
+        break;
+      default:
+        handleNavClick(`pembelian-bahan?tab=${subTabKey}`);
+    }
   };
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
-  const managerTabs = ['manager-dashboard', 'manager-top-products', 'top-products', 'produk-manajemen', 'stok-produk', 'inventaris', 'kategori', 'pembelian-bahan', 'bahan-baku', 'resep-minuman', 'users', 'diskon', 'templates', 'login-history', 'activity-logs', 'vendor-client'];
+  const managerTabs = [
+    'manager-dashboard',
+    'manager-top-products',
+    'top-products',
+    'produk-manajemen',
+    'stok-produk',
+    'inventaris',
+    'kategori',
+    'pembelian-bahan',
+    'pembelian-baru',
+    'riwayat-pembelian',
+    'bahan-baku',
+    'stok-bahan',
+    'resep-minuman',
+    'users',
+    'diskon',
+    'templates',
+    'login-history',
+    'activity-logs',
+    'vendor-client'
+  ];
   const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-stock', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
@@ -362,7 +409,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                     aria-expanded={isSubmenuOpen}
                     onClick={handleToggleSubmenu}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-                      currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman'
+                      isPembelianActive
                         ? 'bg-accent text-white shadow-xs font-bold'
                         : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                     }`}
@@ -379,7 +426,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                         className={`w-3.5 h-3.5 transition-transform duration-200 ${
                           isSubmenuOpen ? 'rotate-90' : ''
                         } ${
-                          currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman'
+                          isPembelianActive
                             ? 'text-white'
                             : 'opacity-60'
                         }`}
@@ -399,7 +446,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                         id="subnav-pembelian-baru"
                         onClick={() => handleSubmenuItemClick('pembelian-baru')}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
-                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'pembelian-baru'
+                          isPembelianActive && activeSubTab === 'pembelian-baru'
                             ? 'bg-orange-100/90 dark:bg-orange-950/80 text-accent font-bold ring-1 ring-accent/30'
                             : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
@@ -416,7 +463,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                         id="subnav-riwayat-pembelian"
                         onClick={() => handleSubmenuItemClick('riwayat-pembelian')}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
-                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'riwayat-pembelian'
+                          isPembelianActive && activeSubTab === 'riwayat-pembelian'
                             ? 'bg-blue-100/90 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 font-bold ring-1 ring-blue-500/30'
                             : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
@@ -433,7 +480,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                         id="subnav-stok-bahan"
                         onClick={() => handleSubmenuItemClick('stok-bahan')}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
-                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'stok-bahan'
+                          isPembelianActive && activeSubTab === 'stok-bahan'
                             ? 'bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 font-bold ring-1 ring-emerald-500/30'
                             : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
@@ -450,7 +497,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                         id="subnav-resep-minuman"
                         onClick={() => handleSubmenuItemClick('resep-minuman')}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${
-                          currentTab.startsWith('pembelian-bahan') && activeSubTab === 'resep-minuman'
+                          isPembelianActive && activeSubTab === 'resep-minuman'
                             ? 'bg-purple-100/90 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 font-bold ring-1 ring-purple-500/30'
                             : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}

@@ -1,22 +1,24 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { Coffee, ArrowRight, Menu, PanelLeft, PackagePlus, Receipt, Boxes, FlaskConical, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
 
 interface NavbarProps {
-  currentTab: string;
+  currentTab?: string;
   onNavigateTab: (tab: string) => void;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentTab,
+  currentTab = '',
   onNavigateTab,
   isSidebarOpen,
   onToggleSidebar
 }) => {
+  const location = useLocation();
   const { user } = useAuth();
   const { t } = useLanguage();
   const { totalItemsCount, subtotal } = useCart();
@@ -24,25 +26,67 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
 
-  const getTabTitle = (tab: string) => {
-    switch (tab) {
+  // Deteksi rute halaman yang sedang diakses secara real-time dari useLocation()
+  const activePath = location.pathname.replace(/^\//, '').split('/')[0] || currentTab || '';
+  const searchParams = new URLSearchParams(location.search);
+  const tabQuery = searchParams.get('tab');
+
+  // Deteksi subTab spesifik pada modul Pembelian Bahan Baku
+  const getSubTab = () => {
+    if (activePath === 'bahan-baku' || activePath === 'stok-bahan' || tabQuery === 'stok-bahan') {
+      return 'stok-bahan';
+    }
+    if (activePath === 'resep-minuman' || tabQuery === 'resep-minuman') {
+      return 'resep-minuman';
+    }
+    if (activePath === 'riwayat-pembelian' || tabQuery === 'riwayat-pembelian') {
+      return 'riwayat-pembelian';
+    }
+    if (activePath === 'pembelian-bahan' || activePath === 'pembelian-baru' || tabQuery === 'pembelian-baru') {
+      return 'pembelian-baru';
+    }
+    return '';
+  };
+
+  const subTab = getSubTab();
+  const isPembelianSection = !!subTab;
+
+  // Hubungkan location ke title di navbar
+  const getTabTitle = () => {
+    // 1. Prioritas judul sub-halaman modul Pembelian Bahan Baku
+    if (subTab === 'riwayat-pembelian') {
+      return 'Riwayat Pembelian Bahan Baku';
+    }
+    if (subTab === 'stok-bahan') {
+      return 'Master Stok Bahan Baku';
+    }
+    if (subTab === 'resep-minuman') {
+      return 'Resep Racikan Minuman';
+    }
+    if (subTab === 'pembelian-baru') {
+      return 'Faktur Pembelian Baru';
+    }
+
+    // 2. Judul untuk rute-rute aplikasi lainnya
+    switch (activePath) {
       case 'katalog':
         return t('navCatalog');
       case 'pesanan':
         return t('navOrders');
+      case 'pembayaran':
+        return 'Pembayaran Transaksi';
       case 'histori':
         return t('navHistory');
       case 'inventaris':
-        return t('navInventory');
+      case 'stok-produk':
+        return 'Stok Produk & Inventaris';
       case 'kategori':
-        return 'Kategori';
+        return 'Kategori Produk';
       case 'variasi-kategori':
       case 'category-variations':
         return 'Variasi Kategori';
       case 'produk-manajemen':
         return 'Manajemen Produk';
-      case 'stok-produk':
-        return 'Stok Produk';
       case 'users':
         return t('navUsers');
       case 'diskon':
@@ -53,10 +97,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navLoginHistory');
       case 'activity-logs':
         return t('navActivityLogs');
-      case 'pembelian-bahan':
-      case 'bahan-baku':
-      case 'resep-minuman':
-        return 'Pembelian Bahan Baku';
       case 'vendor-client':
         return 'Informasi & Profil Vendor';
       case 'manager-dashboard':
@@ -66,6 +106,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'Top 10 Produk Terlaris (Cabang)';
       case 'vendor-management':
         return 'Manajemen Vendor (Admin)';
+      case 'log-viewer':
+        return 'Log Aktivitas Sistem (Admin)';
       case 'admin-dashboard':
         return t('navAdminDashboard') || 'Dashboard Grafik Transaksi Semua Vendor';
       case 'admin-top-products':
@@ -73,6 +115,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'admin-orders':
       case 'admin-riwayat':
         return t('navAdminOrders');
+      case 'admin-products':
+        return 'Manajemen Produk (Semua Vendor)';
+      case 'admin-stock':
       case 'admin-inventory':
       case 'admin-inventaris':
         return t('navAdminInventory');
@@ -99,6 +144,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'KasirKafe POS';
     }
   };
+
+  const navbarTitle = getTabTitle();
 
   return (
     <header
@@ -141,48 +188,37 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-heading truncate">
-                <span className="lg:hidden">{getTabTitle(currentTab)}</span>
-                <span className="hidden lg:inline">{getTabTitle(currentTab)}</span>
+                <span>{navbarTitle}</span>
               </span>
 
-              {/* Status Sub Menu Aktif (Khusus Layar Pembelian Bahan Baku & Resep Minuman) */}
-              {(currentTab.startsWith('pembelian-bahan') || currentTab === 'bahan-baku' || currentTab === 'resep-minuman') && (() => {
-                const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-                const subTab = currentTab === 'bahan-baku'
-                  ? 'stok-bahan'
-                  : currentTab === 'resep-minuman'
-                  ? 'resep-minuman'
-                  : searchParams.get('tab') || 'pembelian-baru';
-
-                return (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 dark:bg-orange-950/50 border border-orange-200/80 dark:border-orange-800/60 shadow-2xs">
-                    {subTab === 'pembelian-baru' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">
-                        <PackagePlus className="w-3.5 h-3.5" />
-                        <span>Faktur Pembelian Baru</span>
-                      </span>
-                    )}
-                    {subTab === 'riwayat-pembelian' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                        <Receipt className="w-3.5 h-3.5" />
-                        <span>Riwayat Pembelian</span>
-                      </span>
-                    )}
-                    {subTab === 'stok-bahan' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                        <Boxes className="w-3.5 h-3.5" />
-                        <span>Master Stok Bahan Baku</span>
-                      </span>
-                    )}
-                    {subTab === 'resep-minuman' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400">
-                        <FlaskConical className="w-3.5 h-3.5" />
-                        <span>Resep Racikan Minuman</span>
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+              {isPembelianSection && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 dark:bg-orange-950/50 border border-orange-200/80 dark:border-orange-800/60 shadow-2xs">
+                  {subTab === 'pembelian-baru' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">
+                      <PackagePlus className="w-3.5 h-3.5" />
+                      <span>Faktur Pembelian</span>
+                    </span>
+                  )}
+                  {subTab === 'riwayat-pembelian' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Riwayat PO</span>
+                    </span>
+                  )}
+                  {subTab === 'stok-bahan' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <Boxes className="w-3.5 h-3.5" />
+                      <span>Stok Bahan</span>
+                    </span>
+                  )}
+                  {subTab === 'resep-minuman' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                      <FlaskConical className="w-3.5 h-3.5" />
+                      <span>BOM Racikan</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -192,13 +228,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center gap-2 shrink-0 ml-auto">
 
         {/* Cart Summary Bar - Hanya tampil untuk role yang punya akses Operasional Kasir (CASHIER & MANAGER) */}
-        {isCashierOrManager && totalItemsCount > 0 && currentTab !== 'pembayaran' && (
+        {isCashierOrManager && totalItemsCount > 0 && activePath !== 'pembayaran' && (
           <button
             type="button"
             id="navbar-cart-summary-btn"
             onClick={() => onNavigateTab('pesanan')}
             className={`rounded-2xl transition-all shadow-2xs active:scale-95 flex items-center gap-2 sm:gap-3 px-2.5 py-1.5 sm:px-3.5 sm:py-2 border cursor-pointer ${
-              currentTab === 'pesanan'
+              activePath === 'pesanan'
                 ? 'bg-orange-50/80 dark:bg-orange-950/40 border-accent ring-2 ring-accent/25'
                 : 'bg-[#fff8f6] dark:bg-[#1f1917] border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-stone-50/80 dark:hover:bg-stone-900/60'
             }`}

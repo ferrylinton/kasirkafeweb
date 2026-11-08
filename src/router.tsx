@@ -25,6 +25,10 @@ import { ProductManagementScreen } from './components/screens/ProductManagementS
 import { ProductStockScreen } from './components/screens/ProductStockScreen';
 import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
 import { RawMaterialPurchasesScreen } from './components/screens/RawMaterialPurchasesScreen';
+import { NewPurchaseScreen } from './components/screens/NewPurchaseScreen';
+import { PurchaseHistoryScreen } from './components/screens/PurchaseHistoryScreen';
+import { RawMaterialStockScreen } from './components/screens/RawMaterialStockScreen';
+import { DrinkRecipesScreen } from './components/screens/DrinkRecipesScreen';
 import { UserManagementScreen } from './components/screens/UserManagementScreen';
 import { DiscountRulesScreen } from './components/screens/DiscountRulesScreen';
 import { EmailTemplateScreen } from './components/screens/EmailTemplateScreen';
@@ -292,9 +296,12 @@ export const router = createBrowserRouter([
           { path: 'stok-produk', element: <ProductStockScreen /> },
           { path: 'inventaris', element: <ProductStockScreen /> },
           { path: 'kategori', element: <CategoryManagementScreen /> },
-          { path: 'pembelian-bahan', element: <RawMaterialPurchasesScreen /> },
-          { path: 'bahan-baku', element: <RawMaterialPurchasesScreen /> },
-          { path: 'resep-minuman', element: <RawMaterialPurchasesScreen /> },
+          { path: 'pembelian-bahan', element: <NewPurchaseScreen /> },
+          { path: 'pembelian-baru', element: <NewPurchaseScreen /> },
+          { path: 'riwayat-pembelian', element: <PurchaseHistoryScreen /> },
+          { path: 'bahan-baku', element: <RawMaterialStockScreen /> },
+          { path: 'stok-bahan', element: <RawMaterialStockScreen /> },
+          { path: 'resep-minuman', element: <DrinkRecipesScreen /> },
           { path: 'users', element: <UserManagementScreen /> },
           { path: 'diskon', element: <DiscountRulesScreen /> },
           { path: 'templates', element: <EmailTemplateScreen /> },
