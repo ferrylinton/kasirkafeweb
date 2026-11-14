@@ -30,8 +30,9 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmationModal } from './ConfirmationModal';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import SidebarLink from './SidebarLink';
+import { ADMIN, MANAGER, CASHIER, ALL_ROLES } from '../../constants/auth';
 
 interface SidebarProps {
   currentTab: string;
@@ -42,11 +43,9 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpen, onClose }) => {
   const location = useLocation();
-  console.log(location.pathname)
   const { t } = useLanguage();
   const { totalItemsCount } = useCart();
   const { user, token, logout } = useAuth();
-  const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
   const isCashier = user?.role === 'CASHIER';
@@ -65,15 +64,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
   const [isSubmenuOpen, setIsSubmenuOpen] = useState<boolean>(() => isPembelianActive);
 
-  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-  const getActiveSubTab = () => {
-    if (currentTab === 'bahan-baku' || currentTab === 'stok-bahan') return 'stok-bahan';
-    if (currentTab === 'resep-minuman') return 'resep-minuman';
-    if (currentTab === 'riwayat-pembelian') return 'riwayat-pembelian';
-    return searchParams.get('tab') || 'pembelian-baru';
-  };
-  const activeSubTab = getActiveSubTab();
-
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       onClose();
@@ -88,25 +78,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
   const handleToggleSubmenu = () => {
     setIsSubmenuOpen(prev => !prev);
-  };
-
-  const handleSubmenuItemClick = (subTabKey: string) => {
-    switch (subTabKey) {
-      case 'pembelian-baru':
-        handleNavClick('pembelian-bahan');
-        break;
-      case 'riwayat-pembelian':
-        handleNavClick('riwayat-pembelian');
-        break;
-      case 'stok-bahan':
-        handleNavClick('bahan-baku');
-        break;
-      case 'resep-minuman':
-        handleNavClick('resep-minuman');
-        break;
-      default:
-        handleNavClick(`pembelian-bahan?tab=${subTabKey}`);
-    }
   };
 
   const cashierTabs = ['katalog', 'pesanan', 'pembayaran', 'histori'];
@@ -238,19 +209,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
           <div className="sidemenu">
 
             {/* Group 1: Operasional Kasir */}
-
             <div className='sidemenu-group'>
-
               <label>Operasional Kasir</label>
 
-              <SidebarLink to='katalog'>
+              <SidebarLink to='katalog' allowedRoles={[CASHIER, MANAGER]}>
                 <label>
                   <Store />
                   <span>{t('navCatalog')}</span>
                 </label>
               </SidebarLink>
 
-              <SidebarLink to='pesanan'>
+              <SidebarLink to='pesanan' allowedRoles={[CASHIER, MANAGER]}>
                 <label>
                   <ShoppingBag />
                   <span>{t('navOrders')}</span>
@@ -262,582 +231,343 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 )}
               </SidebarLink>
 
-              <SidebarLink to='histori'>
+              <SidebarLink to='histori' allowedRoles={[CASHIER, MANAGER]}>
                 <label>
                   <Receipt />
                   <span>{t('navHistory')}</span>
                 </label>
               </SidebarLink>
 
-              <SidebarLink to='manager-dashboard'>
+              <SidebarLink to='manager-dashboard' allowedRoles={[MANAGER]}>
                 <label>
                   <TrendingUp />
                   <span>{t('dashboard')}</span>
                 </label>
               </SidebarLink>
 
-              <SidebarLink to='manager-top-products'>
+              <SidebarLink to='manager-top-products' allowedRoles={[MANAGER]}>
                 <label>
                   <Trophy />
                   <span>{t('topProducts')}</span>
                 </label>
               </SidebarLink>
-
             </div>
 
-
             {/* Group 2: Manajemen Toko */}
-
             <div className='sidemenu-group'>
-
               <label>Manajemen Toko</label>
 
-              <SidebarLink to='produk-manajemen'>
+              <SidebarLink to='produk-manajemen' allowedRoles={[MANAGER]}>
                 <label>
                   <Coffee />
                   <span>{t('product')}</span>
                 </label>
               </SidebarLink>
 
-              <SidebarLink to='stok-produk'>
+              <SidebarLink to='stok-produk' allowedRoles={[MANAGER]}>
                 <label>
                   <Boxes />
                   <span>{t('stock')}</span>
                 </label>
+                {alertCount > 0 && (
+                  <em>
+                    {alertCount}
+                  </em>
+                )}
               </SidebarLink>
 
-              <SidebarLink to='kategori'>
+              <SidebarLink to='kategori' allowedRoles={[MANAGER]}>
                 <label>
                   <Layers />
                   <span>{t('category')}</span>
                 </label>
               </SidebarLink>
 
-
-              {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) - Accordion Sub-Menu (Toggle Expanded/Collapsed) */}
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  id="nav-pembelian-bahan-btn"
-                  aria-expanded={isSubmenuOpen}
-                  onClick={handleToggleSubmenu}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${isPembelianActive
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                    }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <PackagePlus className="w-4 h-4 shrink-0 text-emerald-500" />
-                    <span className="truncate">Pembelian</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <ChevronRight
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-90' : ''
-                        } ${isPembelianActive
-                          ? 'text-white'
-                          : 'opacity-60'
-                        }`}
-                    />
-                  </div>
-                </button>
-
-                {/* Submenu Inline (Expanded / Collapsed) */}
-                {isSubmenuOpen && (
-                  <div
-                    id="submenu-pembelian-bahan-accordion"
-                    className="ml-3 pl-3 border-l-2 border-stone-200 dark:border-stone-800 space-y-1 pt-1 pb-1 transition-all duration-200"
-                  >
-                    {/* 1. Faktur Pembelian Baru */}
-                    <button
-                      type="button"
-                      id="subnav-pembelian-baru"
-                      onClick={() => handleSubmenuItemClick('pembelian-baru')}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${isPembelianActive && activeSubTab === 'pembelian-baru'
-                        ? 'bg-orange-100/90 dark:bg-orange-950/80 text-accent font-bold ring-1 ring-accent/30'
-                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <PackagePlus className="w-4 h-4 shrink-0 text-orange-500" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">Faktur Pembelian Baru</div>
-                      </div>
-                    </button>
-
-                    {/* 2. Riwayat Pembelian */}
-                    <button
-                      type="button"
-                      id="subnav-riwayat-pembelian"
-                      onClick={() => handleSubmenuItemClick('riwayat-pembelian')}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${isPembelianActive && activeSubTab === 'riwayat-pembelian'
-                        ? 'bg-blue-100/90 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 font-bold ring-1 ring-blue-500/30'
-                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <Receipt className="w-4 h-4 shrink-0 text-blue-500" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">Riwayat Pembelian</div>
-                      </div>
-                    </button>
-
-                    {/* 3. Master Stok Bahan Baku */}
-                    <button
-                      type="button"
-                      id="subnav-stok-bahan"
-                      onClick={() => handleSubmenuItemClick('stok-bahan')}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${isPembelianActive && activeSubTab === 'stok-bahan'
-                        ? 'bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 font-bold ring-1 ring-emerald-500/30'
-                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <Boxes className="w-4 h-4 shrink-0 text-emerald-500" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">Master Stok Bahan Baku</div>
-                      </div>
-                    </button>
-
-                    {/* 4. Resep Racikan Minuman (BOM) */}
-                    <button
-                      type="button"
-                      id="subnav-resep-minuman"
-                      onClick={() => handleSubmenuItemClick('resep-minuman')}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-colors cursor-pointer ${isPembelianActive && activeSubTab === 'resep-minuman'
-                        ? 'bg-purple-100/90 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 font-bold ring-1 ring-purple-500/30'
-                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                        }`}
-                    >
-                      <FlaskConical className="w-4 h-4 shrink-0 text-purple-500" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">Resep Racikan Minuman</div>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Manajemen User */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('users')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'users'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navUsers')}</span>
-                </div>
-              </button>
-
-              {/* Aturan Diskon */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('diskon')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'diskon'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Tag className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navDiscounts')}</span>
-                </div>
-              </button>
-
-              {/* Template Email */}
-              <button
-                type="button"
-                onClick={() => handleNavClick('templates')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'templates'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Mail className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navTemplates')}</span>
-                </div>
-              </button>
-
-              {/* Login Histori (Khusus Manajer) */}
-              <button
-                type="button"
-                id="nav-login-history-btn"
-                onClick={() => handleNavClick('login-history')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'login-history'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span className="truncate">Login Histori</span>
-                </div>
-              </button>
-
-              {/* Log Aktivitas Database (Khusus Manajer) */}
-              <button
-                type="button"
-                id="nav-activity-logs-btn"
-                onClick={() => handleNavClick('activity-logs')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'activity-logs'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <ClipboardList className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t('navActivityLogs')}</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                  DB Log
-                </span>
-              </button>
-
-              {/* Informasi Vendor (Khusus Manajer) */}
-              <button
-                type="button"
-                id="nav-vendor-client-btn"
-                onClick={() => handleNavClick('vendor-client')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'vendor-client'
-                  ? 'bg-accent text-white shadow-xs font-bold'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                  }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Building2 className="w-4 h-4 shrink-0" />
-                  <span className="truncate">Informasi Vendor</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300">
-                  Cabang
-                </span>
-              </button>
-
-            </div>
-
-
-            {/* Group 3: Administrasi Sistem (Role ADMIN) */}
-            {(isAdmin) && (
-              <div>
-                <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
-                    <span>Administrasi Sistem</span>
-                  </div>
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
-                    ALL VENDOR
-                  </span>
-                </div>
+              {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) - Accordion Sub-Menu */}
+              {isManager && (
                 <div className="space-y-1">
-                  {/* 0. Dashboard Grafik Transaksi Semua Vendor */}
                   <button
                     type="button"
-                    id="nav-admin-dashboard-btn"
-                    onClick={() => handleNavClick('admin-dashboard')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-dashboard'
-                      ? 'bg-purple-600 text-white shadow-xs font-bold'
+                    id="nav-pembelian-bahan-btn"
+                    aria-expanded={isSubmenuOpen}
+                    onClick={handleToggleSubmenu}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${isPembelianActive
+                      ? 'bg-accent text-white shadow-xs font-bold'
                       : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
                       }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <BarChart3 className="w-4 h-4 shrink-0 text-purple-500" />
-                      <span className="truncate">{t('navAdminDashboard') || 'Dashboard Grafik Transaksi Semua Vendor'}</span>
+                      <PackagePlus className="w-4 h-4 shrink-0 text-emerald-500" />
+                      <span className="truncate">Pembelian</span>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                      GRAFIK
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-90' : ''
+                          } ${isPembelianActive
+                            ? 'text-white'
+                            : 'opacity-60'
+                          }`}
+                      />
+                    </div>
                   </button>
 
-                  {/* 0.5. Top 10 Produk Terlaris (Hari, Minggu, Bulan) */}
-                  <button
-                    type="button"
-                    id="nav-admin-top-products-btn"
-                    onClick={() => handleNavClick('admin-top-products')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-top-products'
-                      ? 'bg-purple-600 text-white shadow-xs font-bold'
-                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                      }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Trophy className="w-4 h-4 shrink-0 text-amber-500" />
-                      <span className="truncate">{t('navAdminTopProducts') || 'Top 10 Produk Terlaris (Hari, Minggu, Bulan)'}</span>
+                  {/* Submenu Inline (Expanded / Collapsed) */}
+                  {isSubmenuOpen && (
+                    <div
+                      id="submenu-pembelian-bahan-accordion"
+                      className="ml-3 pl-3 border-l-2 border-stone-200 dark:border-stone-800 space-y-1 pt-1 pb-1 transition-all duration-200"
+                    >
+                      <SidebarLink id="subnav-pembelian-baru" to='pembelian-bahan' allowedRoles={[MANAGER]}>
+                        <label>
+                          <PackagePlus className="text-orange-500" />
+                          <span>Faktur Pembelian Baru</span>
+                        </label>
+                      </SidebarLink>
+
+                      <SidebarLink id="subnav-riwayat-pembelian" to='riwayat-pembelian' allowedRoles={[MANAGER]}>
+                        <label>
+                          <Receipt className="text-blue-500" />
+                          <span>Riwayat Pembelian</span>
+                        </label>
+                      </SidebarLink>
+
+                      <SidebarLink id="subnav-stok-bahan" to='bahan-baku' allowedRoles={[MANAGER]}>
+                        <label>
+                          <Boxes className="text-emerald-500" />
+                          <span>Master Stok Bahan Baku</span>
+                        </label>
+                      </SidebarLink>
+
+                      <SidebarLink id="subnav-resep-minuman" to='resep-minuman' allowedRoles={[MANAGER]}>
+                        <label>
+                          <FlaskConical className="text-purple-500" />
+                          <span>Resep Racikan Minuman</span>
+                        </label>
+                      </SidebarLink>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                      TOP 10
-                    </span>
-                  </button>
-
-                  {/* Khusus ADMIN: Akses Fitur Manajemen Sistem Semua Vendor Lainnya */}
-                  {isAdmin && (
-                    <>
-                      {/* 1. Riwayat Pesanan Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-orders-btn"
-                        onClick={() => handleNavClick('admin-orders')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-orders'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Receipt className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminOrders')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 2. Katalog Produk Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-products-btn"
-                        onClick={() => handleNavClick('admin-products')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-products'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Coffee className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">Katalog Produk Semua Vendor</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 3. Stok Produk Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-stock-btn"
-                        onClick={() => handleNavClick('admin-stock')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-stock' || currentTab === 'admin-inventory' || currentTab === 'admin-inventaris'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Boxes className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">Stok Produk Semua Vendor</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 3. Manajemen User Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-users-btn"
-                        onClick={() => handleNavClick('admin-users')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-users'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Users className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminUsers')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 4. Aturan Diskon Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-discounts-btn"
-                        onClick={() => handleNavClick('admin-discounts')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-discounts'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Tag className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminDiscounts')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 5. Template Email Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-templates-btn"
-                        onClick={() => handleNavClick('admin-templates')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-templates'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Mail className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminTemplates')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 6. Login History Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-login-history-btn"
-                        onClick={() => handleNavClick('admin-login-history')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-login-history'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <ShieldCheck className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminLoginHistory')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 7. Log Aktivitas DB Semua Vendor */}
-                      <button
-                        type="button"
-                        id="nav-admin-activity-logs-btn"
-                        onClick={() => handleNavClick('admin-activity-logs')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-activity-logs'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <ClipboardList className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminActivityLogs')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          SEMUA
-                        </span>
-                      </button>
-
-                      {/* 8. Manajemen Vendor */}
-                      <button
-                        type="button"
-                        id="nav-vendor-management-btn"
-                        onClick={() => handleNavClick('vendor-management')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'vendor-management'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Building2 className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navAdminVendors')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          ADMIN
-                        </span>
-                      </button>
-
-                      {/* 8. Log Viewer */}
-                      <button
-                        type="button"
-                        id="nav-log-viewer-btn"
-                        onClick={() => handleNavClick('log-viewer')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'log-viewer'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Building2 className="w-4 h-4 shrink-0 text-purple-500" />
-                          <span className="truncate">{t('navLogViewer')}</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          ADMIN
-                        </span>
-                      </button>
-
-                      {/* 9. User Terkunci (Redis Lockout) */}
-                      <button
-                        type="button"
-                        id="nav-admin-locked-users-btn"
-                        onClick={() => handleNavClick('admin-locked-users')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-locked-users'
-                          ? 'bg-purple-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <UserX className="w-4 h-4 shrink-0 text-red-500" />
-                          <span className="truncate">User Terkunci (Redis)</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
-                          REDIS
-                        </span>
-                      </button>
-
-                      {/* 10. Housekeeping Data & Retensi */}
-                      <button
-                        type="button"
-                        id="nav-admin-housekeeping-btn"
-                        onClick={() => handleNavClick('admin-housekeeping')}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${currentTab === 'admin-housekeeping'
-                          ? 'bg-orange-600 text-white shadow-xs font-bold'
-                          : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Sparkles className="w-4 h-4 shrink-0 text-orange-500" />
-                          <span className="truncate">Housekeeping Data</span>
-                        </div>
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-                          ADMIN
-                        </span>
-                      </button>
-
-                    </>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+
+              <SidebarLink to='users' allowedRoles={[MANAGER]}>
+                <label>
+                  <Users />
+                  <span>{t('navUsers')}</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink to='diskon' allowedRoles={[MANAGER]}>
+                <label>
+                  <Tag />
+                  <span>{t('navDiscounts')}</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink to='templates' allowedRoles={[MANAGER]}>
+                <label>
+                  <Mail />
+                  <span>{t('navTemplates')}</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink id="nav-login-history-btn" to='login-history' allowedRoles={[MANAGER]}>
+                <label>
+                  <ShieldCheck />
+                  <span>Login Histori</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink id="nav-activity-logs-btn" to='activity-logs' allowedRoles={[MANAGER]}>
+                <label>
+                  <ClipboardList />
+                  <span>{t('navActivityLogs')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 shrink-0">
+                  DB Log
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-vendor-client-btn" to='vendor-client' allowedRoles={[MANAGER]}>
+                <label>
+                  <Building2 />
+                  <span>Informasi Vendor</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 shrink-0">
+                  Cabang
+                </span>
+              </SidebarLink>
+            </div>
+
+            {/* Group 3: Administrasi Sistem (Role ADMIN) */}
+            <div className='sidemenu-group'>
+              <label className="flex items-center justify-between text-purple-600! dark:text-purple-400!">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Administrasi Sistem</span>
+                </span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
+                  ALL VENDOR
+                </span>
+              </label>
+
+              <SidebarLink id="nav-admin-dashboard-btn" to='admin-dashboard' allowedRoles={[ADMIN]}>
+                <label>
+                  <BarChart3 className="text-purple-500" />
+                  <span>{t('navAdminDashboard') || 'Dashboard Grafik Transaksi Semua Vendor'}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  GRAFIK
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-top-products-btn" to='admin-top-products' allowedRoles={[ADMIN]}>
+                <label>
+                  <Trophy className="text-amber-500" />
+                  <span>{t('navAdminTopProducts') || 'Top 10 Produk Terlaris (Hari, Minggu, Bulan)'}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
+                  TOP 10
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-orders-btn" to='admin-orders' allowedRoles={[ADMIN]}>
+                <label>
+                  <Receipt className="text-purple-500" />
+                  <span>{t('navAdminOrders')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-products-btn" to='admin-products' allowedRoles={[ADMIN]}>
+                <label>
+                  <Coffee className="text-purple-500" />
+                  <span>Katalog Produk Semua Vendor</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-stock-btn" to='admin-stock' allowedRoles={[ADMIN]}>
+                <label>
+                  <Boxes className="text-purple-500" />
+                  <span>Stok Produk Semua Vendor</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-users-btn" to='admin-users' allowedRoles={[ADMIN]}>
+                <label>
+                  <Users className="text-purple-500" />
+                  <span>{t('navAdminUsers')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-discounts-btn" to='admin-discounts' allowedRoles={[ADMIN]}>
+                <label>
+                  <Tag className="text-purple-500" />
+                  <span>{t('navAdminDiscounts')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-templates-btn" to='admin-templates' allowedRoles={[ADMIN]}>
+                <label>
+                  <Mail className="text-purple-500" />
+                  <span>{t('navAdminTemplates')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-login-history-btn" to='admin-login-history' allowedRoles={[ADMIN]}>
+                <label>
+                  <ShieldCheck className="text-purple-500" />
+                  <span>{t('navAdminLoginHistory')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-activity-logs-btn" to='admin-activity-logs' allowedRoles={[ADMIN]}>
+                <label>
+                  <ClipboardList className="text-purple-500" />
+                  <span>{t('navAdminActivityLogs')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  SEMUA
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-vendor-management-btn" to='vendor-management' allowedRoles={[ADMIN]}>
+                <label>
+                  <Building2 className="text-purple-500" />
+                  <span>{t('navAdminVendors')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  ADMIN
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-log-viewer-btn" to='log-viewer' allowedRoles={[ADMIN]}>
+                <label>
+                  <Building2 className="text-purple-500" />
+                  <span>{t('navLogViewer')}</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  ADMIN
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-locked-users-btn" to='admin-locked-users' allowedRoles={[ADMIN]}>
+                <label>
+                  <UserX className="text-red-500" />
+                  <span>User Terkunci (Redis)</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 shrink-0">
+                  REDIS
+                </span>
+              </SidebarLink>
+
+              <SidebarLink id="nav-admin-housekeeping-btn" to='admin-housekeeping' allowedRoles={[ADMIN]}>
+                <label>
+                  <Sparkles className="text-orange-500" />
+                  <span>Housekeeping Data</span>
+                </label>
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 shrink-0">
+                  ADMIN
+                </span>
+              </SidebarLink>
+            </div>
 
             {/* Group 4: Pengaturan & Profil */}
-            <div>
-              <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                Sistem & Akun
-              </div>
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => handleNavClick('settings')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'settings'
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                    }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Settings className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{t('navSettings')}</span>
-                  </div>
-                </button>
+            <div className='sidemenu-group'>
+              <label>Sistem &amp; Akun</label>
 
-                <button
-                  type="button"
-                  onClick={() => handleNavClick('profile')}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all ${currentTab === 'profile'
-                    ? 'bg-accent text-white shadow-xs font-bold'
-                    : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                    }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <UserCheck className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{t('navAccount')}</span>
-                  </div>
-                </button>
-              </div>
+              <SidebarLink to='settings' allowedRoles={[...ALL_ROLES]}>
+                <label>
+                  <Settings />
+                  <span>{t('navSettings')}</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink to='profile' allowedRoles={[...ALL_ROLES]}>
+                <label>
+                  <UserCheck />
+                  <span>{t('navAccount')}</span>
+                </label>
+              </SidebarLink>
             </div>
           </div>
         </div>
