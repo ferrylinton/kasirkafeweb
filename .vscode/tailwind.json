@@ -1,0 +1,13 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@tailwind",
+      "description": "Inserts Tailwind base, components, utilities, and screens styles."
+    },
+    {
+      "name": "@apply",
+      "description": "Inlines existing utility classes into custom CSS."
+    }
+  ]
+}
