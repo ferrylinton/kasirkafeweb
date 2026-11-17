@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  PackagePlus,
   Building,
   Calendar,
   FileText,
   Plus,
   Trash2,
   CheckCircle2,
-  RefreshCw,
   X,
-  AlertTriangle,
-  Receipt,
-  Boxes,
-  ArrowRight
+  AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -265,59 +260,6 @@ export const NewPurchaseScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
-      {/* Top Header & Navigation Links */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent">
-              <PackagePlus className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
-              Faktur Pembelian Baru
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-              Tambah Stok Otomatis
-            </span>
-          </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 max-w-2xl">
-            Catat faktur masuk bahan baku dari pemasok/supplier. Kuantiti stok bahan baku kafe akan otomatis bertambah saat faktur disimpan.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          {/* Refresh Data */}
-          <button
-            type="button"
-            onClick={loadMaterials}
-            disabled={loading}
-            className="p-3 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors disabled:opacity-50 cursor-pointer"
-            title="Segarkan daftar bahan baku"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Quick link to Purchase History */}
-          <button
-            type="button"
-            onClick={() => navigate('/riwayat-pembelian')}
-            className="px-4 py-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <Receipt className="w-4 h-4 text-blue-500" />
-            <span>Lihat Riwayat Pembelian</span>
-          </button>
-
-          {/* Quick link to Master Stock */}
-          <button
-            type="button"
-            onClick={() => navigate('/bahan-baku')}
-            className="px-4 py-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <Boxes className="w-4 h-4 text-emerald-500" />
-            <span>Master Stok ({materials.length})</span>
-          </button>
-        </div>
-      </div>
-
       {/* Main Invoice Form */}
       <form onSubmit={handleSubmitPurchase} className="space-y-6">
         <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-6">

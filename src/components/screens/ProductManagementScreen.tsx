@@ -25,8 +25,6 @@ import {
   AlertCircle,
   ExternalLink,
   ShieldAlert,
-  PackageCheck,
-  PackageX,
   Sliders,
   Database,
   ArrowRight
@@ -536,13 +534,6 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
       });
   }, [stocks, searchQuery, categoryFilter, statusFilter, sortBy]);
 
-  // Key KPI stats
-  const totalSku = products.length;
-  const availableCount = products.filter(p => p.isAvailable !== false).length;
-  const unavailableCount = products.filter(p => p.isAvailable === false).length;
-  const lowStockCount = stocks.filter(s => s.stock > 0 && s.stock <= (s.lowStockThreshold || 10)).length;
-  const outOfStockCount = stocks.filter(s => s.stock <= 0).length;
-
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Admin Multi-Vendor Selector Header (if Admin) */}
@@ -644,75 +635,6 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
           <span>{activeTableTab === 'products' ? 'Buka Tabel Stok' : 'Buka Tabel Produk'}</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
-      </div>
-
-      {/* KPI Cards Overview */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Total SKU */}
-        <div className="p-4 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-stone-500 dark:text-stone-400">Total Produk</span>
-            <div className="w-8 h-8 rounded-xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-600 dark:text-stone-300">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-              {totalSku}
-            </span>
-            <span className="text-[11px] text-stone-400 ml-1.5">SKU Menu</span>
-          </div>
-        </div>
-
-        {/* Produk Tersedia */}
-        <div className="p-4 rounded-3xl bg-white dark:bg-[#251e1c] border border-emerald-200/60 dark:border-emerald-950/40 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Tersedia di Kasir</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600">
-              <PackageCheck className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
-              {availableCount}
-            </span>
-            <span className="text-[11px] text-emerald-600/70 ml-1.5">Aktif dijual</span>
-          </div>
-        </div>
-
-        {/* Produk Draft / Nonaktif */}
-        <div className="p-4 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-stone-500 dark:text-stone-400">Non-Aktif / Draft</span>
-            <div className="w-8 h-8 rounded-xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500">
-              <PackageX className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-stone-600 dark:text-stone-300 font-heading">
-              {unavailableCount}
-            </span>
-            <span className="text-[11px] text-stone-400 ml-1.5">Disembunyikan</span>
-          </div>
-        </div>
-
-        {/* Total Stock Records in new table */}
-        <div className="p-4 rounded-3xl bg-white dark:bg-[#251e1c] border border-amber-200/70 dark:border-amber-950/50 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Tabel Stok (product_stocks)</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-600">
-              <Boxes className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-amber-600 dark:text-amber-400 font-heading">
-              {stocks.length}
-            </span>
-            <span className="text-[11px] text-amber-600/80 ml-1.5">
-              ({outOfStockCount} Habis, {lowStockCount} Menipis)
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Segmented Table Switcher (Tabel Produk vs Tabel Stok Produk) */}

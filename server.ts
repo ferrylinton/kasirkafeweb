@@ -59,8 +59,16 @@ function getArg(flag: string): string | undefined {
   return index !== -1 && args[index + 1] ? args[index + 1] : undefined;
 }
 
-const PORT = Number(process.env.PORT) || (getArg('--port') ? Number(getArg('--port')) : 3000);
-const HOST = process.env.HOST || getArg('--host') || '0.0.0.0';
+const cliPortArg = getArg('--port');
+const cliPort = cliPortArg ? Number(cliPortArg) : undefined;
+const envPort = process.env.PORT ? Number(process.env.PORT) : undefined;
+const nginxPort = process.env.NGINX_PORT ? Number(process.env.NGINX_PORT) : undefined;
+const defaultPort = process.env.DEFAULT_APP_PORT ? Number(process.env.DEFAULT_APP_PORT) : 3000;
+const PORT =
+  (cliPort && !Number.isNaN(cliPort) ? cliPort : undefined) ||
+  (envPort && !Number.isNaN(envPort) && envPort !== nginxPort ? envPort : undefined) ||
+  defaultPort;
+const HOST = getArg('--host') || process.env.HOST || '0.0.0.0';
 
 async function startServer() {
   const app = express();
@@ -118,6 +126,21 @@ async function startServer() {
       connected: true,
       latencyMs: dbHealth.latencyMs
     });
+  });
+
+  let dbReadyPromise: Promise<void> = Promise.resolve();
+
+  // Ensure API endpoints (except health probes) wait for initial DB connection & seeding
+  app.use('/api', async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/health/db') {
+      return next();
+    }
+    try {
+      await dbReadyPromise;
+    } catch {
+      // Fallback store or downstream DB checks handle errors
+    }
+    next();
   });
 
   // API Routes
@@ -205,16 +228,16 @@ async function startServer() {
     });
   }
 
-  // Connect to MongoDB and seed initial collections if needed
-  try {
-    await connectDB();
-    await seedDatabase();
-  } catch (err: any) {
-    console.warn('[Bootstrap] Database connect / seed error:', err.message);
-  }
-
-  // Initialize automated 3-month data retention background scheduler
-  initRetentionScheduler();
+  // Start MongoDB connection, seeding, and retention scheduler without blocking port binding
+  dbReadyPromise = (async () => {
+    try {
+      await connectDB();
+      await seedDatabase();
+    } catch (err: any) {
+      console.warn('[Bootstrap] Database connect / seed error:', err.message);
+    }
+    initRetentionScheduler();
+  })();
 
   httpServer.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
@@ -232,7 +255,7 @@ async function startServer() {
   process.on('SIGTERM', cleanup);
   process.on('SIGINT', cleanup);
 
-  // Bind to HOST:PORT
+  // Bind to HOST:PORT immediately so dev server readiness checks succeed promptly
   httpServer.listen(PORT, HOST, () => {
     console.log(`[Server] KasirKafe POS running on http://${HOST}:${PORT}`);
     writeDailyLog({

@@ -2,21 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Boxes,
   Search,
-  RefreshCw,
   Plus,
   AlertTriangle,
   CheckCircle2,
   Edit2,
   Trash2,
   X,
-  PackagePlus,
-  FlaskConical,
   ArrowRight,
   Filter,
   Sparkles,
   Info
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { RawMaterial } from '../../types';
@@ -24,7 +20,6 @@ import { RawMaterial } from '../../types';
 export const RawMaterialStockScreen: React.FC = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
 
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
@@ -36,7 +31,6 @@ export const RawMaterialStockScreen: React.FC = () => {
 
   // Filters & Searches
   const [materialSearch, setMaterialSearch] = useState<string>('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'depleted' | 'low' | 'safe'>('all');
 
   // Modal: Add / Edit Material
@@ -144,30 +138,6 @@ export const RawMaterialStockScreen: React.FC = () => {
     }
   };
 
-  // Summary Metrics
-  const stockSummary = useMemo(() => {
-    let outOfStock = 0;
-    let lowStock = 0;
-    let safe = 0;
-
-    materials.forEach(m => {
-      if (m.stock <= 0) {
-        outOfStock++;
-      } else if (m.stock <= m.minimumStock) {
-        lowStock++;
-      } else {
-        safe++;
-      }
-    });
-
-    return {
-      total: materials.length,
-      outOfStock,
-      lowStock,
-      safe
-    };
-  }, [materials]);
-
   // Filtered Materials
   const filteredMaterials = useMemo(() => {
     return materials.filter(m => {
@@ -176,8 +146,6 @@ export const RawMaterialStockScreen: React.FC = () => {
         m.name.toLowerCase().includes(query) ||
         (m.category && m.category.toLowerCase().includes(query)) ||
         (m.notes && m.notes.toLowerCase().includes(query));
-
-      const matchCategory = categoryFilter === 'all' || m.category === categoryFilter;
 
       let matchStatus = true;
       if (statusFilter === 'depleted') {
@@ -188,9 +156,9 @@ export const RawMaterialStockScreen: React.FC = () => {
         matchStatus = m.stock > m.minimumStock;
       }
 
-      return matchSearch && matchCategory && matchStatus;
+      return matchSearch && matchStatus;
     });
-  }, [materials, materialSearch, categoryFilter, statusFilter]);
+  }, [materials, materialSearch, statusFilter]);
 
   // Unauthorized view
   if (!isManager && !isAdmin) {
@@ -211,156 +179,6 @@ export const RawMaterialStockScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
-      {/* Top Header Card */}
-      <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 mb-1">
-              <span>Bahan Baku</span>
-              <span>/</span>
-              <span className="text-accent font-bold">Master Stok Bahan</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2.5">
-              <Boxes className="w-6 h-6 text-accent" />
-              <span>Master Stok Bahan Baku Minuman</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
-              Pantau kuantiti fisik bahan racikan barista, tentukan ambang batas minimum, dan kelola estimasi biaya per gram/ml.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={loadMaterials}
-              disabled={loading}
-              className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Segarkan data bahan"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/pembelian-bahan')}
-              className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <PackagePlus className="w-3.5 h-3.5 text-stone-500" />
-              <span>Kulakan / Tambah Stok</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/resep-minuman')}
-              className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <FlaskConical className="w-3.5 h-3.5 text-purple-500" />
-              <span>Resep Minuman</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEditingMaterial(null);
-                setMaterialForm({
-                  name: '',
-                  category: 'KOPI',
-                  unit: 'gram',
-                  stock: 0,
-                  minimumStock: 200,
-                  avgCostPerUnit: 0,
-                  notes: ''
-                });
-                setShowMaterialModal(true);
-              }}
-              className="px-4 py-2 rounded-2xl bg-accent text-white hover:opacity-95 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Bahan Baku Baru</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Metric Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-stone-100 dark:border-stone-800">
-          <button
-            type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
-              statusFilter === 'all'
-                ? 'bg-stone-100 dark:bg-stone-800 border-accent/60'
-                : 'bg-stone-50 dark:bg-stone-900/60 border-stone-200/60 dark:border-stone-800/80 hover:border-stone-300'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
-              Total Master Bahan
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-              {stockSummary.total} <span className="text-xs font-normal text-stone-400">varian</span>
-            </div>
-            <span className="text-[10px] text-stone-400 mt-0.5 block">Semua bahan terdaftar</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('depleted')}
-            className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
-              statusFilter === 'depleted'
-                ? 'bg-red-100/60 dark:bg-red-950/40 border-red-500'
-                : 'bg-red-50/60 dark:bg-red-950/20 border-red-200/60 dark:border-red-900/40 hover:border-red-300'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-red-700 dark:text-red-400 uppercase tracking-wider block mb-1 flex items-center justify-between">
-              <span>Stok Habis (0)</span>
-              {stockSummary.outOfStock > 0 && (
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              )}
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-red-600 dark:text-red-400 font-heading">
-              {stockSummary.outOfStock} <span className="text-xs font-normal text-red-400">bahan</span>
-            </div>
-            <span className="text-[10px] text-red-500/80 dark:text-red-400/80 mt-0.5 block">Menu terkait otomatis nonaktif</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('low')}
-            className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
-              statusFilter === 'low'
-                ? 'bg-amber-100/60 dark:bg-amber-950/40 border-amber-500'
-                : 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200/60 dark:border-amber-900/40 hover:border-amber-300'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block mb-1">
-              Stok Menipis
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 font-heading">
-              {stockSummary.lowStock} <span className="text-xs font-normal text-amber-400">bahan</span>
-            </div>
-            <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 mt-0.5 block">Di bawah batas minimum</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('safe')}
-            className={`p-4 rounded-2xl text-left transition-all cursor-pointer border ${
-              statusFilter === 'safe'
-                ? 'bg-emerald-100/60 dark:bg-emerald-950/40 border-emerald-500'
-                : 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-900/40 hover:border-emerald-300'
-            }`}
-          >
-            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block mb-1">
-              Stok Aman
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
-              {stockSummary.safe} <span className="text-xs font-normal text-emerald-400">bahan</span>
-            </div>
-            <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 block">Kuantiti di atas ambang</span>
-          </button>
-        </div>
-      </div>
-
       {/* Main Stock Table */}
       <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
         {/* Search & Filter Toolbar */}
@@ -386,21 +204,6 @@ export const RawMaterialStockScreen: React.FC = () => {
               />
             </div>
 
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              <option value="all">Semua Kategori</option>
-              <option value="KOPI">Kopi (Beans/Ground)</option>
-              <option value="SUSU">Susu & Dairy</option>
-              <option value="SIRUP_PEMANIS">Sirup & Pemanis</option>
-              <option value="TEH_BUAH">Teh & Bubuk</option>
-              <option value="TOPPING">Topping & Boba</option>
-              <option value="KEMASAN">Kemasan & Cup</option>
-              <option value="LAINNYA">Lainnya</option>
-            </select>
-
             {statusFilter !== 'all' && (
               <button
                 type="button"
@@ -419,7 +222,7 @@ export const RawMaterialStockScreen: React.FC = () => {
           <div className="py-16 text-center text-stone-400">
             <Boxes className="w-12 h-12 mx-auto opacity-30 mb-2" />
             <p className="text-sm font-semibold text-stone-600 dark:text-stone-300">
-              {materialSearch || categoryFilter !== 'all' || statusFilter !== 'all'
+              {materialSearch || statusFilter !== 'all'
                 ? 'Tidak ada bahan baku yang cocok dengan filter yang dipilih.'
                 : 'Belum ada data bahan baku terdaftar.'}
             </p>

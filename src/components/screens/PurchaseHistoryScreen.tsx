@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Receipt,
   Search,
-  RefreshCw,
   Plus,
   Eye,
   Calendar,
@@ -11,9 +10,6 @@ import {
   FileText,
   X,
   AlertTriangle,
-  ArrowRight,
-  Boxes,
-  PackagePlus,
   Coins,
   CheckCircle2
 } from 'lucide-react';
@@ -34,7 +30,6 @@ export const PurchaseHistoryScreen: React.FC = () => {
   const [purchases, setPurchases] = useState<RawMaterialPurchase[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [purchaseSearch, setPurchaseSearch] = useState<string>('');
-  const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [selectedPurchase, setSelectedPurchase] = useState<RawMaterialPurchase | null>(null);
 
   // Load purchase history from backend
@@ -63,18 +58,6 @@ export const PurchaseHistoryScreen: React.FC = () => {
     loadPurchases();
   }, [token]);
 
-  // Summary Metrics
-  const summaryMetrics = useMemo(() => {
-    const totalTransactions = purchases.length;
-    const totalExpenditure = purchases.reduce((acc, p) => acc + (p.totalAmount || 0), 0);
-    const avgPO = totalTransactions > 0 ? Math.round(totalExpenditure / totalTransactions) : 0;
-    
-    // Total items across all purchases
-    const totalItemsPurchased = purchases.reduce((acc, p) => acc + (p.items?.length || 0), 0);
-
-    return { totalTransactions, totalExpenditure, avgPO, totalItemsPurchased };
-  }, [purchases]);
-
   // Filtered Purchases
   const filteredPurchases = useMemo(() => {
     return purchases.filter(p => {
@@ -85,11 +68,9 @@ export const PurchaseHistoryScreen: React.FC = () => {
         (p.invoiceNumber && p.invoiceNumber.toLowerCase().includes(query)) ||
         (p.notes && p.notes.toLowerCase().includes(query));
 
-      const matchPayment = paymentFilter === 'all' || p.paymentMethod === paymentFilter;
-
-      return matchSearch && matchPayment;
+      return matchSearch;
     });
-  }, [purchases, purchaseSearch, paymentFilter]);
+  }, [purchases, purchaseSearch]);
 
   // Unauthorized view
   if (!isManager && !isAdmin) {
@@ -110,101 +91,6 @@ export const PurchaseHistoryScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
-      {/* Top Header & Navigation Actions */}
-      <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-stone-500 mb-1">
-              <span>Bahan Baku</span>
-              <span>/</span>
-              <span className="text-accent font-bold">Riwayat Pembelian</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading flex items-center gap-2.5">
-              <Receipt className="w-6 h-6 text-accent" />
-              <span>Riwayat Faktur Pembelian Bahan Baku</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
-              Arsip lengkap nota belanja, pengeluaran kulakan, dan mutasi masuk bahan racikan minuman kafe.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={loadPurchases}
-              disabled={loading}
-              className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Segarkan data faktur"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/bahan-baku')}
-              className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Boxes className="w-3.5 h-3.5 text-stone-500" />
-              <span>Master Stok Bahan</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/pembelian-bahan')}
-              className="px-4 py-2 rounded-2xl bg-accent text-white hover:opacity-95 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <PackagePlus className="w-3.5 h-3.5" />
-              <span>Faktur Pembelian Baru</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Metric Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-stone-100 dark:border-stone-800">
-          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/60 dark:border-stone-800/80">
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
-              Total Transaksi
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading">
-              {summaryMetrics.totalTransactions} <span className="text-xs font-normal text-stone-400">faktur</span>
-            </div>
-            <span className="text-[10px] text-stone-400 mt-0.5 block">Tercatat di sistem</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-orange-50/60 dark:bg-orange-950/20 border border-orange-200/60 dark:border-orange-900/40">
-            <span className="text-[11px] font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider block mb-1">
-              Total Pengeluaran
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-accent font-heading truncate">
-              Rp {summaryMetrics.totalExpenditure.toLocaleString('id-ID')}
-            </div>
-            <span className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5 block">Belanja bahan baku</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/60 dark:border-stone-800/80">
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
-              Rata-rata PO
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading truncate">
-              Rp {summaryMetrics.avgPO.toLocaleString('id-ID')}
-            </div>
-            <span className="text-[10px] text-stone-400 mt-0.5 block">Per nota pembelian</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
-            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block mb-1">
-              Item Masuk
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
-              {summaryMetrics.totalItemsPurchased} <span className="text-xs font-normal text-stone-400">line items</span>
-            </div>
-            <span className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5 block">Otomatis masuk stok</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Table Card */}
       <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
         {/* Search & Filter Toolbar */}
@@ -229,17 +115,6 @@ export const PurchaseHistoryScreen: React.FC = () => {
                 className="w-full pl-9 pr-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
-
-            <select
-              value={paymentFilter}
-              onChange={e => setPaymentFilter(e.target.value)}
-              className="px-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-700 dark:text-stone-300 font-semibold focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              <option value="all">Semua Metode Bayar</option>
-              <option value="TRANSFER">Transfer Bank</option>
-              <option value="CASH">Tunai (Cash)</option>
-              <option value="TEMPO">Tempo / Hutang Dagang</option>
-            </select>
           </div>
         </div>
 
