@@ -6,6 +6,10 @@ import { getDB } from '../db';
 import {
   getAllVendors,
   findVendorById,
+  buildVendorQuery,
+  resolveVendorId,
+  CENTRAL_VENDOR_ID,
+  ADMIN_VENDOR_ID,
   VendorRecord
 } from '../vendorMiddleware';
 import { signToken, authMiddleware, requireManager, requireAdmin, hashPassword, comparePassword, verifyToken } from '../auth';
@@ -60,12 +64,12 @@ vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
     }
 
     const userRole = (req as any).user?.role;
-    const currentVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const currentVendorId = resolveVendorId(req.vendorId || (req as any).user?.vendorId || CENTRAL_VENDOR_ID);
     let vendors = await getAllVendors();
 
     // Strict role MANAGER rule: MANAGER can ONLY view their own vendor data
     if (userRole !== 'ADMIN') {
-      vendors = vendors.filter(v => v.id === currentVendorId);
+      vendors = vendors.filter(v => resolveVendorId(v.id) === currentVendorId);
     }
 
     // Enhance with live counts for each vendor
@@ -76,9 +80,10 @@ vendorRouter.get('/', authMiddleware, async (req: Request, res: Response) => {
         let userCount = 0;
 
         try {
-          productCount = await db.collection('products').countDocuments({ vendorId: v.id });
-          orderCount = await db.collection('orders').countDocuments({ vendorId: v.id });
-          userCount = await db.collection('users').countDocuments({ vendorId: v.id });
+          const vQuery = buildVendorQuery(v.id);
+          productCount = await db.collection('products').countDocuments(vQuery);
+          orderCount = await db.collection('orders').countDocuments(vQuery);
+          userCount = await db.collection('users').countDocuments(vQuery);
         } catch (e) {}
 
         return {
@@ -129,9 +134,10 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
     let userCount = 0;
 
     try {
-      productCount = await db.collection('products').countDocuments({ vendorId: vendor.id });
-      orderCount = await db.collection('orders').countDocuments({ vendorId: vendor.id });
-      userCount = await db.collection('users').countDocuments({ vendorId: vendor.id });
+      const vQuery = buildVendorQuery(vendor.id);
+      productCount = await db.collection('products').countDocuments(vQuery);
+      orderCount = await db.collection('orders').countDocuments(vQuery);
+      userCount = await db.collection('users').countDocuments(vQuery);
     } catch (e) {}
 
     return res.json({
@@ -421,10 +427,11 @@ vendorRouter.get('/test-isolation', async (req: Request, res: Response) => {
     let discounts: any[] = [];
 
     try {
-      products = await db.collection('products').find({ vendorId: targetVendorId }).toArray();
-      orders = await db.collection('orders').find({ vendorId: targetVendorId }).toArray();
-      users = await db.collection('users').find({ vendorId: targetVendorId }, { projection: { password: 0 } }).toArray();
-      discounts = await db.collection('discount_rules').find({ vendorId: targetVendorId }).toArray();
+      const vQuery = buildVendorQuery(targetVendorId);
+      products = await db.collection('products').find(vQuery).toArray();
+      orders = await db.collection('orders').find(vQuery).toArray();
+      users = await db.collection('users').find(vQuery, { projection: { password: 0 } }).toArray();
+      discounts = await db.collection('discount_rules').find(vQuery).toArray();
     } catch (e) {}
 
     return res.json({
@@ -1044,7 +1051,8 @@ vendorRouter.post('/request-deactivate', authMiddleware, requireManager, async (
       return res.status(400).json({ success: false, message: 'Vendor tidak ditemukan untuk akun ini.' });
     }
 
-    if (vendorId === 'vnd_admin' || vendorId === 'vnd_kasirkafe_central') {
+    const resolvedVendorId = resolveVendorId(vendorId);
+    if (resolvedVendorId === ADMIN_VENDOR_ID || resolvedVendorId === CENTRAL_VENDOR_ID) {
       return res.status(400).json({ success: false, message: 'Vendor Utama Sistem tidak dapat dinonaktifkan.' });
     }
 
@@ -1292,7 +1300,7 @@ vendorRouter.get('/status-requests', authMiddleware, async (req: Request, res: R
 
     const userRole = (req as any).user?.role;
     const userVendorId = (req as any).user?.vendorId;
-    const query = userRole === 'ADMIN' ? {} : { vendorId: userVendorId };
+    const query = userRole === 'ADMIN' ? {} : buildVendorQuery(userVendorId);
     const requests = await db.collection('vendor_status_requests').find(query).sort({ createdAt: -1 }).toArray();
 
     return res.json({

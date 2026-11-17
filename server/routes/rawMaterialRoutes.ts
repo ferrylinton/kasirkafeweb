@@ -6,6 +6,7 @@ import { authMiddleware } from '../auth';
 import { recordActivityLog } from '../activityLogger';
 import { serverProductCache } from '../cache/productCache';
 import { syncProductStocksFromRawMaterials } from '../stockSync';
+import { buildVendorQuery } from '../vendorMiddleware';
 
 export const rawMaterialRouter = Router();
 
@@ -65,18 +66,7 @@ function requireManagerMutationRole(req: Request, res: Response, next: () => voi
 }
 
 function getVendorFilter(vendorId?: string): any {
-  const v = vendorId || 'vnd_kasirkafe_central';
-  if (v === 'vnd_kasirkafe_central' || v === '6ab58389b2a71518d2beb887') {
-    return {
-      $or: [
-        { vendorId: '6ab58389b2a71518d2beb887' },
-        { vendorId: 'vnd_kasirkafe_central' },
-        { vendorId: { $exists: false } },
-        { vendorId: null }
-      ]
-    };
-  }
-  return { vendorId: v };
+  return buildVendorQuery(vendorId);
 }
 
 // Schemas

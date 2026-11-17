@@ -5,6 +5,7 @@ import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
+import { buildVendorQuery, resolveVendorId, CENTRAL_VENDOR_ID } from '../vendorMiddleware';
 
 export const templateRouter = Router();
 
@@ -74,15 +75,9 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
     if (isAllVendors) {
       filter = {};
     } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-      filter = { vendorId: requestedVendor };
+      filter = buildVendorQuery(requestedVendor);
     } else {
-      filter = {
-        $or: [
-          { vendorId: activeVendorId },
-          { vendorId: { $exists: false } },
-          { vendorId: 'vnd_kasirkafe_central' }
-        ]
-      };
+      filter = buildVendorQuery(activeVendorId);
     }
     const templates = await db.collection('email_templates').find(filter).toArray();
 
@@ -92,7 +87,7 @@ templateRouter.get('/', authMiddleware, requireManager, async (req: Request, res
       isAllVendors,
       templates: templates.map(t => ({
         id: t._id ? t._id.toString() : t.code,
-        vendorId: (t as any).vendorId || 'vnd_kasirkafe_central',
+        vendorId: (t as any).vendorId ? resolveVendorId(String((t as any).vendorId)) : CENTRAL_VENDOR_ID,
         code: t.code,
         name: t.name,
         description: t.description,
@@ -122,9 +117,7 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
       });
     }
 
-    const filter = (activeVendorId === 'vnd_kasirkafe_central'
-          ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-          : { vendorId: activeVendorId });
+    const filter = buildVendorQuery(activeVendorId);
     const logs = await db.collection('email_logs').find(filter).sort({ sentAt: -1 }).limit(100).toArray();
 
     return res.json({
@@ -132,7 +125,7 @@ templateRouter.get('/email-logs', authMiddleware, async (req: Request, res: Resp
       vendorId: activeVendorId,
       logs: logs.map(l => ({
         id: l._id ? l._id.toString() : l.id,
-        vendorId: l.vendorId || activeVendorId,
+        vendorId: l.vendorId ? resolveVendorId(String(l.vendorId)) : resolveVendorId(activeVendorId),
         orderId: l.orderId,
         orderNumber: l.orderNumber,
         recipientEmail: l.recipientEmail,

@@ -22,7 +22,7 @@ import { sendLoginAlertEmail, sendLoginHistoryReportEmail, parseUserAgent, sendP
 import { ObjectId } from 'mongodb';
 import { saveSessionToRedis, removeSessionFromRedis, refreshSessionActivity, isSessionActiveInRedis, invalidateUserSessionInStore } from '../sessionStore';
 import { recordActivityLog } from '../activityLogger';
-import { getAllVendors, findVendorById } from '../vendorMiddleware';
+import { getAllVendors, findVendorById, buildVendorQuery } from '../vendorMiddleware';
 import { logLogin } from '../dailyRollingLogger';
 import {
   checkUserLockout,
@@ -159,7 +159,7 @@ export async function revokeAllSessionsForVendor(vendorId: string, reason: strin
   let usersList: any[] = [];
   if (db) {
     try {
-      usersList = await db.collection('users').find({ vendorId }).toArray();
+      usersList = await db.collection('users').find(buildVendorQuery(vendorId)).toArray();
     } catch (e) {}
   }
 
@@ -1404,13 +1404,9 @@ authRouter.get('/login-history', authMiddleware, async (req: Request, res: Respo
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
     if (!isAllVendors) {
       if (vendorQuery && vendorQuery !== 'ALL' && vendorQuery !== 'all') {
-        andClauses.push({ vendorId: vendorQuery });
+        andClauses.push(buildVendorQuery(vendorQuery));
       } else {
-        andClauses.push(
-          activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId }
-        );
+        andClauses.push(buildVendorQuery(activeVendorId));
       }
     }
 

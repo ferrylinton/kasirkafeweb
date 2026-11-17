@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireManager } from '../auth';
 import { getDB } from '../db';
-import { getAllVendors, VendorRecord } from '../vendorMiddleware';
+import { getAllVendors, VendorRecord, resolveVendorId, CENTRAL_VENDOR_ID, ADMIN_VENDOR_ID } from '../vendorMiddleware';
 import {
   getCutoffDate,
   getRetentionStatus,
@@ -16,9 +16,12 @@ export const adminAnalyticsRouter = Router();
 adminAnalyticsRouter.use(authMiddleware, requireManager);
 
 const VENDOR_COLORS: Record<string, string> = {
-  vnd_kasirkafe_central: '#ea580c', // Orange Amber
-  vnd_kopi_kulo_kemang: '#8b5cf6', // Violet Purple
-  vnd_tehpoci_nusantara: '#10b981', // Emerald Green
+  '6ab58389b2a71518d2beb887': '#ea580c',
+  '6ab58389b2a71518d2beb888': '#8b5cf6',
+  '6ab58389b2a71518d2beb889': '#10b981',
+  vnd_kasirkafe_central: '#ea580c',
+  vnd_kopi_kulo_kemang: '#8b5cf6',
+  vnd_tehpoci_nusantara: '#10b981',
 };
 
 const DYNAMIC_PALETTE = ['#0284c7', '#ec4899', '#f59e0b', '#06b6d4', '#84cc16', '#6366f1'];
@@ -62,11 +65,12 @@ function getWeekNumber(d: Date): { year: number; week: number; start: Date; end:
  */
 adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) => {
   try {
-    const requestedVendorId = (req.query.vendorId as string) || 'all';
+    const rawRequestedVendorId = (req.query.vendorId as string) || 'all';
+    const requestedVendorId = rawRequestedVendorId === 'all' ? 'all' : resolveVendorId(rawRequestedVendorId);
 
     // 1. Fetch vendors
     const allVendors = await getAllVendors();
-    const activeVendors = allVendors.filter(v => v.id !== 'vnd_admin');
+    const activeVendors = allVendors.filter(v => v.id !== 'vnd_admin' && v.id !== ADMIN_VENDOR_ID);
 
     const vendorMeta = activeVendors.map((v, idx) => ({
       id: v.id,
@@ -112,7 +116,7 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
       .map((o: any) => {
         const d = new Date(o.createdAt || now);
         const amount = Number(o.totalAmount ?? o.total ?? 0);
-        const vendorId = o.vendorId || 'vnd_kasirkafe_central';
+        const vendorId = o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID;
         const ymd = formatDateYMD(d);
         const year = d.getFullYear();
         const monthKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -426,7 +430,8 @@ adminAnalyticsRouter.get('/transactions', async (req: Request, res: Response) =>
 adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Response) => {
   try {
     const period = ((req.query.period as string) || 'all').toLowerCase(); // 'day' | 'week' | 'month' | 'all'
-    const requestedVendorId = (req.query.vendorId as string) || 'all';
+    const rawRequestedVendorId = (req.query.vendorId as string) || 'all';
+    const requestedVendorId = rawRequestedVendorId === 'all' ? 'all' : resolveVendorId(rawRequestedVendorId);
     const format = ((req.query.format as string) || 'csv').toLowerCase(); // 'csv' | 'json'
     const exportType = ((req.query.type as string) || 'transactions').toLowerCase(); // 'transactions' | 'summary'
 
@@ -479,7 +484,7 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
 
     // Vendor filter
     if (requestedVendorId !== 'all') {
-      orders = orders.filter(o => o.vendorId === requestedVendorId);
+      orders = orders.filter(o => (o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID) === requestedVendorId);
     }
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount ?? o.total ?? 0), 0);
@@ -504,14 +509,15 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
           averageOrderValue: averageTicket
         },
         transactions: orders.map(o => {
-          const vObj = vendorMap.get(o.vendorId);
+          const vId = o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID;
+          const vObj = vendorMap.get(vId);
           return {
             id: (o._id ? o._id.toString() : o.id) || '',
             orderNumber: o.orderNumber || o.id,
             queueNumber: o.queueNumber || '-',
             createdAt: o.createdAt,
-            vendorId: o.vendorId,
-            vendorName: vObj?.name || o.vendorId,
+            vendorId: vId,
+            vendorName: vObj?.name || vId,
             cashier: o.cashier?.name || 'Kasir',
             paymentMethod: o.paymentMethod || 'QRIS',
             totalAmount: Number(o.totalAmount ?? o.total ?? 0),
@@ -550,7 +556,8 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
     ];
 
     const csvRows = orders.map(o => {
-      const vObj = vendorMap.get(o.vendorId);
+      const vId = o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID;
+      const vObj = vendorMap.get(vId);
       const items = Array.isArray(o.items) ? o.items : [];
       const itemDesc = items.map((i: any) => `${i.name} (x${i.quantity || 1})`).join('; ');
       const totalQty = items.reduce((sum: number, i: any) => sum + Number(i.quantity || 1), 0);
@@ -565,7 +572,7 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
         `"${(o.orderNumber || o.id || '').replace(/"/g, '""')}"`,
         `"#${o.queueNumber || '001'}"`,
         `"${dateStr}"`,
-        `"${(vObj?.name || o.vendorId || 'KasirKafe Central').replace(/"/g, '""')}"`,
+        `"${(vObj?.name || vId || 'KasirKafe Central').replace(/"/g, '""')}"`,
         `"${(o.cashier?.name || 'Kasir KasirKafe').replace(/"/g, '""')}"`,
         `"${o.paymentMethod || 'QRIS'}"`,
         `"${itemDesc.replace(/"/g, '""')}"`,
@@ -598,11 +605,12 @@ adminAnalyticsRouter.get('/transactions/export', async (req: Request, res: Respo
 adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) => {
   try {
     const period = ((req.query.period as string) || 'day').toLowerCase(); // 'day' | 'week' | 'month'
-    const requestedVendorId = (req.query.vendorId as string) || 'all';
+    const rawRequestedVendorId = (req.query.vendorId as string) || 'all';
+    const requestedVendorId = rawRequestedVendorId === 'all' ? 'all' : resolveVendorId(rawRequestedVendorId);
     const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '10', 10), 1), 50);
 
     const allVendors = await getAllVendors();
-    const activeVendors = allVendors.filter(v => v.id !== 'vnd_admin');
+    const activeVendors = allVendors.filter(v => v.id !== 'vnd_admin' && v.id !== ADMIN_VENDOR_ID);
     const vendorMap = new Map<string, VendorRecord>();
     activeVendors.forEach(v => vendorMap.set(v.id, v));
 
@@ -662,7 +670,7 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
 
     // Filter by vendor if requested
     if (requestedVendorId !== 'all') {
-      orders = orders.filter(o => o.vendorId === requestedVendorId);
+      orders = orders.filter(o => (o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID) === requestedVendorId);
     }
 
     // Aggregate products
@@ -683,7 +691,7 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
     const categoryTotals: Record<string, { quantity: number; revenue: number }> = {};
 
     orders.forEach((o: any) => {
-      const vId = o.vendorId || 'vnd_kasirkafe_central';
+      const vId = o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID;
       const vObj = vendorMap.get(vId);
       const vName = vObj?.name || 'KasirKafe Central';
 
@@ -822,7 +830,8 @@ adminAnalyticsRouter.get('/top-products', async (req: Request, res: Response) =>
 adminAnalyticsRouter.get('/top-products/export', async (req: Request, res: Response) => {
   try {
     const period = ((req.query.period as string) || 'day').toLowerCase();
-    const requestedVendorId = (req.query.vendorId as string) || 'all';
+    const rawRequestedVendorId = (req.query.vendorId as string) || 'all';
+    const requestedVendorId = rawRequestedVendorId === 'all' ? 'all' : resolveVendorId(rawRequestedVendorId);
     const format = ((req.query.format as string) || 'csv').toLowerCase();
 
     const allVendors = await getAllVendors();
@@ -868,7 +877,7 @@ adminAnalyticsRouter.get('/top-products/export', async (req: Request, res: Respo
     }
 
     if (requestedVendorId !== 'all') {
-      orders = orders.filter(o => o.vendorId === requestedVendorId);
+      orders = orders.filter(o => (o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID) === requestedVendorId);
     }
 
     interface ProductAgg {
@@ -886,7 +895,7 @@ adminAnalyticsRouter.get('/top-products/export', async (req: Request, res: Respo
     let totalQtyAll = 0;
 
     orders.forEach((o: any) => {
-      const vId = o.vendorId || 'vnd_kasirkafe_central';
+      const vId = o.vendorId ? resolveVendorId(String(o.vendorId)) : CENTRAL_VENDOR_ID;
       const vObj = vendorMap.get(vId);
       const vName = vObj?.name || 'KasirKafe Central';
       const items = Array.isArray(o.items) ? o.items : [];

@@ -2,6 +2,7 @@ import { Request } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDB } from './db';
 import { logDataMutation } from './dailyRollingLogger';
+import { buildVendorQuery } from './vendorMiddleware';
 
 export type ActivityAction =
   | 'CREATE'
@@ -201,44 +202,51 @@ export async function queryActivityLogs(options: ActivityFilterOptions) {
 
   if (db) {
     try {
-      const filter: any = {};
+      const andClauses: any[] = [];
 
       if (vendorId && vendorId !== 'ALL') {
-        filter.vendorId = vendorId;
+        andClauses.push(buildVendorQuery(vendorId));
       }
       if (action && action !== 'ALL') {
-        filter.action = action.toUpperCase();
+        andClauses.push({ action: action.toUpperCase() });
       }
       if (entity && entity !== 'ALL') {
-        filter.entity = entity.toUpperCase();
+        andClauses.push({ entity: entity.toUpperCase() });
       }
       if (userId && userId !== 'ALL') {
-        filter.$or = [
-          { 'performedBy.id': userId },
-          { 'performedBy.email': userId }
-        ];
+        andClauses.push({
+          $or: [
+            { 'performedBy.id': userId },
+            { 'performedBy.email': userId }
+          ]
+        });
       }
       if (startDate || endDate) {
-        filter.createdAt = {};
+        const dateFilter: any = {};
         if (startDate) {
-          filter.createdAt.$gte = new Date(startDate);
+          dateFilter.$gte = new Date(startDate);
         }
         if (endDate) {
           const end = new Date(endDate);
           end.setHours(23, 59, 59, 999);
-          filter.createdAt.$lte = end;
+          dateFilter.$lte = end;
         }
+        andClauses.push({ createdAt: dateFilter });
       }
       if (search && search.trim()) {
         const regex = { $regex: search.trim(), $options: 'i' };
-        filter.$or = [
-          { summary: regex },
-          { entityName: regex },
-          { 'performedBy.name': regex },
-          { 'performedBy.email': regex },
-          { ipAddress: regex }
-        ];
+        andClauses.push({
+          $or: [
+            { summary: regex },
+            { entityName: regex },
+            { 'performedBy.name': regex },
+            { 'performedBy.email': regex },
+            { ipAddress: regex }
+          ]
+        });
       }
+
+      const filter: any = andClauses.length > 0 ? { $and: andClauses } : {};
 
       allLogs = await db
         .collection('activity_logs')

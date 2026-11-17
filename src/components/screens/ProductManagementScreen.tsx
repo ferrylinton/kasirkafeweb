@@ -535,7 +535,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   }, [stocks, searchQuery, categoryFilter, statusFilter, sortBy]);
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-in fade-in duration-200">
       {/* Admin Multi-Vendor Selector Header (if Admin) */}
       {allVendorsMode && (
         <AdminAllVendorsHeader

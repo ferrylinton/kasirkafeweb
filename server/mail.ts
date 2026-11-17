@@ -2,6 +2,7 @@ import nodemailer, { Transporter } from 'nodemailer';
 import dotenv from 'dotenv';
 import { getDB } from './db';
 import { ObjectId } from 'mongodb';
+import { buildVendorQuery, CENTRAL_VENDOR_ID } from './vendorMiddleware';
 
 dotenv.config();
 
@@ -58,11 +59,15 @@ export interface TemplateVariables {
  * Fetch email template from database with fallback
  */
 export async function getTemplateByCode(code: string, vendorId?: string): Promise<{ subject: string; bodyHtml: string } | null> {
-  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
+  const activeVendorId = vendorId || CENTRAL_VENDOR_ID;
   const db = getDB();
   if (db) {
     try {
-      let tmpl = await db.collection('email_templates').findOne({ code, vendorId: activeVendorId, isActive: true });
+      let tmpl = await db.collection('email_templates').findOne({
+        code,
+        isActive: true,
+        ...buildVendorQuery(activeVendorId)
+      });
       if (!tmpl) {
         tmpl = await db.collection('email_templates').findOne({ code, isActive: true });
       }

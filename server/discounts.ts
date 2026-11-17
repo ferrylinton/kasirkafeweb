@@ -1,4 +1,5 @@
 import { getDB } from './db';
+import { buildVendorQuery, resolveVendorId, CENTRAL_VENDOR_ID } from './vendorMiddleware';
 
 export interface DiscountRule {
   _id?: any;
@@ -242,7 +243,7 @@ export const DEFAULT_RULES: DiscountRule[] = [
 ];
 
 export async function getActiveDiscountRules(vendorId?: string): Promise<DiscountRule[]> {
-  const activeVendorId = vendorId || 'vnd_kasirkafe_central';
+  const activeVendorId = resolveVendorId(vendorId || CENTRAL_VENDOR_ID);
   const birthdayRule: DiscountRule = {
     vendorId: activeVendorId,
     code: 'BIRTHDAY_REWARD',
@@ -259,10 +260,7 @@ export async function getActiveDiscountRules(vendorId?: string): Promise<Discoun
     try {
       const query: any = {
         isActive: true,
-        $or: [
-          { vendorId: activeVendorId },
-          ...(activeVendorId === 'vnd_kasirkafe_central' ? [{ vendorId: { $exists: false } }, { vendorId: null }] : [])
-        ]
+        ...buildVendorQuery(activeVendorId)
       };
       const rules: DiscountRule[] = await db.collection<DiscountRule>('discount_rules').find(query).toArray();
       if (rules.length > 0) return rules;
@@ -274,12 +272,11 @@ export async function getActiveDiscountRules(vendorId?: string): Promise<Discoun
   const source = DEFAULT_RULES;
   let rules = source.filter(r => {
     if (!r.isActive) return false;
-    const rVendor = r.vendorId || 'vnd_kasirkafe_central';
-    return rVendor === activeVendorId;
+    return resolveVendorId(r.vendorId) === activeVendorId;
   });
 
   if (rules.length === 0) {
-    rules = DEFAULT_RULES.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
+    rules = DEFAULT_RULES.filter(r => resolveVendorId(r.vendorId) === activeVendorId);
   }
 
   if (rules.length === 0) {

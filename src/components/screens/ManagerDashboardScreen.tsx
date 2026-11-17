@@ -11,12 +11,10 @@ import {
   RefreshCw,
   CreditCard,
   PieChart as PieChartIcon,
-  ChevronRight,
   ArrowUpRight,
   Percent,
   CheckCircle2,
   AlertCircle,
-  Download,
   FileSpreadsheet,
   FileCode,
   Clock,
@@ -24,9 +22,7 @@ import {
   Trash2,
   CalendarCheck,
   Sparkles,
-  Database,
-  Building2,
-  Trophy
+  Database
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,7 +38,6 @@ import {
   Tooltip
 } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 
 type PeriodType = 'day' | 'week' | 'month';
@@ -136,9 +131,8 @@ interface ManagerDashboardScreenProps {
   onNavigateTab?: (tab: string) => void;
 }
 
-export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ onNavigateTab }) => {
-  const { token, user } = useAuth();
-  const { t } = useLanguage();
+export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = () => {
+  const { token } = useAuth();
   const { showToast } = useToast();
 
   const [period, setPeriod] = useState<PeriodType>('day');
@@ -147,18 +141,13 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
 
   const [data, setData] = useState<ManagerAnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isPurging, setIsPurging] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState<boolean>(false);
 
   // Fetch Manager Vendor Analytics
   const fetchAnalytics = async (showRefreshToast = false) => {
     try {
-      if (showRefreshToast) setIsRefreshing(true);
-      else setIsLoading(true);
-      setError(null);
+      setIsLoading(true);
 
       const res = await fetch('/api/manager/analytics/transactions', {
         headers: {
@@ -181,11 +170,9 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
       }
     } catch (err: any) {
       console.error('[ManagerDashboard] Fetch error:', err);
-      setError(err.message || 'Terjadi kesalahan saat memuat data transaksi');
       showToast(err.message || 'Gagal memuat data transaksi vendor', 'error');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
@@ -220,7 +207,6 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
   const handleExport = async (format: 'csv' | 'json', targetPeriod: 'day' | 'week' | 'month' | 'all' = 'all') => {
     try {
       setIsExporting(true);
-      setExportMenuOpen(false);
 
       const url = `/api/manager/analytics/transactions/export?format=${format}&period=${targetPeriod}`;
       const res = await fetch(url, {
@@ -436,121 +422,10 @@ export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = ({ 
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto space-y-6 select-none font-sans">
-      {/* 1. Header & Quick Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-200/80 dark:border-stone-800/80">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-              Dashboard Transaksi Cabang
-            </h1>
-
-            {data?.vendor && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/80 shadow-2xs">
-                <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{data.vendor.name}</span>
-              </span>
-            )}
-          </div>
-
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 flex items-center gap-2">
-            <span>Data transaksi terisolasi khusus cabang Anda</span>
-            <span>•</span>
-            <span className="font-semibold text-orange-600 dark:text-orange-400">Retensi 3 Bulan Terakhir</span>
-          </p>
-        </div>
-
-        {/* Header Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Quick link to Top 10 Products for Manager */}
-          {onNavigateTab && (
-            <button
-              type="button"
-              id="goto-manager-top-products-btn"
-              onClick={() => onNavigateTab('manager-top-products')}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
-              title="Buka Peringkat 10 Produk Paling Laku Cabang"
-            >
-              <Trophy className="w-3.5 h-3.5 text-amber-500" />
-              <span>Top 10 Produk</span>
-            </button>
-          )}
-
-          {/* Refresh Button */}
-          <button
-            type="button"
-            onClick={() => fetchAnalytics(true)}
-            disabled={isLoading || isRefreshing}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
-            title="Muat ulang data transaksi"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-orange-600' : ''}`} />
-            <span>Segarkan</span>
-          </button>
-
-          {/* Export Dropdown Menu */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setExportMenuOpen(prev => !prev)}
-              disabled={isExporting || isLoading}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white hover:bg-orange-600 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
-            >
-              <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
-              <span>{isExporting ? 'Mengekspor...' : 'Ekspor Data'}</span>
-              <ChevronRight className={`w-3.5 h-3.5 transition-transform ${exportMenuOpen ? 'rotate-90' : ''}`} />
-            </button>
-
-            {exportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-stone-900 rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-stone-400 dark:text-stone-500 border-b border-stone-100 dark:border-stone-800">
-                  Format Ekspor 3 Bulan
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleExport('csv', 'all')}
-                  className="w-full text-left px-3.5 py-2 text-xs text-stone-700 dark:text-stone-300 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <div className="font-bold">Ekspor CSV (Excel)</div>
-                    <div className="text-[10px] text-stone-400">Rincian nota transaksi lengkap</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleExport('json', 'all')}
-                  className="w-full text-left px-3.5 py-2 text-xs text-stone-700 dark:text-stone-300 hover:bg-orange-50 dark:hover:bg-orange-950/40 hover:text-orange-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <FileCode className="w-4 h-4 text-purple-600 shrink-0" />
-                  <div>
-                    <div className="font-bold">Ekspor JSON</div>
-                    <div className="text-[10px] text-stone-400">Struktur arsip digital sistem</div>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* 2. Banner Kebijakan Retensi 3 Bulan & Skeduler Otomatis */}
       <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-600/5 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-stone-900/40 border border-amber-300/80 dark:border-amber-800/70 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Database className="w-4 h-4" />
-              </span>
-              <span className="text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 font-heading">
-                Kebijakan Retensi Data 3 Bulan & Skeduler Pembersihan Otomatis
-              </span>
-            </div>
-
-            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-              Sesuai regulasi sistem, seluruh transaksi cabang <strong className="text-stone-900 dark:text-stone-100">{data?.vendor?.name || 'Anda'}</strong> disimpan selama <strong className="text-amber-700 dark:text-amber-400">3 bulan terakhir (90 hari)</strong>. Data yang melewati batas cutoff otomatis dibersihkan secara berkala oleh skeduler latar belakang setiap 6 jam.
-            </p>
 
             {/* Retention Metrics Pills */}
             <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">

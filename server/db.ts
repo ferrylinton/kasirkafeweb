@@ -22,85 +22,123 @@ function normalizeMongoUri(rawUri?: string): string | null {
   return uri;
 }
 
-const rawUri = process.env.MONGODB_URI;
-const MONGODB_URI = normalizeMongoUri(rawUri);
-if (MONGODB_URI && MONGODB_URI !== rawUri) {
-  process.env.MONGODB_URI = MONGODB_URI;
+function resolveMongoConfig(): { uri: string | null; dbName: string } {
+  if (!process.env.MONGODB_URI) {
+    dotenv.config({ override: true });
+  }
+  const rawUri = process.env.MONGODB_URI;
+  const normalized = normalizeMongoUri(rawUri);
+  if (normalized && normalized !== rawUri) {
+    process.env.MONGODB_URI = normalized;
+  }
+  const dbName = (process.env.MONGODB_DB_NAME || '').trim() || 'beverage_app_db';
+  return { uri: normalized, dbName };
 }
-const DB_NAME = process.env.MONGODB_DB_NAME || 'beverage_app_db';
 
 let client: MongoClient | null = null;
 let dbInstance: Db | null = null;
 let isConnected = false;
+let connectPromise: Promise<Db | null> | null = null;
 
 export async function connectDB(): Promise<Db | null> {
   if (dbInstance && isConnected) {
     return dbInstance;
   }
 
-  if (!MONGODB_URI) {
-    console.error('[MongoDB] No MONGODB_URI provided. Database connection failed.');
-    isConnected = false;
-    dbInstance = null;
-    logDatabase({
-      event: 'ERROR',
-      message: 'Tidak ada MONGODB_URI; sistem gagal terhubung ke database.',
-      dbName: DB_NAME
-    }).catch(() => {});
-    return null;
+  if (connectPromise) {
+    return connectPromise;
   }
 
-  try {
-    console.log('[MongoDB] Connecting to MongoDB...');
-    logDatabase({
-      event: 'CONNECTING',
-      message: `Mencoba menghubungkan ke MongoDB Atlas (${DB_NAME})...`,
-      dbName: DB_NAME
-    }).catch(() => {});
+  connectPromise = (async () => {
+    const { uri, dbName } = resolveMongoConfig();
 
-    client = new MongoClient(MONGODB_URI, {
-      connectTimeoutMS: 5000,
-      serverSelectionTimeoutMS: 5000,
-    });
-
-    client.on('close', () => {
-      console.warn('[MongoDB] Connection closed.');
+    if (!uri) {
+      console.error('[MongoDB] No MONGODB_URI provided. Database connection failed.');
       isConnected = false;
       dbInstance = null;
-    });
+      logDatabase({
+        event: 'ERROR',
+        message: 'Tidak ada MONGODB_URI; sistem gagal terhubung ke database.',
+        dbName
+      }).catch(() => {});
+      return null;
+    }
 
-    client.on('error', (err) => {
-      console.error('[MongoDB] Client error:', err);
+    try {
+      console.log('[MongoDB] Connecting to MongoDB...');
+      logDatabase({
+        event: 'CONNECTING',
+        message: `Mencoba menghubungkan ke MongoDB Atlas (${dbName})...`,
+        dbName
+      }).catch(() => {});
+
+      if (client) {
+        try {
+          await client.close();
+        } catch {}
+        client = null;
+      }
+
+      const newClient = new MongoClient(uri, {
+        connectTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 10000,
+      });
+
+      newClient.on('close', () => {
+        console.warn('[MongoDB] Connection closed.');
+        isConnected = false;
+        dbInstance = null;
+      });
+
+      newClient.on('error', (err) => {
+        console.error('[MongoDB] Client error:', err);
+        isConnected = false;
+        dbInstance = null;
+      });
+
+      await newClient.connect();
+      const db = newClient.db(dbName);
+      await db.command({ ping: 1 });
+
+      client = newClient;
+      dbInstance = db;
+      isConnected = true;
+      console.log('[MongoDB] Connected successfully to database:', dbName);
+      logDatabase({
+        event: 'CONNECTED',
+        message: `Koneksi berhasil terhubung ke basis data MongoDB: ${dbName}`,
+        dbName
+      }).catch(() => {});
+      return dbInstance;
+    } catch (err: any) {
+      console.error('[MongoDB] Direct connection error:', err.message);
       isConnected = false;
       dbInstance = null;
-    });
+      client = null;
+      logDatabase({
+        event: 'ERROR',
+        message: `Gagal terhubung ke MongoDB: ${err.message}.`,
+        error: err,
+        dbName
+      }).catch(() => {});
+      return null;
+    } finally {
+      connectPromise = null;
+    }
+  })();
 
-    await client.connect();
-    dbInstance = client.db(DB_NAME);
-    isConnected = true;
-    console.log('[MongoDB] Connected successfully to database:', DB_NAME);
-    logDatabase({
-      event: 'CONNECTED',
-      message: `Koneksi berhasil terhubung ke basis data MongoDB: ${DB_NAME}`,
-      dbName: DB_NAME
-    }).catch(() => {});
-    return dbInstance;
-  } catch (err: any) {
-    console.error('[MongoDB] Direct connection error:', err.message);
-    isConnected = false;
-    dbInstance = null;
-    logDatabase({
-      event: 'ERROR',
-      message: `Gagal terhubung ke MongoDB: ${err.message}.`,
-      error: err,
-      dbName: DB_NAME
-    }).catch(() => {});
-    return null;
-  }
+  return connectPromise;
 }
 
 export function getDB(): Db | null {
   return dbInstance;
+}
+
+export async function ensureDBConnected(): Promise<Db | null> {
+  if (dbInstance && isConnected) {
+    return dbInstance;
+  }
+  return connectDB();
 }
 
 export function isDbConnected(): boolean {
@@ -110,12 +148,12 @@ export function isDbConnected(): boolean {
 /**
  * Checks database health via ping command
  */
-export async function checkDbConnection(): Promise<{ connected: boolean; latencyMs?: number; error?: string }> {
+export async function checkDbConnection(): Promise<{ connected: boolean; latencyMs?: number; dbName?: string; error?: string }> {
+  const { dbName } = resolveMongoConfig();
   if (!dbInstance || !isConnected) {
-    // Attempt reconnect
     const db = await connectDB();
     if (!db) {
-      return { connected: false, error: 'can not connect to db' };
+      return { connected: false, dbName, error: 'can not connect to db' };
     }
   }
 
@@ -124,11 +162,11 @@ export async function checkDbConnection(): Promise<{ connected: boolean; latency
     await dbInstance!.command({ ping: 1 });
     const latencyMs = Date.now() - start;
     isConnected = true;
-    return { connected: true, latencyMs };
+    return { connected: true, latencyMs, dbName: dbInstance!.databaseName };
   } catch (err: any) {
     isConnected = false;
     dbInstance = null;
-    return { connected: false, error: err.message || 'can not connect to db' };
+    return { connected: false, dbName, error: err.message || 'can not connect to db' };
   }
 }
 
@@ -140,7 +178,7 @@ export async function reconnectDB(): Promise<boolean> {
   if (client) {
     try {
       await client.close();
-    } catch (e) {}
+    } catch {}
     client = null;
     dbInstance = null;
   }

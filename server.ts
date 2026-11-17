@@ -5,7 +5,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 
-import { connectDB, checkDbConnection, isDbConnected } from './server/db';
+import { connectDB, checkDbConnection, isDbConnected, ensureDBConnected } from './server/db';
 import { seedDatabase } from './server/seeder';
 import { tokenBucketRateLimiter } from './server/redis';
 import { authRouter } from './server/routes/authRoutes';
@@ -89,7 +89,25 @@ async function startServer() {
   // Token Bucket Rate Limiting Middleware (connected to Upstash Redis)
   app.use('/api', tokenBucketRateLimiter({ capacity: 80, refillRate: 5 }));
 
-  // Multi-Vendor Resolution & Isolation Middleware
+  let dbReadyPromise: Promise<void> = Promise.resolve();
+
+  // Ensure API endpoints (except health probes) wait for DB connection & auto-reconnect if dropped
+  app.use('/api', async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/health/db') {
+      return next();
+    }
+    try {
+      await dbReadyPromise;
+      if (!isDbConnected()) {
+        await ensureDBConnected();
+      }
+    } catch {
+      // Downstream DB checks handle errors
+    }
+    next();
+  });
+
+  // Multi-Vendor Resolution & Isolation Middleware (runs after DB readiness check)
   app.use('/api', vendorMiddleware);
 
   // API Health Check
@@ -107,6 +125,7 @@ async function startServer() {
       status: 'ok',
       service: 'KasirKafe POS API',
       database: 'connected',
+      dbName: dbHealth.dbName,
       latencyMs: dbHealth.latencyMs,
       timestamp: new Date().toISOString()
     });
@@ -124,23 +143,9 @@ async function startServer() {
     return res.json({
       success: true,
       connected: true,
+      dbName: dbHealth.dbName,
       latencyMs: dbHealth.latencyMs
     });
-  });
-
-  let dbReadyPromise: Promise<void> = Promise.resolve();
-
-  // Ensure API endpoints (except health probes) wait for initial DB connection & seeding
-  app.use('/api', async (req, res, next) => {
-    if (req.path === '/health' || req.path === '/health/db') {
-      return next();
-    }
-    try {
-      await dbReadyPromise;
-    } catch {
-      // Fallback store or downstream DB checks handle errors
-    }
-    next();
   });
 
   // API Routes

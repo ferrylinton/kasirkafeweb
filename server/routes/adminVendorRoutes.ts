@@ -5,7 +5,8 @@ import { getDB } from '../db';
 import {
   VendorRecord,
   findVendorById,
-  getAllVendors
+  getAllVendors,
+  buildVendorQuery
 } from '../vendorMiddleware';
 import { recordActivityLog } from '../activityLogger';
 import { revokeAllSessionsForVendor } from './authRoutes';
@@ -28,9 +29,10 @@ async function computeVendorStats(vendorId: string) {
 
   if (db) {
     try {
-      productCount = await db.collection('products').countDocuments({ vendorId });
-      userCount = await db.collection('users').countDocuments({ vendorId });
-      const orders = await db.collection('orders').find({ vendorId }).toArray();
+      const vQuery = buildVendorQuery(vendorId);
+      productCount = await db.collection('products').countDocuments(vQuery);
+      userCount = await db.collection('users').countDocuments(vQuery);
+      const orders = await db.collection('orders').find(vQuery).toArray();
       orderCount = orders.length;
       totalRevenue = orders.reduce((sum, o: any) => sum + (Number(o.totalAmount ?? o.total ?? 0)), 0);
     } catch (e) {

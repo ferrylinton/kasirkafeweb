@@ -12,6 +12,7 @@ import { authMiddleware, requireManager } from '../auth';
 import { ObjectId } from 'mongodb';
 import { recordActivityLog } from '../activityLogger';
 import { IParam } from '@/src/types';
+import { buildVendorQuery, resolveVendorId, CENTRAL_VENDOR_ID } from '../vendorMiddleware';
 
 export const discountRouter = Router();
 
@@ -152,13 +153,9 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
         if (isAllVendors) {
           filter = {};
         } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-          filter = requestedVendor === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: requestedVendor };
+          filter = buildVendorQuery(requestedVendor);
         } else {
-          filter = activeVendorId === 'vnd_kasirkafe_central'
-            ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-            : { vendorId: activeVendorId };
+          filter = buildVendorQuery(activeVendorId);
         }
         rules = await db.collection('discount_rules').find(filter).toArray();
       } catch (e) {}
@@ -168,9 +165,11 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
       if (isAllVendors) {
         rules = source;
       } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        rules = source.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === requestedVendor);
+        const targetResolved = resolveVendorId(requestedVendor);
+        rules = source.filter(r => resolveVendorId(r.vendorId) === targetResolved);
       } else {
-        rules = source.filter(r => (r.vendorId || 'vnd_kasirkafe_central') === activeVendorId);
+        const activeResolved = resolveVendorId(activeVendorId);
+        rules = source.filter(r => resolveVendorId(r.vendorId) === activeResolved);
       }
     }
 
@@ -180,7 +179,7 @@ discountRouter.get('/rules', async (req: Request, res: Response) => {
       isAllVendors,
       rules: rules.map(r => ({
         id: r._id ? r._id.toString() : r.code,
-        vendorId: r.vendorId || 'vnd_kasirkafe_central',
+        vendorId: r.vendorId ? resolveVendorId(String(r.vendorId)) : CENTRAL_VENDOR_ID,
         code: r.code,
         name: r.name,
         description: r.description,
@@ -379,7 +378,7 @@ discountRouter.put('/rules/:id', authMiddleware, requireDiscountWriteAccess, asy
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         existingRule = await db.collection('discount_rules').findOne(query);
-        if (existingRule  && existingRule.vendorId && existingRule.vendorId !== activeVendorId) {
+        if (existingRule && existingRule.vendorId && resolveVendorId(String(existingRule.vendorId)) !== resolveVendorId(activeVendorId)) {
           return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
         }
         await db.collection('discount_rules').updateOne(query, { $set: updateData });
@@ -424,7 +423,7 @@ discountRouter.delete('/rules/:id', authMiddleware, requireDiscountWriteAccess, 
       try {
         const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { code: id };
         targetRule = await db.collection('discount_rules').findOne(query);
-        if (targetRule && targetRule.vendorId && targetRule.vendorId !== activeVendorId) {
+        if (targetRule && targetRule.vendorId && resolveVendorId(String(targetRule.vendorId)) !== resolveVendorId(activeVendorId)) {
           return res.status(403).json({ success: false, error: 'Akses ditolak: Aturan diskon milik vendor lain' });
         }
         await db.collection('discount_rules').deleteOne(query);

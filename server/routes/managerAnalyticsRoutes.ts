@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireManager } from '../auth';
 import { getDB } from '../db';
-import { getAllVendors, findVendorById } from '../vendorMiddleware';
+import { getAllVendors, buildVendorQuery, resolveVendorId, CENTRAL_VENDOR_ID, ADMIN_VENDOR_ID } from '../vendorMiddleware';
 import {
   getCutoffDate,
   getRetentionStatus,
@@ -54,16 +54,16 @@ function getWeekNumber(d: Date): { year: number; week: number; start: Date; end:
  */
 async function resolveManagerVendor(req: Request) {
   const user = req.user!;
-  let targetVendorId = user.vendorId || req.vendorId || 'vnd_kasirkafe_central';
+  let targetVendorId = resolveVendorId(user.vendorId || req.vendorId || CENTRAL_VENDOR_ID);
 
   // If user is ADMIN testing or managing, they may optionally pass a specific vendor
   if (user.role === 'ADMIN' && req.query.vendorId && req.query.vendorId !== 'all') {
-    targetVendorId = req.query.vendorId as string;
+    targetVendorId = resolveVendorId(req.query.vendorId as string);
   }
 
   const allVendors = await getAllVendors();
   const vendorObj = allVendors.find(v => v.id === targetVendorId) ||
-    allVendors.find(v => v.id !== 'vnd_admin') ||
+    allVendors.find(v => v.id !== 'vnd_admin' && v.id !== ADMIN_VENDOR_ID) ||
     allVendors[0];
 
   return {
@@ -92,7 +92,7 @@ managerAnalyticsRouter.get('/transactions', async (req: Request, res: Response) 
     if (db) {
       try {
         rawOrders = await db.collection('orders').find({
-          vendorId: vendorId,
+          ...buildVendorQuery(vendorId),
           createdAt: { $gte: cutoffDate }
         }).sort({ createdAt: 1 }).toArray();
       } catch (e) {
@@ -348,7 +348,7 @@ managerAnalyticsRouter.get('/transactions/export', async (req: Request, res: Res
     if (db) {
       try {
         orders = await db.collection('orders').find({
-          vendorId: vendorId,
+          ...buildVendorQuery(vendorId),
           createdAt: { $gte: startDate, $lte: endDate }
         }).sort({ createdAt: -1 }).toArray();
       } catch (e) {
@@ -570,7 +570,7 @@ managerAnalyticsRouter.get('/top-products', async (req: Request, res: Response) 
     if (db) {
       try {
         orders = await db.collection('orders').find({
-          vendorId: vendorId,
+          ...buildVendorQuery(vendorId),
           createdAt: { $gte: startDate, $lte: endDate }
         }).toArray();
       } catch (e) {
@@ -773,7 +773,7 @@ managerAnalyticsRouter.get('/top-products/export', async (req: Request, res: Res
     if (db) {
       try {
         orders = await db.collection('orders').find({
-          vendorId: vendorId,
+          ...buildVendorQuery(vendorId),
           createdAt: { $gte: startDate, $lte: endDate }
         }).toArray();
       } catch (e) {
