@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Boxes,
   Search,
@@ -9,15 +10,18 @@ import {
   Trash2,
   X,
   ArrowRight,
-  Filter,
-  Sparkles,
-  Info
+  RefreshCw,
+  ShoppingBag,
+  Settings,
+  FlaskConical
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
-import { RawMaterial } from '../../types';
+import { Product, ProductRecipe, RawMaterial, StockManagementMode } from '../../types';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 export const RawMaterialStockScreen: React.FC = () => {
+  const navigate = useNavigate();
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
@@ -26,6 +30,10 @@ export const RawMaterialStockScreen: React.FC = () => {
 
   // State
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
+  const [recipes, setRecipes] = useState<ProductRecipe[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('PRODUCT_STOCK');
+  const [switchingMode, setSwitchingMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -49,19 +57,51 @@ export const RawMaterialStockScreen: React.FC = () => {
   // Modal: Delete Material Confirmation
   const [deletingMaterial, setDeletingMaterial] = useState<RawMaterial | null>(null);
 
-  // Load raw materials
+  // Load raw materials, recipes, products, and vendor stock config
   const loadMaterials = async () => {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/raw-materials', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMaterials(data.materials || []);
+      const [matRes, vendorRes, recipesRes, prodsRes] = await Promise.all([
+        fetch('/api/raw-materials', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch('/api/vendors/current', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch('/api/raw-materials/recipes', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch('/api/products?refresh=true', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      const [matData, vendorData, recipesData, prodsData] = await Promise.all([
+        matRes.json(),
+        vendorRes.json().catch(() => ({})),
+        recipesRes.json().catch(() => ({})),
+        prodsRes.json().catch(() => ({}))
+      ]);
+
+      if (matData.success) {
+        setMaterials(matData.materials || []);
       } else {
-        showToast(data.error || 'Gagal memuat master bahan baku', 'error');
+        showToast(matData.error || 'Gagal memuat master bahan baku', 'error');
+      }
+
+      if (vendorData?.success && vendorData.vendor?.stockManagementMode) {
+        setStockManagementMode(vendorData.vendor.stockManagementMode);
+      } else if (prodsData?.stockManagementMode) {
+        setStockManagementMode(prodsData.stockManagementMode);
+      }
+
+      if (recipesData?.success && Array.isArray(recipesData.recipes)) {
+        setRecipes(recipesData.recipes);
+      }
+
+      if (prodsData?.success && Array.isArray(prodsData.products)) {
+        setProducts(prodsData.products);
       }
     } catch (err) {
       console.error('Error fetching raw materials:', err);
@@ -74,6 +114,43 @@ export const RawMaterialStockScreen: React.FC = () => {
   useEffect(() => {
     loadMaterials();
   }, [token]);
+
+  // Switch Vendor Stock Management Mode
+  const handleToggleStockMode = async (targetMode: StockManagementMode) => {
+    if (!isManager && !isAdmin) return;
+    if (switchingMode || targetMode === stockManagementMode) return;
+
+    setSwitchingMode(true);
+    try {
+      const res = await fetch('/api/vendors/stock-config', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ stockManagementMode: targetMode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStockManagementMode(data.stockManagementMode || targetMode);
+        clearClientCatalogCache();
+        showToast(
+          data.message ||
+            (targetMode === 'RAW_MATERIAL'
+              ? 'Stok produk kini diproses otomatis dari Stok Bahan Baku!'
+              : 'Stok produk dialihkan kembali ke Stok Produk Manual.'),
+          'success'
+        );
+        await loadMaterials();
+      } else {
+        showToast(data.message || data.error || 'Gagal mengubah konfigurasi stok', 'error');
+      }
+    } catch (err) {
+      showToast('Gagal terhubung ke server untuk menyimpan konfigurasi', 'error');
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
 
   // Save / Update Raw Material
   const handleSaveMaterial = async (e: React.FormEvent) => {
@@ -99,6 +176,7 @@ export const RawMaterialStockScreen: React.FC = () => {
 
       const data = await res.json();
       if (data.success) {
+        clearClientCatalogCache();
         showToast(data.message || 'Data bahan baku berhasil disimpan!', 'success');
         setShowMaterialModal(false);
         setEditingMaterial(null);
@@ -125,6 +203,7 @@ export const RawMaterialStockScreen: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
+        clearClientCatalogCache();
         showToast(data.message || 'Bahan baku berhasil dihapus', 'success');
         setDeletingMaterial(null);
         await loadMaterials();
@@ -136,6 +215,72 @@ export const RawMaterialStockScreen: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Map material -> linked recipe products
+  const materialUsageMap = useMemo(() => {
+    const productById = new Map<string, Product>();
+    for (const p of products) {
+      productById.set(String(p.id), p);
+    }
+
+    const byKey = new Map<
+      string,
+      {
+        productId: string;
+        productName: string;
+        quantityNeeded: number;
+        unit: string;
+        productStock: number;
+      }[]
+    >();
+
+    for (const recipe of recipes) {
+      const linkedProduct = productById.get(String(recipe.productId));
+      const productName = linkedProduct?.name || recipe.productName;
+      const productStock = linkedProduct?.stock ?? 0;
+
+      for (const ing of recipe.ingredients || []) {
+        const entry = {
+          productId: recipe.productId,
+          productName,
+          quantityNeeded: ing.quantityNeeded,
+          unit: ing.unit,
+          productStock
+        };
+
+        if (ing.materialId) {
+          const idKey = `id:${ing.materialId}`;
+          const list = byKey.get(idKey) || [];
+          if (!list.some(item => item.productId === recipe.productId)) {
+            list.push(entry);
+            byKey.set(idKey, list);
+          }
+        }
+        if (ing.materialName) {
+          const nameKey = `name:${ing.materialName.trim().toLowerCase()}`;
+          const list = byKey.get(nameKey) || [];
+          if (!list.some(item => item.productId === recipe.productId)) {
+            list.push(entry);
+            byKey.set(nameKey, list);
+          }
+        }
+      }
+    }
+
+    return byKey;
+  }, [recipes, products]);
+
+  const getLinkedProductsForMaterial = (m: RawMaterial) => {
+    const byId = materialUsageMap.get(`id:${m.id}`) || [];
+    const byName = materialUsageMap.get(`name:${m.name.trim().toLowerCase()}`) || [];
+    const merged = [...byId];
+    for (const item of byName) {
+      if (!merged.some(existing => existing.productId === item.productId)) {
+        merged.push(item);
+      }
+    }
+    return merged;
   };
 
   // Filtered Materials
@@ -181,6 +326,109 @@ export const RawMaterialStockScreen: React.FC = () => {
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
       {/* Main Stock Table */}
       <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
+        {/* Konfigurasi Sumber Stok Produk Bar */}
+        <div
+          className={`p-3.5 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+            stockManagementMode === 'RAW_MATERIAL'
+              ? 'bg-emerald-50/70 dark:bg-emerald-950/25 border-emerald-200 dark:border-emerald-800/60'
+              : 'bg-amber-50/70 dark:bg-amber-950/25 border-amber-200 dark:border-amber-800/60'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                stockManagementMode === 'RAW_MATERIAL'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+              }`}
+            >
+              <FlaskConical className="w-4 h-4" />
+            </div>
+            <div className="text-xs leading-relaxed">
+              <div className="font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2 flex-wrap">
+                <span>
+                  {stockManagementMode === 'RAW_MATERIAL'
+                    ? 'Sumber Stok Produk Aktif: Stok Bahan Baku (Otomatis)'
+                    : 'Sumber Stok Produk Aktif: Stok Produk Manual (ProductStockScreen)'}
+                </span>
+              </div>
+              <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                {stockManagementMode === 'RAW_MATERIAL'
+                  ? 'Stok produk ber-resep dihitung otomatis dari sisa bahan baku ini. Jika salah satu bahan baku habis (0 / kurang dari takaran), stok produk terkait otomatis habis (0), dan akan terisi ulang saat mencatat Pembelian Stok Bahan Baku.'
+                  : 'Saat ini stok produk masih dikelola manual di halaman Stok Produk. Aktifkan mode Stok Bahan Baku agar stok produk otomatis mengikuti ketersediaan bahan baku & faktur pembelian.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={switchingMode}
+              onClick={() =>
+                handleToggleStockMode(stockManagementMode === 'RAW_MATERIAL' ? 'PRODUCT_STOCK' : 'RAW_MATERIAL')
+              }
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 ${
+                stockManagementMode === 'RAW_MATERIAL'
+                  ? 'bg-white dark:bg-[#251e1c] border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50'
+                  : 'bg-accent text-white hover:opacity-90'
+              }`}
+            >
+              {switchingMode ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Settings className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {stockManagementMode === 'RAW_MATERIAL'
+                  ? 'Alihkan ke Stok Produk Manual'
+                  : 'Aktifkan Stok dari Bahan Baku'}
+              </span>
+            </button>
+
+            {isManager && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('/pembelian-bahan')}
+                  className="px-3 py-1.5 rounded-xl bg-accent text-white text-xs font-bold inline-flex items-center gap-1.5 hover:opacity-90 cursor-pointer"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Beli Stok Bahan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMaterial(null);
+                    setMaterialForm({
+                      name: '',
+                      category: 'KOPI',
+                      unit: 'gram',
+                      stock: 0,
+                      minimumStock: 200,
+                      avgCostPerUnit: 0,
+                      notes: ''
+                    });
+                    setShowMaterialModal(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Bahan</span>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              className="px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#251e1c] text-stone-600 dark:text-stone-300 text-xs font-semibold hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer"
+              title="Buka Pengaturan Sistem"
+            >
+              Pengaturan
+            </button>
+          </div>
+        </div>
+
         {/* Search & Filter Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -218,7 +466,12 @@ export const RawMaterialStockScreen: React.FC = () => {
         </div>
 
         {/* Materials Table or Empty State */}
-        {filteredMaterials.length === 0 ? (
+        {loading ? (
+          <div className="py-14 flex flex-col items-center justify-center gap-2 text-stone-500">
+            <RefreshCw className="w-7 h-7 text-accent animate-spin" />
+            <span className="text-xs font-semibold">Memuat stok bahan baku &amp; keterkaitan resep...</span>
+          </div>
+        ) : filteredMaterials.length === 0 ? (
           <div className="py-16 text-center text-stone-400">
             <Boxes className="w-12 h-12 mx-auto opacity-30 mb-2" />
             <p className="text-sm font-semibold text-stone-600 dark:text-stone-300">
@@ -229,26 +482,28 @@ export const RawMaterialStockScreen: React.FC = () => {
             <p className="text-xs text-stone-400 mt-1 max-w-sm mx-auto">
               Tambahkan bahan baku dasar kafe Anda seperti Biji Kopi, Fresh Milk, Sirup Vanila, atau Cup Takeaway.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingMaterial(null);
-                setMaterialForm({
-                  name: '',
-                  category: 'KOPI',
-                  unit: 'gram',
-                  stock: 0,
-                  minimumStock: 200,
-                  avgCostPerUnit: 0,
-                  notes: ''
-                });
-                setShowMaterialModal(true);
-              }}
-              className="mt-4 px-4 py-2 rounded-xl bg-accent text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer hover:opacity-90"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Tambah Bahan Baku Pertama</span>
-            </button>
+            {isManager && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMaterial(null);
+                  setMaterialForm({
+                    name: '',
+                    category: 'KOPI',
+                    unit: 'gram',
+                    stock: 0,
+                    minimumStock: 200,
+                    avgCostPerUnit: 0,
+                    notes: ''
+                  });
+                  setShowMaterialModal(true);
+                }}
+                className="mt-4 px-4 py-2 rounded-xl bg-accent text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer hover:opacity-90"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Bahan Baku Pertama</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto border border-stone-200 dark:border-stone-700/80 rounded-2xl">
@@ -260,6 +515,7 @@ export const RawMaterialStockScreen: React.FC = () => {
                   <th className="p-3">Stok Fisik Saat Ini</th>
                   <th className="p-3">Batas Minimum</th>
                   <th className="p-3">Status Stok</th>
+                  <th className="p-3">Produk Terkait (Resep)</th>
                   <th className="p-3">Estimasi Biaya / Satuan</th>
                   <th className="p-3 text-center">Aksi</th>
                 </tr>
@@ -268,6 +524,7 @@ export const RawMaterialStockScreen: React.FC = () => {
                 {filteredMaterials.map(m => {
                   const isDepleted = m.stock <= 0;
                   const isLow = m.stock > 0 && m.stock <= m.minimumStock;
+                  const linkedProducts = getLinkedProductsForMaterial(m);
 
                   return (
                     <tr key={m.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-850/60 transition-colors">
@@ -307,41 +564,82 @@ export const RawMaterialStockScreen: React.FC = () => {
                           </span>
                         )}
                       </td>
+                      <td className="p-3 max-w-[230px]">
+                        {linkedProducts.length === 0 ? (
+                          <span className="text-[11px] text-stone-400 italic">Belum terhubung ke resep</span>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 truncate" title={linkedProducts.map(lp => lp.productName).join(', ')}>
+                              {linkedProducts.slice(0, 2).map(lp => lp.productName).join(', ')}
+                              {linkedProducts.length > 2 && ` +${linkedProducts.length - 2} lainnya`}
+                            </div>
+                            {stockManagementMode === 'RAW_MATERIAL' && isDepleted && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{linkedProducts.length} produk otomatis Habis (0)</span>
+                              </span>
+                            )}
+                            {stockManagementMode === 'RAW_MATERIAL' && !isDepleted && (
+                              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block">
+                                Menyusun {linkedProducts.length} menu aktif
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 text-stone-700 dark:text-stone-300 font-medium whitespace-nowrap">
                         Rp {(m.avgCostPerUnit || 0).toLocaleString('id-ID')} <span className="text-[11px] text-stone-400">/ {m.unit}</span>
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingMaterial(m);
-                              setMaterialForm({
-                                name: m.name,
-                                category: m.category || 'KOPI',
-                                unit: m.unit || 'gram',
-                                stock: m.stock,
-                                minimumStock: m.minimumStock || 100,
-                                avgCostPerUnit: m.avgCostPerUnit || 0,
-                                notes: m.notes || ''
-                              });
-                              setShowMaterialModal(true);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-[11px] font-bold cursor-pointer inline-flex items-center gap-1 transition-colors"
-                            title="Ubah bahan baku"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            <span>Ubah</span>
-                          </button>
+                          {isManager && (
+                            <>
+                              {isDepleted || isLow ? (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate('/pembelian-bahan')}
+                                  className="px-2.5 py-1 rounded-lg bg-accent/15 hover:bg-accent/25 text-accent text-[11px] font-bold cursor-pointer inline-flex items-center gap-1 transition-colors"
+                                  title="Catat pembelian stok bahan baku"
+                                >
+                                  <ShoppingBag className="w-3 h-3" />
+                                  <span>Beli</span>
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMaterial(m);
+                                  setMaterialForm({
+                                    name: m.name,
+                                    category: m.category || 'KOPI',
+                                    unit: m.unit || 'gram',
+                                    stock: m.stock,
+                                    minimumStock: m.minimumStock || 100,
+                                    avgCostPerUnit: m.avgCostPerUnit || 0,
+                                    notes: m.notes || ''
+                                  });
+                                  setShowMaterialModal(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-[11px] font-bold cursor-pointer inline-flex items-center gap-1 transition-colors"
+                                title="Ubah bahan baku"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Ubah</span>
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setDeletingMaterial(m)}
-                            className="p-1 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer transition-colors"
-                            title="Hapus bahan baku"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingMaterial(m)}
+                                className="p-1 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer transition-colors"
+                                title="Hapus bahan baku"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                          {!isManager && (
+                            <span className="text-[11px] text-stone-400">Lihat Saja</span>
+                          )}
                         </div>
                       </td>
                     </tr>

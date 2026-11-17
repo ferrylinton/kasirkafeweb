@@ -10,6 +10,7 @@ import { logOrder } from '../dailyRollingLogger';
 import { IParam } from '@/src/types';
 import { serverProductCache } from '../cache/productCache';
 import { toVendorObjectId, buildVendorQuery, CENTRAL_VENDOR_ID } from '../vendorMiddleware';
+import { getVendorStockMode, syncProductStocksFromRawMaterials } from '../stockSync';
 
 export const orderRouter = Router();
 
@@ -346,8 +347,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     // ----------------------------------------------------
     // SINKRONISASI BAHAN BAKU MINUMAN & VALIDASI KETERSEDIAAN
-    // Jika bahan habis/kurang, tolak pesanan (produk tidak tersedia)
+    // Jika mode RAW_MATERIAL dan bahan habis/kurang, tolak pesanan
     // ----------------------------------------------------
+    const stockMode = await getVendorStockMode(db, vendorIdStr);
     const requiredMaterialsMap = new Map<string, {
       materialId: string;
       materialName: string;
@@ -355,78 +357,76 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       unit: string;
       productName: string;
     }>();
+    const recipeMatchedProductIds = new Set<string>();
+    const matVendorFilter = buildVendorQuery(vendorIdStr);
 
-    try {
-      const recipeVendorFilter = (activeVendorId === 'vnd_kasirkafe_central' || activeVendorId === '6ab58389b2a71518d2beb887')
-        ? { $or: [{ vendorId: 'vnd_kasirkafe_central' }, { vendorId: '6ab58389b2a71518d2beb887' }, { vendorId: { $exists: false } }, { vendorId: null }] }
-        : { vendorId: activeVendorId };
+    if (stockMode === 'RAW_MATERIAL') {
+      try {
+        const activeRecipes = await db.collection('product_recipes')
+          .find(matVendorFilter)
+          .toArray();
 
-      const activeRecipes = await db.collection('product_recipes')
-        .find(recipeVendorFilter)
-        .toArray();
+        const recipeLookup = new Map<string, any>();
+        activeRecipes.forEach(r => {
+          if (r.productId) recipeLookup.set(String(r.productId), r);
+          if (r.productName) recipeLookup.set(r.productName.toLowerCase().trim(), r);
+        });
 
-      const recipeLookup = new Map<string, any>();
-      activeRecipes.forEach(r => {
-        recipeLookup.set(String(r.productId), r);
-        if (r.productName) recipeLookup.set(r.productName.toLowerCase().trim(), r);
-      });
-
-      // Calculate total required ingredients across all ordered items
-      for (const item of items) {
-        const recipe = recipeLookup.get(String(item.productId)) || recipeLookup.get(item.name?.toLowerCase().trim());
-        if (recipe && Array.isArray(recipe.ingredients) && recipe.isAutoDeduct !== false) {
-          for (const ing of recipe.ingredients) {
-            const matKey = String(ing.materialId || ing.materialName);
-            const neededForThis = (Number(ing.quantityNeeded) || 1) * item.quantity;
-            const existing = requiredMaterialsMap.get(matKey);
-            if (existing) {
-              existing.totalRequiredQty += neededForThis;
-            } else {
-              requiredMaterialsMap.set(matKey, {
-                materialId: String(ing.materialId),
-                materialName: ing.materialName,
-                totalRequiredQty: neededForThis,
-                unit: ing.unit || 'gram',
-                productName: item.name
-              });
+        // Calculate total required ingredients across all ordered items
+        for (const item of items) {
+          const recipe = recipeLookup.get(String(item.productId)) || recipeLookup.get(item.name?.toLowerCase().trim());
+          if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 && recipe.isAutoDeduct !== false) {
+            recipeMatchedProductIds.add(String(item.productId));
+            for (const ing of recipe.ingredients) {
+              const matKey = String(ing.materialId || ing.materialName);
+              const neededForThis = (Number(ing.quantityNeeded) || 1) * item.quantity;
+              const existing = requiredMaterialsMap.get(matKey);
+              if (existing) {
+                existing.totalRequiredQty += neededForThis;
+              } else {
+                requiredMaterialsMap.set(matKey, {
+                  materialId: String(ing.materialId),
+                  materialName: ing.materialName,
+                  totalRequiredQty: neededForThis,
+                  unit: ing.unit || 'gram',
+                  productName: item.name
+                });
+              }
             }
           }
         }
-      }
 
-      // Check current raw material stocks
-      for (const [key, reqMat] of requiredMaterialsMap.entries()) {
-        const matQuery: any = { vendorId: activeVendorId };
-        if (ObjectId.isValid(reqMat.materialId)) {
-          matQuery._id = new ObjectId(reqMat.materialId);
-        } else {
-          matQuery.$or = [{ id: reqMat.materialId }, { name: reqMat.materialName }];
+        // Check current raw material stocks
+        for (const [, reqMat] of requiredMaterialsMap.entries()) {
+          const idOrNameFilter: any = ObjectId.isValid(reqMat.materialId)
+            ? { _id: new ObjectId(reqMat.materialId) }
+            : { $or: [{ id: reqMat.materialId }, { name: reqMat.materialName }] };
+          const matQuery: any = { $and: [matVendorFilter, idOrNameFilter] };
+
+          const materialDoc = await db.collection('raw_materials').findOne(matQuery);
+          const currentStock = materialDoc ? (typeof materialDoc.stock === 'number' ? materialDoc.stock : 0) : 0;
+
+          if (currentStock <= 0 || currentStock < reqMat.totalRequiredQty) {
+            return res.status(400).json({
+              success: false,
+              error: 'Bahan Baku Tidak Tersedia',
+              message: `Produk '${reqMat.productName}' tidak tersedia karena bahan baku '${reqMat.materialName}' tidak mencukupi (tersisa ${currentStock} ${reqMat.unit}, dibutuhkan ${reqMat.totalRequiredQty} ${reqMat.unit}). Harap hubungi Manager untuk pembelian bahan baku.`
+            });
+          }
         }
-
-        const materialDoc = await db.collection('raw_materials').findOne(matQuery);
-        const currentStock = materialDoc ? (typeof materialDoc.stock === 'number' ? materialDoc.stock : 0) : 0;
-
-        if (currentStock < reqMat.totalRequiredQty) {
-          return res.status(400).json({
-            success: false,
-            error: 'Bahan Baku Tidak Tersedia',
-            message: `Produk '${reqMat.productName}' tidak tersedia karena bahan baku '${reqMat.materialName}' tidak mencukupi (tersisa ${currentStock} ${reqMat.unit}, dibutuhkan ${reqMat.totalRequiredQty} ${reqMat.unit}). Harap hubungi Manager untuk pembelian bahan baku.`
-          });
-        }
+      } catch (recipeCheckErr) {
+        console.warn('[Orders] Warning checking drink recipes:', recipeCheckErr);
       }
-    } catch (recipeCheckErr) {
-      console.warn('[Orders] Warning checking drink recipes:', recipeCheckErr);
     }
 
     let orderId = new ObjectId().toString();
 
-    // Deduct stock for ordered products
+    // Deduct stock for ordered products (for PRODUCT_STOCK mode or non-recipe items)
     for (const item of items) {
+      if (stockMode === 'RAW_MATERIAL' && recipeMatchedProductIds.has(String(item.productId))) {
+        continue;
+      }
       try {
-        const query: any = ObjectId.isValid(item.productId)
-          ? { _id: new ObjectId(item.productId) }
-          : { _id: item.productId };
-
         const prodIdStr = String(item.productId);
         const stockRecord = await db.collection('product_stocks').findOne({ productId: prodIdStr });
         const prevStock = stockRecord?.stock ?? 0;
@@ -461,51 +461,63 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       }
     }
 
-    // OTOMATIS: Kurangi stok bahan baku racikan minuman
-    for (const [key, reqMat] of requiredMaterialsMap.entries()) {
-      try {
-        const matQuery: any = { vendorId: activeVendorId };
-        if (ObjectId.isValid(reqMat.materialId)) {
-          matQuery._id = new ObjectId(reqMat.materialId);
-        } else {
-          matQuery.$or = [{ id: reqMat.materialId }, { name: reqMat.materialName }];
+    // OTOMATIS: Kurangi stok bahan baku racikan minuman & sinkronkan stok produk
+    if (stockMode === 'RAW_MATERIAL' && requiredMaterialsMap.size > 0) {
+      for (const [, reqMat] of requiredMaterialsMap.entries()) {
+        try {
+          const idOrNameFilter: any = ObjectId.isValid(reqMat.materialId)
+            ? { _id: new ObjectId(reqMat.materialId) }
+            : { $or: [{ id: reqMat.materialId }, { name: reqMat.materialName }] };
+          const matQuery: any = { $and: [matVendorFilter, idOrNameFilter] };
+
+          const currentMat = await db.collection('raw_materials').findOne(matQuery);
+          if (currentMat) {
+            const prevMatStock = currentMat.stock || 0;
+            const nextMatStock = Math.max(0, prevMatStock - reqMat.totalRequiredQty);
+
+            await db.collection('raw_materials').updateOne(
+              { _id: currentMat._id },
+              {
+                $set: {
+                  stock: nextMatStock,
+                  updatedAt: new Date()
+                }
+              }
+            );
+
+            await db.collection('raw_material_logs').insertOne({
+              vendorId: vendorIdStr,
+              materialId: currentMat._id.toString(),
+              materialName: currentMat.name,
+              change: -reqMat.totalRequiredQty,
+              previousStock: prevMatStock,
+              newStock: nextMatStock,
+              type: 'RECIPE_DEDUCTION',
+              referenceNumber: orderNumber,
+              productName: reqMat.productName,
+              reason: `Pembuatan pesanan Order #${orderNumber}`,
+              performedBy: {
+                id: req.user?.userId || '',
+                name: cashierName,
+                role: req.user?.role || 'CASHIER'
+              },
+              createdAt: new Date()
+            });
+          }
+        } catch (matDeductErr) {
+          console.error(`[Orders] Error deducting raw material ${reqMat.materialName}:`, matDeductErr);
         }
-
-        const currentMat = await db.collection('raw_materials').findOne(matQuery);
-        if (currentMat) {
-          const prevMatStock = currentMat.stock || 0;
-          const nextMatStock = Math.max(0, prevMatStock - reqMat.totalRequiredQty);
-
-          await db.collection('raw_materials').updateOne(
-            { _id: currentMat._id },
-            {
-              $inc: { stock: -reqMat.totalRequiredQty },
-              $set: { updatedAt: new Date() }
-            }
-          );
-
-          await db.collection('raw_material_logs').insertOne({
-            vendorId: activeVendorId,
-            materialId: currentMat._id.toString(),
-            materialName: currentMat.name,
-            change: -reqMat.totalRequiredQty,
-            previousStock: prevMatStock,
-            newStock: nextMatStock,
-            type: 'RECIPE_DEDUCTION',
-            referenceNumber: orderNumber,
-            productName: reqMat.productName,
-            reason: `Pembuatan pesanan Order #${orderNumber}`,
-            performedBy: {
-              id: req.user?.userId || '',
-              name: cashierName,
-              role: req.user?.role || 'CASHIER'
-            },
-            createdAt: new Date()
-          });
-        }
-      } catch (matDeductErr) {
-        console.error(`[Orders] Error deducting raw material ${reqMat.materialName}:`, matDeductErr);
       }
+
+      await syncProductStocksFromRawMaterials(db, vendorIdStr, {
+        logChanges: true,
+        reason: `Pengurangan penjualan Order #${orderNumber} (via Stok Bahan Baku)`,
+        performedBy: {
+          id: req.user?.userId || '',
+          name: cashierName,
+          role: req.user?.role || 'CASHIER'
+        }
+      });
     }
 
     // Deduct stock for discount item if provided
@@ -1294,40 +1306,102 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
     };
 
     // Restore stock for cancelled order items
+    const stockMode = await getVendorStockMode(db, activeVendorId);
+    const matVendorFilter = buildVendorQuery(activeVendorId);
+    let restoredRawMaterials = false;
+
     if (Array.isArray(existingOrder.items)) {
+      const activeRecipes = stockMode === 'RAW_MATERIAL'
+        ? await db.collection('product_recipes').find(matVendorFilter).toArray()
+        : [];
+      const recipeLookup = new Map<string, any>();
+      activeRecipes.forEach(r => {
+        if (r.productId) recipeLookup.set(String(r.productId), r);
+        if (r.productName) recipeLookup.set(r.productName.toLowerCase().trim(), r);
+      });
+
       for (const item of existingOrder.items) {
         if (item.productId) {
           try {
-            const query: any = ObjectId.isValid(item.productId)
-              ? { _id: new ObjectId(item.productId) }
-              : { _id: item.productId };
             const prodIdStr = String(item.productId);
-            await db.collection('product_stocks').updateOne(
-              { productId: prodIdStr },
-              { $inc: { stock: item.quantity || 1 }, $set: { updatedAt: now } },
-              { upsert: true }
-            );
-            await db.collection('inventory_logs').insertOne({
-              vendorId: vendorOid, // on table use ObjectId from table Vendor
-              productId: item.productId,
-              productName: item.name || 'Produk',
-              change: item.quantity || 1,
-              type: 'CANCEL_RESTORE',
-              reason: `Pengembalian stok pembatalan pesanan #${existingOrder.orderNumber}`,
-              performedBy: {
-                id: req.user?.userId || '',
-                name: cashierName,
-                role: req.user?.role || 'CASHIER'
-              },
-              createdAt: now
-            });
+            const recipe = stockMode === 'RAW_MATERIAL'
+              ? (recipeLookup.get(prodIdStr) || recipeLookup.get(item.name?.toLowerCase().trim()))
+              : null;
+
+            if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 && recipe.isAutoDeduct !== false) {
+              for (const ing of recipe.ingredients) {
+                const restoreQty = (Number(ing.quantityNeeded) || 1) * (item.quantity || 1);
+                const idOrNameFilter: any = ObjectId.isValid(ing.materialId)
+                  ? { _id: new ObjectId(ing.materialId) }
+                  : { $or: [{ id: ing.materialId }, { name: ing.materialName }] };
+                const currentMat = await db.collection('raw_materials').findOne({ $and: [matVendorFilter, idOrNameFilter] });
+                if (currentMat) {
+                  const prevMatStock = currentMat.stock || 0;
+                  await db.collection('raw_materials').updateOne(
+                    { _id: currentMat._id },
+                    { $inc: { stock: restoreQty }, $set: { updatedAt: now } }
+                  );
+                  await db.collection('raw_material_logs').insertOne({
+                    vendorId: activeVendorId,
+                    materialId: currentMat._id.toString(),
+                    materialName: currentMat.name,
+                    change: restoreQty,
+                    previousStock: prevMatStock,
+                    newStock: prevMatStock + restoreQty,
+                    type: 'CANCEL_RESTORE',
+                    referenceNumber: existingOrder.orderNumber,
+                    productName: item.name || 'Produk',
+                    reason: `Pengembalian bahan baku pembatalan pesanan #${existingOrder.orderNumber}`,
+                    performedBy: {
+                      id: req.user?.userId || '',
+                      name: cashierName,
+                      role: req.user?.role || 'CASHIER'
+                    },
+                    createdAt: now
+                  });
+                  restoredRawMaterials = true;
+                }
+              }
+            } else {
+              await db.collection('product_stocks').updateOne(
+                { productId: prodIdStr },
+                { $inc: { stock: item.quantity || 1 }, $set: { updatedAt: now } },
+                { upsert: true }
+              );
+              await db.collection('inventory_logs').insertOne({
+                vendorId: vendorOid, // on table use ObjectId from table Vendor
+                productId: item.productId,
+                productName: item.name || 'Produk',
+                change: item.quantity || 1,
+                type: 'CANCEL_RESTORE',
+                reason: `Pengembalian stok pembatalan pesanan #${existingOrder.orderNumber}`,
+                performedBy: {
+                  id: req.user?.userId || '',
+                  name: cashierName,
+                  role: req.user?.role || 'CASHIER'
+                },
+                createdAt: now
+              });
+            }
           } catch (e) {}
         }
       }
     }
 
-    // Invalidate product cache
-    serverProductCache.invalidateProducts(activeVendorId);
+    if (restoredRawMaterials) {
+      await syncProductStocksFromRawMaterials(db, activeVendorId, {
+        logChanges: true,
+        reason: `Pengembalian stok pembatalan pesanan #${existingOrder.orderNumber}`,
+        performedBy: {
+          id: req.user?.userId || '',
+          name: cashierName,
+          role: req.user?.role || 'CASHIER'
+        }
+      });
+    } else {
+      // Invalidate product cache
+      serverProductCache.invalidateProducts(activeVendorId);
+    }
 
     const updateFields: any = {
       status: 'CANCELLED',

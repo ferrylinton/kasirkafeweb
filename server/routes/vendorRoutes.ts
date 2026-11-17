@@ -15,6 +15,8 @@ import { sendVendorConfirmationEmail } from '../mail';
 import { writeDailyLog } from '../dailyRollingLogger';
 import { verifyCaptcha } from '../captcha';
 import { IParam } from '@/src/types';
+import { syncProductStocksFromRawMaterials } from '../stockSync';
+import { serverProductCache } from '../cache/productCache';
 
 export const vendorRouter = Router();
 
@@ -34,7 +36,12 @@ const vendorCreateSchema = z.object({
 const vendorUpdateSchema = z.object({
   name: z.string().min(2).optional(),
   currency: z.string().optional(),
-  status: z.enum(['ACTIVE', 'SUSPENDED']).optional()
+  status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
+  stockManagementMode: z.enum(['PRODUCT_STOCK', 'RAW_MATERIAL']).optional()
+});
+
+const stockConfigSchema = z.object({
+  stockManagementMode: z.enum(['PRODUCT_STOCK', 'RAW_MATERIAL'])
 });
 
 /**
@@ -131,6 +138,7 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
       success: true,
       vendor: {
         ...vendor,
+        stockManagementMode: vendor.stockManagementMode || 'PRODUCT_STOCK',
         stats: {
           productCount,
           orderCount,
@@ -140,6 +148,94 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/vendors/stock-config
+ * Configure whether active vendor manages product stock via ProductStockScreen ('PRODUCT_STOCK')
+ * or automatically from RawMaterialStockScreen ('RAW_MATERIAL').
+ */
+vendorRouter.patch('/stock-config', authMiddleware, requireManager, async (req: Request, res: Response) => {
+  try {
+    const db = getDB();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'can not connect to db',
+        message: 'can not connect to db'
+      });
+    }
+
+    const parsed = stockConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Mode konfigurasi stok tidak valid.',
+        details: parsed.error.format()
+      });
+    }
+
+    const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
+    const vendor = await findVendorById(activeVendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    const { stockManagementMode } = parsed.data;
+    const now = new Date();
+
+    await db.collection('vendors').updateOne(
+      getVendorQuery(vendor.id),
+      { $set: { stockManagementMode, updatedAt: now } }
+    );
+
+    let syncedCount = 0;
+    if (stockManagementMode === 'RAW_MATERIAL') {
+      const user = (req as any).user;
+      const syncResult = await syncProductStocksFromRawMaterials(db, vendor.id, {
+        logChanges: true,
+        reason: 'Konfigurasi stok diaktifkan ke Stok Bahan Baku (RawMaterialStockScreen)',
+        performedBy: {
+          id: user?.userId || '',
+          name: user?.name || 'Manager',
+          role: user?.role || 'MANAGER'
+        }
+      });
+      syncedCount = syncResult.syncedCount;
+    } else {
+      serverProductCache.invalidateProducts(vendor.id);
+    }
+
+    await recordActivityLog({
+      action: 'UPDATE',
+      entity: 'VENDOR',
+      entityId: vendor.id,
+      entityName: vendor.name,
+      summary: `Mengubah konfigurasi sumber stok produk menjadi ${
+        stockManagementMode === 'RAW_MATERIAL'
+          ? 'Stok Bahan Baku (RawMaterialStockScreen)'
+          : 'Stok Produk Manual (ProductStockScreen)'
+      }`,
+      details: { stockManagementMode, syncedCount },
+      req
+    });
+
+    const updatedVendor = await findVendorById(vendor.id);
+
+    return res.json({
+      success: true,
+      stockManagementMode,
+      syncedCount,
+      vendor: updatedVendor,
+      message:
+        stockManagementMode === 'RAW_MATERIAL'
+          ? `Sumber stok produk dialihkan ke Stok Bahan Baku (${syncedCount} produk resep disinkronkan).`
+          : 'Sumber stok produk dialihkan ke Stok Produk Manual (ProductStockScreen).'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Server Error' });
   }
 });
 

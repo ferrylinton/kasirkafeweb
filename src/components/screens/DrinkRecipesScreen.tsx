@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { Product, ProductRecipe, ProductRecipeItem, RawMaterial } from '../../types';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 const BEVERAGE_CATEGORIES = new Set([
   'kopi',
@@ -240,6 +241,7 @@ export const DrinkRecipesScreen: React.FC = () => {
 
       const data = await res.json();
       if (res.ok && data.success) {
+        clearClientCatalogCache();
         showToast(`Resep racikan untuk '${editingRecipeProduct.name}' berhasil disimpan!`, 'success');
         setEditingRecipeProduct(null);
         await loadData();

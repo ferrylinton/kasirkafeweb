@@ -6,12 +6,15 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
 
 export type VendorStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
 
+export type StockManagementMode = 'PRODUCT_STOCK' | 'RAW_MATERIAL';
+
 export interface Vendor {
   id: string;
   name: string;
   address?: string;
   status: VendorStatus;
   currency?: string;
+  stockManagementMode?: StockManagementMode;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -90,6 +93,8 @@ export interface Product {
   rawMaterialReason?: string;
   maxServingsPossible?: number;
   hasRecipe?: boolean;
+  stockSource?: StockManagementMode;
+  stockManagementMode?: StockManagementMode;
   updatedAt?: string;
 }
 
@@ -165,6 +170,10 @@ export interface ProductStock {
   stock: number;
   lowStockThreshold: number;
   isAvailable?: boolean;
+  stockSource?: StockManagementMode;
+  stockManagementMode?: StockManagementMode;
+  rawMaterialAvailable?: boolean;
+  rawMaterialReason?: string;
   updatedAt?: string;
 }
 

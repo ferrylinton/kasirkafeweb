@@ -5,6 +5,7 @@ import { getDB, connectDB } from '../db';
 import { authMiddleware } from '../auth';
 import { recordActivityLog } from '../activityLogger';
 import { serverProductCache } from '../cache/productCache';
+import { syncProductStocksFromRawMaterials } from '../stockSync';
 
 export const rawMaterialRouter = Router();
 
@@ -203,8 +204,17 @@ rawMaterialRouter.post('/', authMiddleware, requireManagerMutationRole, async (r
       req
     });
 
-    // Invalidate product cache
-    serverProductCache.invalidateProducts(activeVendorId);
+    // Sync product stocks if vendor uses RAW_MATERIAL mode & invalidate cache
+    const user = (req as any).user;
+    await syncProductStocksFromRawMaterials(db, activeVendorId, {
+      logChanges: true,
+      reason: `Sinkronisasi dari penambahan bahan baku: ${parsed.data.name}`,
+      performedBy: {
+        id: user?.userId || '',
+        name: user?.name || 'Manager',
+        role: user?.role || 'MANAGER'
+      }
+    });
 
     return res.status(201).json({
       success: true,
@@ -240,12 +250,8 @@ rawMaterialRouter.put('/:id', authMiddleware, requireManagerMutationRole, async 
     if (!db) return res.status(503).json({ success: false, error: 'Database tidak terhubung' });
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
-    const query: any = { vendorId: activeVendorId };
-    if (ObjectId.isValid(id)) {
-      query._id = new ObjectId(id);
-    } else {
-      query.id = id;
-    }
+    const idFilter: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+    const query: any = { $and: [getVendorFilter(activeVendorId), idFilter] };
 
     const existing = await db.collection('raw_materials').findOne(query);
     if (!existing) {
@@ -257,10 +263,19 @@ rawMaterialRouter.put('/:id', authMiddleware, requireManagerMutationRole, async 
       updatedAt: new Date()
     };
 
-    await db.collection('raw_materials').updateOne(query, { $set: updateDoc });
+    await db.collection('raw_materials').updateOne({ _id: existing._id }, { $set: updateDoc });
 
-    // Invalidate product cache to recalculate drink availability
-    serverProductCache.invalidateProducts(activeVendorId);
+    // Sync product stocks when raw material stock/info changes
+    const user = (req as any).user;
+    const syncRes = await syncProductStocksFromRawMaterials(db, activeVendorId, {
+      logChanges: true,
+      reason: `Sinkronisasi dari pembaruan stok bahan baku: ${parsed.data.name || existing.name}`,
+      performedBy: {
+        id: user?.userId || '',
+        name: user?.name || 'Manager',
+        role: user?.role || 'MANAGER'
+      }
+    });
 
     await recordActivityLog({
       action: 'UPDATE',
@@ -274,7 +289,12 @@ rawMaterialRouter.put('/:id', authMiddleware, requireManagerMutationRole, async 
 
     return res.json({
       success: true,
-      message: 'Data bahan baku berhasil diperbarui!'
+      syncedProductsCount: syncRes.syncedCount,
+      stockManagementMode: syncRes.mode,
+      message:
+        syncRes.mode === 'RAW_MATERIAL' && syncRes.syncedCount > 0
+          ? `Data bahan baku diperbarui dan ${syncRes.syncedCount} stok produk disinkronkan otomatis!`
+          : 'Data bahan baku berhasil diperbarui!'
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message || 'Server Error' });
@@ -293,21 +313,26 @@ rawMaterialRouter.delete('/:id', authMiddleware, requireManagerMutationRole, asy
     if (!db) return res.status(503).json({ success: false, error: 'Database tidak terhubung' });
 
     const activeVendorId = req.vendorId || (req as any).user?.vendorId || 'vnd_kasirkafe_central';
-    const query: any = { vendorId: activeVendorId };
-    if (ObjectId.isValid(id)) {
-      query._id = new ObjectId(id);
-    } else {
-      query.id = id;
-    }
+    const idFilter: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { id };
+    const query: any = { $and: [getVendorFilter(activeVendorId), idFilter] };
 
     const existing = await db.collection('raw_materials').findOne(query);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Bahan baku tidak ditemukan' });
     }
 
-    await db.collection('raw_materials').deleteOne(query);
+    await db.collection('raw_materials').deleteOne({ _id: existing._id });
 
-    serverProductCache.invalidateProducts(activeVendorId);
+    const user = (req as any).user;
+    await syncProductStocksFromRawMaterials(db, activeVendorId, {
+      logChanges: true,
+      reason: `Sinkronisasi setelah penghapusan bahan baku: ${existing.name}`,
+      performedBy: {
+        id: user?.userId || '',
+        name: user?.name || 'Manager',
+        role: user?.role || 'MANAGER'
+      }
+    });
 
     await recordActivityLog({
       action: 'DELETE',
@@ -433,12 +458,10 @@ rawMaterialRouter.post('/purchases', authMiddleware, requireManagerMutationRole,
     // SINKRONISASI OTOMATIS: Update stok bahan baku
     for (const item of parsed.data.items) {
       try {
-        const matQuery: any = { vendorId: activeVendorId };
-        if (ObjectId.isValid(item.materialId)) {
-          matQuery._id = new ObjectId(item.materialId);
-        } else {
-          matQuery.$or = [{ id: item.materialId }, { name: item.materialName }];
-        }
+        const idOrNameFilter: any = ObjectId.isValid(item.materialId)
+          ? { _id: new ObjectId(item.materialId) }
+          : { $or: [{ id: item.materialId }, { name: item.materialName }] };
+        const matQuery: any = { $and: [getVendorFilter(activeVendorId), idOrNameFilter] };
 
         const material = await db.collection('raw_materials').findOne(matQuery);
         if (material) {
@@ -482,8 +505,16 @@ rawMaterialRouter.post('/purchases', authMiddleware, requireManagerMutationRole,
       }
     }
 
-    // Invalidate product cache because restocking materials makes out-of-stock drinks available again!
-    serverProductCache.invalidateProducts(activeVendorId);
+    // Sync product stocks when purchasing raw materials (if configured to RAW_MATERIAL mode) & invalidate cache
+    const syncRes = await syncProductStocksFromRawMaterials(db, activeVendorId, {
+      logChanges: true,
+      reason: `Pembelian Stok Bahan Baku (${purchaseNumber})`,
+      performedBy: {
+        id: user.userId || '',
+        name: user.name || 'Manager',
+        role: user.role || 'MANAGER'
+      }
+    });
 
     await recordActivityLog({
       action: 'CREATE',
@@ -497,7 +528,12 @@ rawMaterialRouter.post('/purchases', authMiddleware, requireManagerMutationRole,
 
     return res.status(201).json({
       success: true,
-      message: `Faktur pembelian #${purchaseNumber} berhasil disimpan dan stok bahan baku bertambah otomatis!`,
+      syncedProductsCount: syncRes.syncedCount,
+      stockManagementMode: syncRes.mode,
+      message:
+        syncRes.mode === 'RAW_MATERIAL' && syncRes.syncedCount > 0
+          ? `Faktur pembelian #${purchaseNumber} tersimpan! Stok bahan baku bertambah & ${syncRes.syncedCount} stok produk otomatis diperbarui.`
+          : `Faktur pembelian #${purchaseNumber} berhasil disimpan dan stok bahan baku bertambah otomatis!`,
       purchase: {
         id: purchaseId,
         ...purchaseDoc
@@ -581,13 +617,22 @@ rawMaterialRouter.put('/recipes/:productId', authMiddleware, requireManagerMutat
     };
 
     await db.collection('product_recipes').updateOne(
-      { vendorId: activeVendorId, productId },
+      { $and: [getVendorFilter(activeVendorId), { productId }] },
       { $set: recipeData },
       { upsert: true }
     );
 
-    // Invalidate product cache so availability reflects new recipe immediately
-    serverProductCache.invalidateProducts(activeVendorId);
+    // Sync product stocks when recipe changes & invalidate cache
+    const user = (req as any).user;
+    await syncProductStocksFromRawMaterials(db, activeVendorId, {
+      logChanges: true,
+      reason: `Sinkronisasi dari perubahan resep: ${parsed.data.productName}`,
+      performedBy: {
+        id: user?.userId || '',
+        name: user?.name || 'Manager',
+        role: user?.role || 'MANAGER'
+      }
+    });
 
     await recordActivityLog({
       action: 'UPDATE',

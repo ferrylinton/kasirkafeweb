@@ -3,12 +3,15 @@ import { ObjectId } from 'mongodb';
 import { getDB } from './db';
 import { verifyToken } from './auth';
 
+export type StockManagementMode = 'PRODUCT_STOCK' | 'RAW_MATERIAL';
+
 export interface VendorRecord {
   id: string;
   name: string;
   address?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATE';
   currency?: string;
+  stockManagementMode?: StockManagementMode;
   createdAt: Date | string;
   updatedAt?: Date | string;
 }
@@ -109,6 +112,7 @@ export function mapVendorDoc(doc: any): VendorRecord {
     address: rest.address,
     status: rest.status || 'ACTIVE',
     currency: rest.currency || 'IDR',
+    stockManagementMode: rest.stockManagementMode === 'RAW_MATERIAL' ? 'RAW_MATERIAL' : 'PRODUCT_STOCK',
     createdAt: rest.createdAt || new Date(),
     updatedAt: rest.updatedAt
   };

@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { RawMaterial } from '../../types';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 export const NewPurchaseScreen: React.FC = () => {
   const { user, token } = useAuth();
@@ -192,6 +193,7 @@ export const NewPurchaseScreen: React.FC = () => {
 
       const data = await res.json();
       if (data.success) {
+        clearClientCatalogCache();
         showToast(data.message || 'Faktur pembelian berhasil disimpan dan stok otomatis bertambah!', 'success');
         // Reset form
         setPurchaseForm({
@@ -236,6 +238,7 @@ export const NewPurchaseScreen: React.FC = () => {
 
       const data = await res.json();
       if (data.success) {
+        clearClientCatalogCache();
         showToast(data.message || 'Bahan baku baru berhasil ditambahkan!', 'success');
         setShowMaterialModal(false);
         setMaterialForm({

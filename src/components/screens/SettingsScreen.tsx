@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Settings,
   Globe,
@@ -16,20 +17,99 @@ import {
   Clock,
   Database,
   Zap,
-  Trash2
+  Trash2,
+  Boxes,
+  FlaskConical,
+  ArrowRight,
+  Lock,
+  RefreshCw
 } from 'lucide-react';
 import { useTheme, THEME_ACCENTS } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { clearClientCatalogCache } from '../../utils/productCache';
+import { StockManagementMode } from '../../types';
 
 export const SettingsScreen: React.FC = () => {
+  const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode, accent, setAccent } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const { simulateIdleWarning } = useAuth();
+  const { user, token, simulateIdleWarning } = useAuth();
   const { showToast } = useToast();
   const [clearingCache, setClearingCache] = React.useState(false);
+
+  const canConfigureStock = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+  const isManager = user?.role === 'MANAGER';
+
+  const [stockManagementMode, setStockManagementMode] = React.useState<StockManagementMode>('PRODUCT_STOCK');
+  const [loadingStockConfig, setLoadingStockConfig] = React.useState<boolean>(false);
+  const [savingStockConfig, setSavingStockConfig] = React.useState<boolean>(false);
+  const [lastSyncedCount, setLastSyncedCount] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadVendorStockConfig = async () => {
+      if (!token) return;
+      setLoadingStockConfig(true);
+      try {
+        const res = await fetch('/api/vendors/current', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (active && data.success && data.vendor?.stockManagementMode) {
+          setStockManagementMode(data.vendor.stockManagementMode);
+        }
+      } catch (err) {
+        console.warn('Gagal memuat konfigurasi stok vendor:', err);
+      } finally {
+        if (active) setLoadingStockConfig(false);
+      }
+    };
+    loadVendorStockConfig();
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  const handleChangeStockMode = async (targetMode: StockManagementMode) => {
+    if (!canConfigureStock || savingStockConfig || targetMode === stockManagementMode) return;
+    if (!token) {
+      showToast('Sesi login tidak ditemukan', 'error');
+      return;
+    }
+
+    setSavingStockConfig(true);
+    try {
+      const res = await fetch('/api/vendors/stock-config', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ stockManagementMode: targetMode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStockManagementMode(data.stockManagementMode || targetMode);
+        setLastSyncedCount(typeof data.syncedCount === 'number' ? data.syncedCount : null);
+        clearClientCatalogCache();
+        showToast(
+          data.message ||
+            (targetMode === 'RAW_MATERIAL'
+              ? 'Konfigurasi stok berhasil dialihkan ke Stok Bahan Baku.'
+              : 'Konfigurasi stok berhasil dialihkan ke Stok Produk Manual.'),
+          'success'
+        );
+      } else {
+        showToast(data.message || data.error || 'Gagal menyimpan konfigurasi stok', 'error');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan koneksi saat menyimpan konfigurasi stok', 'error');
+    } finally {
+      setSavingStockConfig(false);
+    }
+  };
 
   const handleClearCatalogCache = async () => {
     setClearingCache(true);
@@ -98,6 +178,182 @@ export const SettingsScreen: React.FC = () => {
           <span>{t('resetSettings')}</span>
         </button>
       </div>
+
+      {/* 1.5 Stock Management Source Configuration Section */}
+      <section className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 dark:border-stone-800/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-accent flex items-center justify-center shrink-0">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold font-heading text-stone-900 dark:text-stone-100">
+                {language === 'id' ? 'Konfigurasi Sumber Stok Produk' : 'Product Stock Source Configuration'}
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {language === 'id'
+                  ? 'Pilih apakah stok produk dikelola langsung di Stok Produk atau dihitung otomatis dari Stok Bahan Baku.'
+                  : 'Choose whether product stock is managed manually or derived automatically from Raw Material stock.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {loadingStockConfig || savingStockConfig ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>{savingStockConfig ? 'Menyimpan...' : 'Memuat...'}</span>
+              </span>
+            ) : (
+              <span
+                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                  stockManagementMode === 'RAW_MATERIAL'
+                    ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-orange-100 dark:bg-orange-950/60 text-accent'
+                }`}
+              >
+                {stockManagementMode === 'RAW_MATERIAL' ? 'Stok Bahan Baku' : 'Stok Produk Manual'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {!canConfigureStock && (
+          <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-800 flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
+            <Lock className="w-4 h-4 text-stone-400 shrink-0" />
+            <span>
+              Mode sumber stok hanya dapat diubah oleh akun <strong>Manager</strong> atau <strong>Admin</strong>. Tampilan di bawah bersifat baca-saja.
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* Option 1: ProductStockScreen (Manual Stock) */}
+          <button
+            type="button"
+            disabled={!canConfigureStock || savingStockConfig}
+            onClick={() => handleChangeStockMode('PRODUCT_STOCK')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 relative ${
+              stockManagementMode === 'PRODUCT_STOCK'
+                ? 'border-accent bg-orange-50/60 dark:bg-orange-950/30 ring-2 ring-accent/20'
+                : 'border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-stone-50/50 dark:bg-stone-900/40'
+            } ${!canConfigureStock ? 'opacity-80 cursor-default' : 'cursor-pointer'}`}
+          >
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0">
+                <Boxes className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-sm text-stone-900 dark:text-stone-100 flex items-center gap-2 flex-wrap">
+                  <span>Stok Produk (Manual)</span>
+                  {stockManagementMode === 'PRODUCT_STOCK' && (
+                    <span className="px-1.5 py-0.2 rounded-md bg-accent text-white text-[9px] font-bold">
+                      {t('settingActiveBadge')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
+                  Jumlah stok unit produk diatur langsung melalui halaman <strong>Stok Produk</strong> (penambahan/pengurangan manual &amp; restock per menu).
+                </p>
+              </div>
+            </div>
+            <div
+              className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                stockManagementMode === 'PRODUCT_STOCK'
+                  ? 'bg-accent text-white'
+                  : 'border border-stone-300 dark:border-stone-700'
+              }`}
+            >
+              {stockManagementMode === 'PRODUCT_STOCK' && <Check className="w-3 h-3 stroke-[3]" />}
+            </div>
+          </button>
+
+          {/* Option 2: RawMaterialStockScreen (Auto-derived from Raw Materials & Recipes) */}
+          <button
+            type="button"
+            disabled={!canConfigureStock || savingStockConfig}
+            onClick={() => handleChangeStockMode('RAW_MATERIAL')}
+            className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 relative ${
+              stockManagementMode === 'RAW_MATERIAL'
+                ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
+                : 'border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-stone-50/50 dark:bg-stone-900/40'
+            } ${!canConfigureStock ? 'opacity-80 cursor-default' : 'cursor-pointer'}`}
+          >
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <FlaskConical className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-sm text-stone-900 dark:text-stone-100 flex items-center gap-2 flex-wrap">
+                  <span>Stok Bahan Baku (Otomatis)</span>
+                  {stockManagementMode === 'RAW_MATERIAL' && (
+                    <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-white text-[9px] font-bold">
+                      {t('settingActiveBadge')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
+                  Stok produk dihitung otomatis dari <strong>Stok Bahan Baku</strong> sesuai Resep. Jika salah satu bahan baku habis maka stok produk otomatis habis (0), dan akan diperbarui saat ada pembelian bahan baku.
+                </p>
+              </div>
+            </div>
+            <div
+              className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                stockManagementMode === 'RAW_MATERIAL'
+                  ? 'bg-emerald-600 text-white'
+                  : 'border border-stone-300 dark:border-stone-700'
+              }`}
+            >
+              {stockManagementMode === 'RAW_MATERIAL' && <Check className="w-3 h-3 stroke-[3]" />}
+            </div>
+          </button>
+        </div>
+
+        {/* Dynamic behavior explanation & quick links */}
+        <div className="p-3.5 rounded-2xl bg-stone-50/90 dark:bg-stone-900/50 border border-stone-200/70 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+            {stockManagementMode === 'RAW_MATERIAL' ? (
+              <span>
+                <strong className="text-emerald-700 dark:text-emerald-400">Sinkronisasi Bahan Baku Aktif:</strong>{' '}
+                Penjualan kasir memotong bahan baku resep; jika ada bahan baku 0 atau kurang dari takaran resep, produk terkait otomatis Habis (0). Mencatat faktur pembelian bahan baku langsung mengisi ulang stok produk.
+                {lastSyncedCount !== null && ` (${lastSyncedCount} produk resep disinkronkan)`}
+              </span>
+            ) : (
+              <span>
+                <strong className="text-stone-800 dark:text-stone-200">Stok Produk Manual Aktif:</strong>{' '}
+                Kasir memotong langsung jumlah unit stok di halaman <strong>Stok Produk</strong>. Produk tanpa resep di mode Bahan Baku juga tetap menggunakan stok produk manual.
+              </span>
+            )}
+          </div>
+
+          {isManager && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => navigate(stockManagementMode === 'RAW_MATERIAL' ? '/bahan-baku' : '/stok-produk')}
+                className="px-3 py-1.5 rounded-xl bg-accent text-white text-xs font-bold inline-flex items-center gap-1 hover:opacity-90 cursor-pointer"
+              >
+                <span>{stockManagementMode === 'RAW_MATERIAL' ? 'Kelola Bahan Baku' : 'Kelola Stok Produk'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/pembelian-bahan')}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#251e1c] text-stone-700 dark:text-stone-300 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                Pembelian Bahan
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/resep-minuman')}
+                className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#251e1c] text-stone-700 dark:text-stone-300 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                Resep Minuman
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* 2. Language Toggle Section */}
       <section className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs space-y-4">

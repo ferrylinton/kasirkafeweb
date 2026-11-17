@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Boxes,
   AlertCircle,
@@ -27,9 +28,12 @@ import {
   Clock,
   Coffee,
   HelpCircle,
-  Info
+  Info,
+  FlaskConical,
+  ShoppingBag,
+  Settings
 } from 'lucide-react';
-import { Product, InventoryLog, Category } from '../../types';
+import { Product, InventoryLog, Category, StockManagementMode } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
@@ -51,6 +55,7 @@ interface ProductStockScreenProps {
 }
 
 export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendorsMode = false }) => {
+  const navigate = useNavigate();
   const { user, token } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
@@ -61,6 +66,8 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
   const [products, setProducts] = useState<Product[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('PRODUCT_STOCK');
+  const [switchingStockMode, setSwitchingStockMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'stock' | 'logs'>('stock');
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
@@ -119,6 +126,9 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
 
       if (prodsData.success && Array.isArray(prodsData.products)) {
         setProducts(prodsData.products);
+        if (prodsData.stockManagementMode) {
+          setStockManagementMode(prodsData.stockManagementMode);
+        }
       }
       if (logsData.success && Array.isArray(logsData.logs)) {
         setLogs(logsData.logs);
@@ -137,6 +147,41 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
   useEffect(() => {
     fetchStockData();
   }, [token, allVendorsMode, selectedVendor]);
+
+  // Switch Vendor Stock Mode (Manager only in vendor mode)
+  const handleSwitchStockMode = async (targetMode: StockManagementMode) => {
+    if (isReadOnly || switchingStockMode || targetMode === stockManagementMode) return;
+    setSwitchingStockMode(true);
+    try {
+      const res = await fetch('/api/vendors/stock-config', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({ stockManagementMode: targetMode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStockManagementMode(data.stockManagementMode || targetMode);
+        clearClientCatalogCache();
+        showToast(
+          data.message ||
+            (targetMode === 'RAW_MATERIAL'
+              ? 'Sumber stok dialihkan ke Stok Bahan Baku.'
+              : 'Sumber stok dialihkan ke Stok Produk Manual.'),
+          'success'
+        );
+        await fetchStockData();
+      } else {
+        showToast(data.message || data.error || 'Gagal mengubah konfigurasi sumber stok', 'error');
+      }
+    } catch (err) {
+      showToast('Gagal terhubung ke server saat mengubah konfigurasi stok', 'error');
+    } finally {
+      setSwitchingStockMode(false);
+    }
+  };
 
   // Quick Stock Adjustment (+/-)
   const handleQuickAdjust = async (product: Product, delta: number) => {
@@ -543,6 +588,98 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
         </div>
       )}
 
+      {/* Konfigurasi Sumber Stok Banner */}
+      {!allVendorsMode && (
+        <div
+          className={`rounded-2xl border p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+            stockManagementMode === 'RAW_MATERIAL'
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/25 border-emerald-200 dark:border-emerald-800/60'
+              : 'bg-stone-50/90 dark:bg-stone-900/50 border-stone-200/80 dark:border-stone-800'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                stockManagementMode === 'RAW_MATERIAL'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-orange-100 dark:bg-orange-950/60 text-accent'
+              }`}
+            >
+              {stockManagementMode === 'RAW_MATERIAL' ? (
+                <FlaskConical className="w-4 h-4" />
+              ) : (
+                <Boxes className="w-4 h-4" />
+              )}
+            </div>
+            <div className="text-xs leading-relaxed">
+              <div className="font-bold text-stone-900 dark:text-stone-100">
+                {stockManagementMode === 'RAW_MATERIAL'
+                  ? 'Mode Sumber Stok: Stok Bahan Baku (RawMaterialStockScreen)'
+                  : 'Mode Sumber Stok: Stok Produk Manual (ProductStockScreen)'}
+              </div>
+              <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                {stockManagementMode === 'RAW_MATERIAL'
+                  ? 'Produk yang memiliki resep diproses otomatis dari Stok Bahan Baku. Jika salah satu bahan baku habis maka stok produk otomatis menjadi 0 (habis), dan diperbarui otomatis saat ada Pembelian Stok Bahan Baku. Produk tanpa resep tetap memakai stok manual.'
+                  : 'Stok produk dikelola secara manual melalui tombol +/- dan Restock di halaman ini. Anda dapat mengalihkan ke mode Stok Bahan Baku jika ingin sinkronisasi otomatis dari resep & pembelian bahan baku.'}
+              </p>
+            </div>
+          </div>
+
+          {!isReadOnly && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {stockManagementMode === 'RAW_MATERIAL' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/bahan-baku')}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FlaskConical className="w-3.5 h-3.5" />
+                    <span>Kelola Bahan Baku</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/pembelian-bahan')}
+                    className="px-3 py-1.5 rounded-xl bg-accent hover:opacity-90 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Pembelian Bahan</span>
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                disabled={switchingStockMode}
+                onClick={() =>
+                  handleSwitchStockMode(stockManagementMode === 'RAW_MATERIAL' ? 'PRODUCT_STOCK' : 'RAW_MATERIAL')
+                }
+                className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#251e1c] border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {switchingStockMode ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Settings className="w-3.5 h-3.5 text-accent" />
+                )}
+                <span>
+                  {stockManagementMode === 'RAW_MATERIAL'
+                    ? 'Alihkan ke Stok Manual'
+                    : 'Aktifkan Stok dari Bahan Baku'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                className="px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#251e1c] text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                Pengaturan
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* KPI Metric Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Total SKU & Fisik */}
@@ -787,6 +924,8 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                 const isHealthy = product.stock > threshold;
                 const isAvailable = product.isAvailable !== false;
                 const isQuickBusy = quickAdjustingId === product.id;
+                const isRawMaterialDriven =
+                  !allVendorsMode && stockManagementMode === 'RAW_MATERIAL' && product.stockSource === 'RAW_MATERIAL';
 
                 return (
                   <div
@@ -828,6 +967,12 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                                 {product.tag}
                               </span>
                             )}
+                            {isRawMaterialDriven && (
+                              <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1">
+                                <FlaskConical className="w-2.5 h-2.5" />
+                                <span>Dari Bahan Baku</span>
+                              </span>
+                            )}
                             {allVendorsMode && product.vendorId && (
                               <VendorBadge vendorId={product.vendorId} />
                             )}
@@ -840,6 +985,17 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                           </span>
                         </div>
                       </div>
+
+                      {/* Raw Material Depletion Warning Banner */}
+                      {isRawMaterialDriven && product.rawMaterialReason && (
+                        <div className="mt-3 p-2.5 rounded-2xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/70 flex items-start gap-2 text-red-800 dark:text-red-200">
+                          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                          <div className="text-[11px] leading-snug">
+                            <strong className="block font-bold">Stok Bahan Baku Habis / Kurang</strong>
+                            <span>{product.rawMaterialReason}</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Temporary Unavailable Warning Banner */}
                       {!isAvailable && (
@@ -859,7 +1015,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                         <div className="flex items-center justify-between">
                           <div className="flex items-baseline gap-1.5">
                             <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-                              Stok Fisik:
+                              {isRawMaterialDriven ? 'Estimasi Porsi Bahan:' : 'Stok Fisik:'}
                             </span>
                             <span
                               className={`text-2xl font-black font-heading ${
@@ -932,7 +1088,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                             <span>Batas Minimum (Alert):</span>
                             <strong className="text-stone-700 dark:text-stone-300">{threshold} unit</strong>
                           </span>
-                          {!isReadOnly && (
+                          {!isReadOnly && !isRawMaterialDriven && (
                             <button
                               type="button"
                               onClick={() => openStockModal(product)}
@@ -949,68 +1105,38 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                     {/* Bottom Controls: Quick +/- Adjusters & Availability Button */}
                     <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex flex-col gap-2">
                       {!isReadOnly ? (
-                        <>
-                          {/* Row 1: Quick +/- Quantity Steppers */}
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
-                              Ubah Cepat:
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                disabled={product.stock <= 0 || isQuickBusy}
-                                onClick={() => handleQuickAdjust(product, -1)}
-                                className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
-                                title="Kurangi 1 unit"
-                              >
-                                -1
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isQuickBusy}
-                                onClick={() => handleQuickAdjust(product, 1)}
-                                className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                                title="Tambah 1 unit"
-                              >
-                                +1
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isQuickBusy}
-                                onClick={() => handleQuickAdjust(product, 5)}
-                                className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                                title="Tambah 5 unit"
-                              >
-                                +5
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isQuickBusy}
-                                onClick={() => handleQuickAdjust(product, 10)}
-                                className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                                title="Tambah 10 unit"
-                              >
-                                +10
-                              </button>
+                        isRawMaterialDriven ? (
+                          <>
+                            <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50 flex items-center justify-between gap-2 text-[11px]">
+                              <span className="text-emerald-800 dark:text-emerald-300 font-semibold">
+                                Dihitung otomatis dari Bahan Baku
+                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate('/bahan-baku')}
+                                  className="px-2 py-1 rounded-lg bg-white dark:bg-[#251e1c] border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-50 cursor-pointer"
+                                >
+                                  Bahan
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate('/pembelian-bahan')}
+                                  className="px-2 py-1 rounded-lg bg-accent text-white font-bold hover:opacity-90 cursor-pointer"
+                                >
+                                  Beli Bahan
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Row 2: Temporary Unavailable Switch & Edit Button */}
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            {/* Toggle Temporary Unavailable Button */}
                             <button
                               type="button"
                               onClick={() => openTemporaryUnavailableModal(product)}
-                              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                              className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                                 !isAvailable
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                   : 'bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
                               }`}
-                              title={
-                                !isAvailable
-                                  ? 'Klik untuk mengaktifkan kembali produk ke kasir'
-                                  : 'Klik jika produk ini habis sementara atau tidak dapat disajikan'
-                              }
                             >
                               {!isAvailable ? (
                                 <>
@@ -1024,19 +1150,97 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                                 </>
                               )}
                             </button>
+                          </>
+                        ) : (
+                          <>
+                            {/* Row 1: Quick +/- Quantity Steppers */}
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                                Ubah Cepat:
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={product.stock <= 0 || isQuickBusy}
+                                  onClick={() => handleQuickAdjust(product, -1)}
+                                  className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all disabled:opacity-30 active:scale-95 cursor-pointer"
+                                  title="Kurangi 1 unit"
+                                >
+                                  -1
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isQuickBusy}
+                                  onClick={() => handleQuickAdjust(product, 1)}
+                                  className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                                  title="Tambah 1 unit"
+                                >
+                                  +1
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isQuickBusy}
+                                  onClick={() => handleQuickAdjust(product, 5)}
+                                  className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                                  title="Tambah 5 unit"
+                                >
+                                  +5
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isQuickBusy}
+                                  onClick={() => handleQuickAdjust(product, 10)}
+                                  className="w-8 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                                  title="Tambah 10 unit"
+                                >
+                                  +10
+                                </button>
+                              </div>
+                            </div>
 
-                            {/* Restock / Manual Modal Button */}
-                            <button
-                              type="button"
-                              onClick={() => openStockModal(product)}
-                              className="px-3 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:bg-accent/90 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
-                              title="Buka form modifikasi jumlah stok dan ambang batas"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Restock</span>
-                            </button>
-                          </div>
-                        </>
+                            {/* Row 2: Temporary Unavailable Switch & Edit Button */}
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              {/* Toggle Temporary Unavailable Button */}
+                              <button
+                                type="button"
+                                onClick={() => openTemporaryUnavailableModal(product)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                                  !isAvailable
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
+                                }`}
+                                title={
+                                  !isAvailable
+                                    ? 'Klik untuk mengaktifkan kembali produk ke kasir'
+                                    : 'Klik jika produk ini habis sementara atau tidak dapat disajikan'
+                                }
+                              >
+                                {!isAvailable ? (
+                                  <>
+                                    <PlayCircle className="w-3.5 h-3.5" />
+                                    <span>Aktifkan Kembali</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PauseCircle className="w-3.5 h-3.5" />
+                                    <span>Habis Sementara</span>
+                                  </>
+                                )}
+                              </button>
+
+                              {/* Restock / Manual Modal Button */}
+                              <button
+                                type="button"
+                                onClick={() => openStockModal(product)}
+                                className="px-3 py-1.5 rounded-xl bg-accent text-white font-bold text-xs shadow-2xs hover:bg-accent/90 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                                title="Buka form modifikasi jumlah stok dan ambang batas"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Restock</span>
+                              </button>
+                            </div>
+                          </>
+                        )
                       ) : (
                         <div className="flex items-center justify-between text-xs text-stone-500 py-1">
                           <span className="flex items-center gap-1 text-[11px] font-medium text-stone-400">
