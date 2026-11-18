@@ -18,6 +18,14 @@ function isVendorOwner(docVendorId: any, activeVendorId: string): boolean {
   return normalizedDoc === normalizedActive;
 }
 
+function normalizeCategoryName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export const productRouter = Router();
 
 /**
@@ -225,8 +233,16 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       }))
     }));
 
+    const normalizedName = normalizeCategoryName(parsed.data.name);
+    if (!normalizedName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nama kategori tidak boleh kosong'
+      });
+    }
+
     const newCategory = {
-      name: parsed.data.name.trim(),
+      name: normalizedName,
       description: parsed.data.description?.trim() || '',
       variations: formattedVariations,
       vendorId: activeVendorId,
@@ -243,16 +259,19 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
       });
     }
 
-    // Check if category name already exists for this vendor
+    // Check if category name already exists for this vendor (case-insensitive, whitespace-normalized)
+    const duplicatePattern = `^\\s*${escapeRegExp(normalizedName).replace(/ /g, '\\s+')}\\s*$`;
     const existing = await db.collection('categories').findOne({
-      name: { $regex: new RegExp(`^${parsed.data.name.trim()}$`, 'i') },
-      ...buildVendorQuery(activeVendorId)
+      $and: [
+        buildVendorQuery(activeVendorId),
+        { name: { $regex: new RegExp(duplicatePattern, 'i') } }
+      ]
     });
 
     if (existing) {
       return res.status(409).json({
         success: false,
-        error: 'Kategori dengan nama ini sudah ada untuk vendor Anda.'
+        error: `Kategori dengan nama '${normalizedName}' sudah ada untuk vendor Anda.`
       });
     }
 
@@ -260,7 +279,15 @@ productRouter.post('/categories', authMiddleware, requireInventoryWriteAccess, a
     try {
       const result = await db.collection('categories').insertOne(newCategory);
       insertedId = result.insertedId.toString();
-    } catch (e) {}
+    } catch (e: any) {
+      if (e?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          error: `Kategori dengan nama '${normalizedName}' sudah ada untuk vendor Anda.`
+        });
+      }
+      throw e;
+    }
 
     // Invalidate categories cache for active vendor
     serverProductCache.invalidateCategories(activeVendorId);
@@ -326,7 +353,33 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       updatedAt: new Date()
     };
 
-    if (parsed.data.name !== undefined) updateFields.name = parsed.data.name.trim();
+    if (parsed.data.name !== undefined) {
+      const normalizedName = normalizeCategoryName(parsed.data.name);
+      if (!normalizedName) {
+        return res.status(400).json({
+          success: false,
+          error: 'Nama kategori tidak boleh kosong'
+        });
+      }
+
+      const duplicatePattern = `^\\s*${escapeRegExp(normalizedName).replace(/ /g, '\\s+')}\\s*$`;
+      const duplicateCategory = await db.collection('categories').findOne({
+        $and: [
+          buildVendorQuery(activeVendorId),
+          { _id: { $ne: category._id } },
+          { name: { $regex: new RegExp(duplicatePattern, 'i') } }
+        ]
+      });
+
+      if (duplicateCategory) {
+        return res.status(409).json({
+          success: false,
+          error: `Kategori dengan nama '${normalizedName}' sudah ada untuk vendor Anda.`
+        });
+      }
+
+      updateFields.name = normalizedName;
+    }
     if (parsed.data.description !== undefined) updateFields.description = parsed.data.description.trim();
 
     if (parsed.data.variations !== undefined) {
@@ -344,7 +397,17 @@ productRouter.put('/categories/:id', authMiddleware, requireInventoryWriteAccess
       }));
     }
 
-    await db.collection('categories').updateOne({ _id: category._id }, { $set: updateFields });
+    try {
+      await db.collection('categories').updateOne({ _id: category._id }, { $set: updateFields });
+    } catch (e: any) {
+      if (e?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          error: `Kategori dengan nama '${updateFields.name || category.name}' sudah ada untuk vendor Anda.`
+        });
+      }
+      throw e;
+    }
 
     // Invalidate categories cache
     serverProductCache.invalidateCategories(activeVendorId);

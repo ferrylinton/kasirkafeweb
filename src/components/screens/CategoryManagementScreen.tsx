@@ -58,6 +58,22 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  const normalizeCategoryName = (name: string) => name.trim().replace(/\s+/g, ' ');
+  const normalizedFormName = normalizeCategoryName(formName);
+  const isDuplicateName =
+    normalizedFormName.length > 0 &&
+    categories.some(cat => {
+      if (editingCategory) {
+        const isSameCategory =
+          cat.id && editingCategory.id
+            ? cat.id === editingCategory.id
+            : normalizeCategoryName(cat.name).toLowerCase() ===
+              normalizeCategoryName(editingCategory.name).toLowerCase();
+        if (isSameCategory) return false;
+      }
+      return normalizeCategoryName(cat.name).toLowerCase() === normalizedFormName.toLowerCase();
+    });
+
   const fetchCategories = async (showLoadingState = true) => {
     if (showLoadingState) setLoading(true);
     setIsRefreshing(true);
@@ -297,15 +313,19 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) {
+    if (!normalizedFormName) {
       showToast('Nama kategori tidak boleh kosong', 'warning');
+      return;
+    }
+    if (isDuplicateName) {
+      showToast(`Kategori dengan nama '${normalizedFormName}' sudah ada! Gunakan nama lain.`, 'error');
       return;
     }
 
     setIsSaving(true);
     try {
       const payload = {
-        name: formName.trim(),
+        name: normalizedFormName,
         description: formDescription.trim(),
         categoryVariationIds: formVariations.map(v => v.id).filter(Boolean),
         variationIds: formVariations.map(v => v.id).filter(Boolean),
@@ -648,8 +668,18 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
                   placeholder="Contoh: Kopi, Teh, Jus, Cemilan..."
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className={`w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border text-sm focus:outline-none focus:ring-2 ${
+                    isDuplicateName
+                      ? 'border-rose-500 dark:border-rose-500 focus:ring-rose-500'
+                      : 'border-stone-200 dark:border-stone-700 focus:ring-accent'
+                  }`}
                 />
+                {isDuplicateName && (
+                  <p className="mt-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Nama kategori '{normalizedFormName}' sudah ada. Nama kategori harus unik.</span>
+                  </p>
+                )}
               </div>
 
               {/* Description */}
@@ -863,8 +893,8 @@ export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> =
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-md hover:opacity-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                  disabled={isSaving || !normalizedFormName || isDuplicateName}
+                  className="px-6 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-md hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {isSaving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>{editingCategory ? 'Simpan Perubahan' : 'Buat Kategori & Variasi'}</span>
