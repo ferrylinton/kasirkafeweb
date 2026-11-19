@@ -1,35 +1,24 @@
-import React, { useState, useEffect } from 'react';
 import {
+  AlertCircle,
+  Check,
+  Edit3,
+  Info,
   Layers,
   Plus,
-  Edit3,
-  Trash2,
   RefreshCw,
-  Sparkles,
-  Check,
-  X,
-  AlertCircle,
-  HelpCircle,
-  Coffee,
-  CupSoda,
-  GlassWater,
-  Cookie,
   SlidersHorizontal,
-  ChevronDown,
-  ChevronUp,
-  Info
+  Trash2,
+  X
 } from 'lucide-react';
-import { Category, CategoryVariation, VariationOption } from '../../types';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useToast } from '../common/Toast';
+import { Category, CategoryVariation, VariationOption } from '../../types';
 import { clearClientCatalogCache } from '../../utils/productCache';
+import { useToast } from '../common/Toast';
 
-interface CategoryManagementScreenProps {
-  onNavigateTab?: (tab: string) => void;
-}
 
-export const CategoryManagementScreen: React.FC<CategoryManagementScreenProps> = ({ onNavigateTab }) => {
+export const CategoryManagementScreen: React.FC = () => {
   const { user, token } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();

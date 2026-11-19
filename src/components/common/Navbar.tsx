@@ -23,49 +23,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { t } = useLanguage();
   const { totalItemsCount, subtotal } = useCart();
   const isCashierOrManager = user?.role === 'CASHIER' || user?.role === 'MANAGER';
-  const isManager = user?.role === 'MANAGER';
-  const isAdmin = user?.role === 'ADMIN';
 
   // Deteksi rute halaman yang sedang diakses secara real-time dari useLocation()
   const activePath = location.pathname.replace(/^\//, '').split('/')[0] || currentTab || '';
   const searchParams = new URLSearchParams(location.search);
   const tabQuery = searchParams.get('tab');
 
-  // Deteksi subTab spesifik pada modul Pembelian Bahan Baku
-  const getSubTab = () => {
-    if (activePath === 'bahan-baku' || activePath === 'stok-bahan' || tabQuery === 'stok-bahan') {
-      return 'stok-bahan';
-    }
-    if (activePath === 'resep-minuman' || tabQuery === 'resep-minuman') {
-      return 'resep-minuman';
-    }
-    if (activePath === 'riwayat-pembelian' || tabQuery === 'riwayat-pembelian') {
-      return 'riwayat-pembelian';
-    }
-    if (activePath === 'pembelian-bahan' || activePath === 'pembelian-baru' || tabQuery === 'pembelian-baru') {
-      return 'pembelian-baru';
-    }
-    return '';
-  };
-
-  const subTab = getSubTab();
-  const isPembelianSection = !!subTab;
-
   // Hubungkan location ke title di navbar
   const getTabTitle = () => {
-    // 1. Prioritas judul sub-halaman modul Pembelian Bahan Baku
-    if (subTab === 'riwayat-pembelian') {
-      return 'Riwayat Pembelian Bahan Baku';
-    }
-    if (subTab === 'stok-bahan') {
-      return 'Master Stok Bahan Baku';
-    }
-    if (subTab === 'resep-minuman') {
-      return 'Resep Racikan Minuman';
-    }
-    if (subTab === 'pembelian-baru') {
-      return 'Faktur Pembelian Baru';
-    }
 
     // 2. Judul untuk rute-rute aplikasi lainnya
     switch (activePath) {
@@ -191,34 +156,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{navbarTitle}</span>
               </span>
 
-              {isPembelianSection && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 dark:bg-orange-950/50 border border-orange-200/80 dark:border-orange-800/60 shadow-2xs">
-                  {subTab === 'pembelian-baru' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-accent">
-                      <PackagePlus className="w-3.5 h-3.5" />
-                      <span>Faktur Pembelian</span>
-                    </span>
-                  )}
-                  {subTab === 'riwayat-pembelian' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                      <Receipt className="w-3.5 h-3.5" />
-                      <span>Riwayat PO</span>
-                    </span>
-                  )}
-                  {subTab === 'stok-bahan' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                      <Boxes className="w-3.5 h-3.5" />
-                      <span>Stok Bahan</span>
-                    </span>
-                  )}
-                  {subTab === 'resep-minuman' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400">
-                      <FlaskConical className="w-3.5 h-3.5" />
-                      <span>BOM Racikan</span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>

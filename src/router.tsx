@@ -243,7 +243,7 @@ const AdminOrderHistoryPage: React.FC = () => {
 
 const ManagerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  return <ManagerDashboardScreen onNavigateTab={(tab) => navigate('/' + tab)} />;
+  return <ManagerDashboardScreen />;
 };
 
 /**

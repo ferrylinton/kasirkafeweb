@@ -283,71 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 </label>
               </SidebarLink>
 
-              {/* Pembelian Bahan Baku & Resep Minuman (Khusus Role MANAGER) - Accordion Sub-Menu */}
-              {isManager && (
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    id="nav-pembelian-bahan-btn"
-                    aria-expanded={isSubmenuOpen}
-                    onClick={handleToggleSubmenu}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${isPembelianActive
-                      ? 'bg-accent text-white shadow-xs font-bold'
-                      : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-850 hover:text-stone-900 dark:hover:text-stone-100'
-                      }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <PackagePlus className="w-4 h-4 shrink-0 text-emerald-500" />
-                      <span className="truncate">Pembelian</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <ChevronRight
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-90' : ''
-                          } ${isPembelianActive
-                            ? 'text-white'
-                            : 'opacity-60'
-                          }`}
-                      />
-                    </div>
-                  </button>
 
-                  {/* Submenu Inline (Expanded / Collapsed) */}
-                  {isSubmenuOpen && (
-                    <div
-                      id="submenu-pembelian-bahan-accordion"
-                      className="ml-3 pl-3 border-l-2 border-stone-200 dark:border-stone-800 space-y-1 pt-1 pb-1 transition-all duration-200"
-                    >
-                      <SidebarLink id="subnav-pembelian-baru" to='pembelian-bahan' allowedRoles={[MANAGER]}>
-                        <label>
-                          <PackagePlus className="text-orange-500" />
-                          <span>Faktur Pembelian Baru</span>
-                        </label>
-                      </SidebarLink>
-
-                      <SidebarLink id="subnav-riwayat-pembelian" to='riwayat-pembelian' allowedRoles={[MANAGER]}>
-                        <label>
-                          <Receipt className="text-blue-500" />
-                          <span>Riwayat Pembelian</span>
-                        </label>
-                      </SidebarLink>
-
-                      <SidebarLink id="subnav-stok-bahan" to='bahan-baku' allowedRoles={[MANAGER]}>
-                        <label>
-                          <Boxes className="text-emerald-500" />
-                          <span>Master Stok Bahan Baku</span>
-                        </label>
-                      </SidebarLink>
-
-                      <SidebarLink id="subnav-resep-minuman" to='resep-minuman' allowedRoles={[MANAGER]}>
-                        <label>
-                          <FlaskConical className="text-purple-500" />
-                          <span>Resep Racikan Minuman</span>
-                        </label>
-                      </SidebarLink>
-                    </div>
-                  )}
-                </div>
-              )}
 
               <SidebarLink to='users' allowedRoles={[MANAGER]}>
                 <label>
@@ -395,6 +331,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 shrink-0">
                   Cabang
                 </span>
+              </SidebarLink>
+            </div>
+
+            <div className='sidemenu-group'>
+              <label>Pembelian</label>
+
+              <SidebarLink id="subnav-pembelian-baru" to='pembelian-bahan' allowedRoles={[MANAGER]}>
+                <label>
+                  <PackagePlus />
+                  <span>Faktur Pembelian Baru</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink id="subnav-riwayat-pembelian" to='riwayat-pembelian' allowedRoles={[MANAGER]}>
+                <label>
+                  <Receipt />
+                  <span>Riwayat Pembelian</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink id="subnav-stok-bahan" to='bahan-baku' allowedRoles={[MANAGER]}>
+                <label>
+                  <Boxes />
+                  <span>Master Stok Bahan Baku</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink id="subnav-resep-minuman" to='resep-minuman' allowedRoles={[MANAGER]}>
+                <label>
+                  <FlaskConical />
+                  <span>Resep Racikan Minuman</span>
+                </label>
               </SidebarLink>
             </div>
 

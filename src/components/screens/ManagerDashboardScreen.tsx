@@ -127,11 +127,7 @@ export interface ChartDataItem {
   [key: string]: any;
 }
 
-interface ManagerDashboardScreenProps {
-  onNavigateTab?: (tab: string) => void;
-}
-
-export const ManagerDashboardScreen: React.FC<ManagerDashboardScreenProps> = () => {
+export const ManagerDashboardScreen: React.FC = () => {
   const { token } = useAuth();
   const { showToast } = useToast();
 
