@@ -853,7 +853,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
     } catch (e) {}
 
     // Synchronize vendor stock mode, recipes and raw materials
-    let stockManagementMode: StockManagementMode = 'PRODUCT_STOCK';
+    let stockManagementMode: StockManagementMode = 'RAW_MATERIAL';
     const vendorModeMap = new Map<string, StockManagementMode>();
     const recipeMap = new Map<string, any>();
     const rawMaterialMap = new Map<string, any>();
@@ -867,7 +867,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
 
       vendorsList.forEach(v => {
         const vId = v._id ? v._id.toString() : String(v.id || '');
-        const mode: StockManagementMode = v.stockManagementMode === 'RAW_MATERIAL' ? 'RAW_MATERIAL' : 'PRODUCT_STOCK';
+        const mode: StockManagementMode = v.stockManagementMode === 'PRODUCT_STOCK' ? 'PRODUCT_STOCK' : 'RAW_MATERIAL';
         if (vId) vendorModeMap.set(vId, mode);
       });
 
@@ -914,11 +914,12 @@ productRouter.get('/', async (req: Request, res: Response) => {
         const prodId = p._id ? p._id.toString() : p.id;
         const prodVendorResolved = resolveVendorId(p.vendorId || targetVendor);
         const activeMode: StockManagementMode = isAllVendors
-          ? (vendorModeMap.get(prodVendorResolved) || 'PRODUCT_STOCK')
+          ? (vendorModeMap.get(prodVendorResolved) || 'RAW_MATERIAL')
           : stockManagementMode;
 
         const stockRec = stockMap.get(prodId);
         const directStock = stockRec ? stockRec.stock : (typeof p.stock === 'number' ? p.stock : 0);
+        const threshold = stockRec ? stockRec.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10);
 
         const recipe =
           recipeMap.get(`${prodVendorResolved}:${prodId}`) ||
@@ -933,6 +934,9 @@ productRouter.get('/', async (req: Request, res: Response) => {
         let rawMaterialReason = '';
         let maxServingsPossible = directStock;
         let stockSource: StockManagementMode = 'PRODUCT_STOCK';
+        let hasLowStockIngredient = false;
+        let lowStockIngredients: any[] = [];
+        let ingredientBreakdown: any[] = [];
 
         if (activeMode === 'RAW_MATERIAL' && hasRecipe) {
           // Build vendor-scoped view of raw materials when in all-vendors mode
@@ -949,9 +953,14 @@ productRouter.get('/', async (req: Request, res: Response) => {
           maxServingsPossible = computed.maxServingsPossible;
           rawMaterialAvailable = computed.rawMaterialAvailable;
           rawMaterialReason = computed.rawMaterialReason;
+          hasLowStockIngredient = computed.hasLowStockIngredient;
+          lowStockIngredients = computed.lowStockIngredients;
+          ingredientBreakdown = computed.ingredientBreakdown;
           isAvailable = p.isAvailable !== false && computed.rawMaterialAvailable && computed.stock > 0;
           stockSource = 'RAW_MATERIAL';
         }
+
+        const isLowStock = isAvailable && effectiveStock > 0 && (effectiveStock <= threshold || hasLowStockIngredient);
 
         return {
           id: prodId,
@@ -960,7 +969,7 @@ productRouter.get('/', async (req: Request, res: Response) => {
           category: p.category,
           price: p.price,
           stock: effectiveStock,
-          lowStockThreshold: stockRec ? stockRec.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10),
+          lowStockThreshold: threshold,
           description: p.description,
           tag: p.tag,
           image: p.image,
@@ -969,6 +978,10 @@ productRouter.get('/', async (req: Request, res: Response) => {
           rawMaterialReason: rawMaterialReason || p.temporaryUnavailableReason,
           maxServingsPossible,
           hasRecipe,
+          hasLowStockIngredient,
+          lowStockIngredients,
+          ingredientBreakdown,
+          isLowStock,
           stockSource,
           stockManagementMode: activeMode
         };
@@ -1037,35 +1050,56 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
     const vendorModeMap = new Map<string, StockManagementMode>();
     vendorsList.forEach(v => {
       const vId = v._id ? v._id.toString() : String(v.id || '');
-      if (vId) vendorModeMap.set(vId, v.stockManagementMode === 'RAW_MATERIAL' ? 'RAW_MATERIAL' : 'PRODUCT_STOCK');
+      if (vId) vendorModeMap.set(vId, v.stockManagementMode === 'PRODUCT_STOCK' ? 'PRODUCT_STOCK' : 'RAW_MATERIAL');
     });
 
     const stockManagementMode: StockManagementMode = isAllVendors
-      ? 'PRODUCT_STOCK'
+      ? 'RAW_MATERIAL'
       : (vendorModeMap.get(resolveVendorId(targetVendor)) || await getVendorStockMode(db, targetVendor));
 
     const recipeMap = new Map<string, any>();
     recipes.forEach(r => {
-      if (r.productId) recipeMap.set(String(r.productId), r);
-      if (r.productName) recipeMap.set(r.productName.toLowerCase().trim(), r);
+      const rVId = resolveVendorId(r.vendorId);
+      if (r.productId) {
+        recipeMap.set(String(r.productId), r);
+        recipeMap.set(`${rVId}:${String(r.productId)}`, r);
+      }
+      if (r.productName) {
+        recipeMap.set(r.productName.toLowerCase().trim(), r);
+        recipeMap.set(`${rVId}:${r.productName.toLowerCase().trim()}`, r);
+      }
     });
 
     const rawMaterialMap = new Map<string, any>();
     rawMaterials.forEach(m => {
+      const mVId = resolveVendorId(m.vendorId);
       rawMaterialMap.set(m._id.toString(), m);
-      if (m.id) rawMaterialMap.set(String(m.id), m);
-      if (m.name) rawMaterialMap.set(m.name.toLowerCase().trim(), m);
+      rawMaterialMap.set(`${mVId}:${m._id.toString()}`, m);
+      if (m.id) {
+        rawMaterialMap.set(String(m.id), m);
+        rawMaterialMap.set(`${mVId}:${String(m.id)}`, m);
+      }
+      if (m.name) {
+        rawMaterialMap.set(m.name.toLowerCase().trim(), m);
+        rawMaterialMap.set(`${mVId}:${m.name.toLowerCase().trim()}`, m);
+      }
     });
 
     const stocks = products.map(p => {
       const prodId = p._id ? p._id.toString() : p.id;
+      const prodVendorResolved = resolveVendorId(p.vendorId || targetVendor);
       const s = stockMap.get(prodId);
       const directStock = s ? s.stock : 0;
+      const threshold = s ? s.lowStockThreshold : 10;
       const activeMode: StockManagementMode = isAllVendors
-        ? (vendorModeMap.get(resolveVendorId(p.vendorId || targetVendor)) || 'PRODUCT_STOCK')
+        ? (vendorModeMap.get(prodVendorResolved) || 'RAW_MATERIAL')
         : stockManagementMode;
 
-      const recipe = recipeMap.get(prodId) || recipeMap.get(p.name?.toLowerCase().trim());
+      const recipe =
+        recipeMap.get(`${prodVendorResolved}:${prodId}`) ||
+        recipeMap.get(prodId) ||
+        recipeMap.get(`${prodVendorResolved}:${p.name?.toLowerCase().trim()}`) ||
+        recipeMap.get(p.name?.toLowerCase().trim());
       const hasRecipe = Boolean(recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0);
 
       let effectiveStock = directStock;
@@ -1073,15 +1107,30 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
       let rawMaterialAvailable = true;
       let rawMaterialReason = '';
       let stockSource: StockManagementMode = 'PRODUCT_STOCK';
+      let hasLowStockIngredient = false;
+      let lowStockIngredients: any[] = [];
+      let ingredientBreakdown: any[] = [];
 
       if (activeMode === 'RAW_MATERIAL' && hasRecipe) {
-        const computed = computeRawMaterialProductStock(recipe, rawMaterialMap);
+        const scopedMaterialMap = isAllVendors
+          ? new Map(
+              Array.from(rawMaterialMap.entries())
+                .filter(([k]) => k.startsWith(`${prodVendorResolved}:`))
+                .map(([k, v]) => [k.slice(prodVendorResolved.length + 1), v])
+            )
+          : rawMaterialMap;
+        const computed = computeRawMaterialProductStock(recipe, scopedMaterialMap);
         effectiveStock = computed.stock;
         rawMaterialAvailable = computed.rawMaterialAvailable;
         rawMaterialReason = computed.rawMaterialReason;
+        hasLowStockIngredient = computed.hasLowStockIngredient;
+        lowStockIngredients = computed.lowStockIngredients;
+        ingredientBreakdown = computed.ingredientBreakdown;
         isAvailable = p.isAvailable !== false && computed.rawMaterialAvailable && computed.stock > 0;
         stockSource = 'RAW_MATERIAL';
       }
+
+      const isLowStock = isAvailable && effectiveStock > 0 && (effectiveStock <= threshold || hasLowStockIngredient);
 
       return {
         id: s?._id ? s._id.toString() : `stk_${prodId}`,
@@ -1092,10 +1141,15 @@ productRouter.get('/stocks', async (req: Request, res: Response) => {
         image: p.image,
         price: p.price,
         stock: effectiveStock,
-        lowStockThreshold: s ? s.lowStockThreshold : 10,
+        lowStockThreshold: threshold,
         isAvailable,
         rawMaterialAvailable,
         rawMaterialReason: rawMaterialReason || p.temporaryUnavailableReason,
+        hasRecipe,
+        hasLowStockIngredient,
+        lowStockIngredients,
+        ingredientBreakdown,
+        isLowStock,
         stockSource,
         stockManagementMode: activeMode,
         updatedAt: s?.updatedAt || p.updatedAt
@@ -1135,16 +1189,17 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
       });
     }
 
+    let query: any = {};
+    if (isAllVendors) {
+      query = {};
+    } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
+      query = buildVendorQuery(requestedVendor);
+    } else {
+      query = buildVendorQuery(activeVendorId);
+    }
+
     let products: any[] = [];
     try {
-      let query: any = {};
-      if (isAllVendors) {
-        query = {};
-      } else if (isAdmin && requestedVendor && requestedVendor !== 'all') {
-        query = buildVendorQuery(requestedVendor);
-      } else {
-        query = buildVendorQuery(activeVendorId);
-      }
       products = await db.collection('products').find(query).toArray();
     } catch (e) {}
 
@@ -1160,44 +1215,78 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
     stockDocs.forEach(s => stockMap.set(String(s.productId), s));
 
     const stockManagementMode: StockManagementMode = isAllVendors
-      ? 'PRODUCT_STOCK'
+      ? 'RAW_MATERIAL'
       : await getVendorStockMode(db, requestedVendor || activeVendorId);
 
+    const [recipes, rawMaterials] = await Promise.all([
+      db.collection('product_recipes').find(query).toArray(),
+      db.collection('raw_materials').find(query).toArray()
+    ]);
+
     const recipeMap = new Map<string, any>();
+    recipes.forEach(r => {
+      const rVId = resolveVendorId(r.vendorId);
+      if (r.productId) {
+        recipeMap.set(String(r.productId), r);
+        recipeMap.set(`${rVId}:${String(r.productId)}`, r);
+      }
+      if (r.productName) {
+        recipeMap.set(r.productName.toLowerCase().trim(), r);
+        recipeMap.set(`${rVId}:${r.productName.toLowerCase().trim()}`, r);
+      }
+    });
+
     const rawMaterialMap = new Map<string, any>();
-    if (stockManagementMode === 'RAW_MATERIAL') {
-      const vFilter = buildVendorQuery(requestedVendor || activeVendorId);
-      const [recipes, rawMaterials] = await Promise.all([
-        db.collection('product_recipes').find(vFilter).toArray(),
-        db.collection('raw_materials').find(vFilter).toArray()
-      ]);
-      recipes.forEach(r => {
-        if (r.productId) recipeMap.set(String(r.productId), r);
-        if (r.productName) recipeMap.set(r.productName.toLowerCase().trim(), r);
-      });
-      rawMaterials.forEach(m => {
-        rawMaterialMap.set(m._id.toString(), m);
-        if (m.id) rawMaterialMap.set(String(m.id), m);
-        if (m.name) rawMaterialMap.set(m.name.toLowerCase().trim(), m);
-      });
-    }
+    rawMaterials.forEach(m => {
+      const mVId = resolveVendorId(m.vendorId);
+      rawMaterialMap.set(m._id.toString(), m);
+      rawMaterialMap.set(`${mVId}:${m._id.toString()}`, m);
+      if (m.id) {
+        rawMaterialMap.set(String(m.id), m);
+        rawMaterialMap.set(`${mVId}:${String(m.id)}`, m);
+      }
+      if (m.name) {
+        rawMaterialMap.set(m.name.toLowerCase().trim(), m);
+        rawMaterialMap.set(`${mVId}:${m.name.toLowerCase().trim()}`, m);
+      }
+    });
 
     const mapped = products.map(p => {
       const prodId = p._id ? p._id.toString() : p.id;
+      const prodVendorResolved = resolveVendorId(p.vendorId || activeVendorId);
       const s = stockMap.get(prodId);
       const threshold = s && typeof s.lowStockThreshold === 'number' ? s.lowStockThreshold : (typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10);
       const directStock = s && typeof s.stock === 'number' ? s.stock : (typeof p.stock === 'number' ? p.stock : 0);
 
       let stock = directStock;
+      let hasLowStockIngredient = false;
+      let lowStockIngredients: any[] = [];
+      let rawMaterialReason = '';
+
       if (stockManagementMode === 'RAW_MATERIAL') {
-        const recipe = recipeMap.get(prodId) || recipeMap.get(p.name?.toLowerCase().trim());
+        const recipe =
+          recipeMap.get(`${prodVendorResolved}:${prodId}`) ||
+          recipeMap.get(prodId) ||
+          recipeMap.get(`${prodVendorResolved}:${p.name?.toLowerCase().trim()}`) ||
+          recipeMap.get(p.name?.toLowerCase().trim());
         if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
-          stock = computeRawMaterialProductStock(recipe, rawMaterialMap).stock;
+          const scopedMaterialMap = isAllVendors
+            ? new Map(
+                Array.from(rawMaterialMap.entries())
+                  .filter(([k]) => k.startsWith(`${prodVendorResolved}:`))
+                  .map(([k, v]) => [k.slice(prodVendorResolved.length + 1), v])
+              )
+            : rawMaterialMap;
+          const computed = computeRawMaterialProductStock(recipe, scopedMaterialMap);
+          stock = computed.stock;
+          hasLowStockIngredient = computed.hasLowStockIngredient;
+          lowStockIngredients = computed.lowStockIngredients;
+          rawMaterialReason = computed.rawMaterialReason;
         }
       }
 
       const isOutOfStock = stock === 0;
-      const isLowStock = stock > 0 && stock <= threshold;
+      const isLowStock = !isOutOfStock && (stock <= threshold || hasLowStockIngredient);
       return {
         id: prodId,
         vendorId: p.vendorId || 'vnd_kasirkafe_central',
@@ -1210,19 +1299,47 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
         tag: p.tag,
         image: p.image,
         isAvailable: p.isAvailable !== false && stock > 0,
+        hasLowStockIngredient,
+        lowStockIngredients,
+        rawMaterialReason,
         isLowStock,
         isOutOfStock
       };
     });
 
-    const healthyCount = mapped.filter(p => p.stock > p.lowStockThreshold).length;
+    const rawMaterialAlerts = rawMaterials
+      .filter(m => {
+        const st = typeof m.stock === 'number' ? m.stock : 0;
+        const minSt = typeof m.minimumStock === 'number' ? m.minimumStock : 100;
+        return st <= minSt;
+      })
+      .map(m => {
+        const st = typeof m.stock === 'number' ? m.stock : 0;
+        const minSt = typeof m.minimumStock === 'number' ? m.minimumStock : 100;
+        return {
+          id: m._id ? m._id.toString() : String(m.id || ''),
+          vendorId: m.vendorId || activeVendorId,
+          name: m.name,
+          category: m.category || 'LAINNYA',
+          unit: m.unit || 'unit',
+          stock: st,
+          minimumStock: minSt,
+          status: st <= 0 ? ('OUT_OF_STOCK' as const) : ('LOW_STOCK' as const)
+        };
+      })
+      .sort((a, b) => a.stock - b.stock);
+
+    const rawMaterialLowCount = rawMaterialAlerts.filter(r => r.status === 'LOW_STOCK').length;
+    const rawMaterialOutCount = rawMaterialAlerts.filter(r => r.status === 'OUT_OF_STOCK').length;
+
+    const healthyCount = mapped.filter(p => !p.isOutOfStock && !p.isLowStock).length;
     const lowStockCount = mapped.filter(p => p.isLowStock).length;
     const outOfStockCount = mapped.filter(p => p.isOutOfStock).length;
     const totalStockUnits = mapped.reduce((sum, p) => sum + p.stock, 0);
     const totalStockValue = mapped.reduce((sum, p) => sum + (p.stock * p.price), 0);
 
     const alerts = mapped
-      .filter(p => p.stock <= p.lowStockThreshold)
+      .filter(p => p.isOutOfStock || p.isLowStock)
       .sort((a, b) => a.stock - b.stock);
 
     return res.json({
@@ -1238,7 +1355,11 @@ productRouter.get('/inventory/alerts', authMiddleware, requireManager, async (re
         totalStockUnits,
         totalStockValue,
         defaultThreshold: 10,
-        alerts
+        alerts,
+        rawMaterialAlerts,
+        rawMaterialLowCount,
+        rawMaterialOutCount,
+        combinedAlertCount: Math.max(alerts.length, rawMaterialAlerts.length)
       }
     });
   } catch (err: any) {

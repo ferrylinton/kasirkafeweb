@@ -66,7 +66,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
   const [products, setProducts] = useState<Product[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('PRODUCT_STOCK');
+  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('RAW_MATERIAL');
   const [switchingStockMode, setSwitchingStockMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'stock' | 'logs'>('stock');
@@ -148,6 +148,12 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
     fetchStockData();
   }, [token, allVendorsMode, selectedVendor]);
 
+  useEffect(() => {
+    const onInventoryUpdated = () => fetchStockData();
+    window.addEventListener('kasirkafe:inventory-updated', onInventoryUpdated);
+    return () => window.removeEventListener('kasirkafe:inventory-updated', onInventoryUpdated);
+  }, [token, allVendorsMode, selectedVendor]);
+
   // Switch Vendor Stock Mode (Manager only in vendor mode)
   const handleSwitchStockMode = async (targetMode: StockManagementMode) => {
     if (isReadOnly || switchingStockMode || targetMode === stockManagementMode) return;
@@ -165,6 +171,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
       if (data.success) {
         setStockManagementMode(data.stockManagementMode || targetMode);
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(
           data.message ||
             (targetMode === 'RAW_MATERIAL'
@@ -209,6 +216,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
       if (data.success) {
         showToast(`Stok '${product.name}' diubah menjadi ${newStock} unit`, 'success');
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         // Optimistic update
         setProducts(prev =>
           prev.map(p => (p.id === product.id ? { ...p, stock: newStock } : p))
@@ -262,6 +270,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
       if (data.success) {
         showToast(`Stok '${stockModalProduct.name}' berhasil diperbarui menjadi ${targetStock} unit!`, 'success');
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         setStockModalProduct(null);
         fetchStockData();
       } else {
@@ -432,7 +441,7 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
         // Status filter
         const threshold = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
         const isOut = p.stock <= 0;
-        const isLow = p.stock > 0 && p.stock <= threshold;
+        const isLow = p.stock > 0 && (p.stock <= threshold || Boolean(p.hasLowStockIngredient) || Boolean(p.isLowStock));
         const isAvailable = p.isAvailable !== false;
 
         if (statusFilter === 'available' && !isAvailable) return false;
@@ -446,8 +455,10 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
       .sort((a, b) => {
         const thresholdA = typeof a.lowStockThreshold === 'number' ? a.lowStockThreshold : 10;
         const thresholdB = typeof b.lowStockThreshold === 'number' ? b.lowStockThreshold : 10;
-        const aCritical = a.isAvailable === false ? 0 : a.stock <= 0 ? 1 : a.stock <= thresholdA ? 2 : 3;
-        const bCritical = b.isAvailable === false ? 0 : b.stock <= 0 ? 1 : b.stock <= thresholdB ? 2 : 3;
+        const aLow = a.stock > 0 && (a.stock <= thresholdA || Boolean(a.hasLowStockIngredient) || Boolean(a.isLowStock));
+        const bLow = b.stock > 0 && (b.stock <= thresholdB || Boolean(b.hasLowStockIngredient) || Boolean(b.isLowStock));
+        const aCritical = a.isAvailable === false ? 0 : a.stock <= 0 ? 1 : aLow ? 2 : 3;
+        const bCritical = b.isAvailable === false ? 0 : b.stock <= 0 ? 1 : bLow ? 2 : 3;
 
         if (sortBy === 'critical') {
           if (aCritical !== bCritical) return aCritical - bCritical;
@@ -466,11 +477,11 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
   const outOfStockCount = products.filter(p => p.stock <= 0 && p.isAvailable !== false).length;
   const lowStockCount = products.filter(p => {
     const t = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
-    return p.stock > 0 && p.stock <= t && p.isAvailable !== false;
+    return p.stock > 0 && (p.stock <= t || Boolean(p.hasLowStockIngredient) || Boolean(p.isLowStock)) && p.isAvailable !== false;
   }).length;
   const healthyCount = products.filter(p => {
     const t = typeof p.lowStockThreshold === 'number' ? p.lowStockThreshold : 10;
-    return p.stock > t && p.isAvailable !== false;
+    return p.stock > t && !p.hasLowStockIngredient && !p.isLowStock && p.isAvailable !== false;
   }).length;
   const totalUnits = products.reduce((sum, p) => sum + (p.stock || 0), 0);
 
@@ -920,24 +931,25 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
               {filteredProducts.map(product => {
                 const threshold = typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10;
                 const isOut = product.stock <= 0;
-                const isLow = product.stock > 0 && product.stock <= threshold;
-                const isHealthy = product.stock > threshold;
+                const isLow = !isOut && (product.stock <= threshold || Boolean(product.hasLowStockIngredient) || Boolean(product.isLowStock));
+                const isHealthy = !isOut && !isLow;
                 const isAvailable = product.isAvailable !== false;
                 const isQuickBusy = quickAdjustingId === product.id;
                 const isRawMaterialDriven =
                   !allVendorsMode && stockManagementMode === 'RAW_MATERIAL' && product.stockSource === 'RAW_MATERIAL';
+                const lowWarnings = (product.lowStockIngredients || []).filter(w => w.status === 'LOW_STOCK');
 
                 return (
                   <div
                     key={product.id}
-                    className={`flex flex-col justify-between rounded-3xl bg-white dark:bg-[#251e1c] border p-4 sm:p-5 transition-all duration-200 shadow-2xs hover:shadow-md ${
-                      !isAvailable
-                        ? 'border-purple-300 dark:border-purple-900/60 bg-purple-50/20 dark:bg-purple-950/10'
+                    className={`flex flex-col justify-between rounded-3xl p-4 sm:p-5 transition-all duration-200 hover:shadow-md ${
+                      !isAvailable && !isOut
+                        ? 'bg-white dark:bg-[#251e1c] border border-purple-300 dark:border-purple-900/60 bg-purple-50/20 dark:bg-purple-950/10 shadow-2xs'
                         : isOut
-                        ? 'border-red-300 dark:border-red-900/60'
+                        ? 'bg-red-50/40 dark:bg-[#251e1c] border-2 border-red-400 dark:border-red-800/80 shadow-md shadow-red-500/10'
                         : isLow
-                        ? 'border-amber-300 dark:border-amber-900/60'
-                        : 'border-stone-200/80 dark:border-stone-800'
+                        ? 'bg-amber-50/50 dark:bg-[#251e1c] border-2 border-amber-400 dark:border-amber-600/90 shadow-lg shadow-amber-500/15'
+                        : 'bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs'
                     }`}
                   >
                     <div>
@@ -970,8 +982,11 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                             {isRawMaterialDriven && (
                               <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1">
                                 <FlaskConical className="w-2.5 h-2.5" />
-                                <span>Dari Bahan Baku</span>
+                                <span>Dari Resep</span>
                               </span>
+                            )}
+                            {isLow && (
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" title="Bahan/stok menipis sebelum habis" />
                             )}
                             {allVendorsMode && product.vendorId && (
                               <VendorBadge vendorId={product.vendorId} />
@@ -991,8 +1006,23 @@ export const ProductStockScreen: React.FC<ProductStockScreenProps> = ({ allVendo
                         <div className="mt-3 p-2.5 rounded-2xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/70 flex items-start gap-2 text-red-800 dark:text-red-200">
                           <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                           <div className="text-[11px] leading-snug">
-                            <strong className="block font-bold">Stok Bahan Baku Habis / Kurang</strong>
+                            <strong className="block font-bold">Bahan / Perlengkapan Resep Habis</strong>
                             <span>{product.rawMaterialReason}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Low-Stock Ingredient / Supply Warning Banner (Before Running Out) */}
+                      {isRawMaterialDriven && !isOut && lowWarnings.length > 0 && (
+                        <div className="mt-3 p-2.5 rounded-2xl bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 flex items-start gap-2 text-amber-900 dark:text-amber-200 shadow-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                          <div className="text-[11px] leading-snug">
+                            <strong className="block font-bold">Bahan / Perlengkapan Menipis (Segera Restock)</strong>
+                            <span>
+                              {lowWarnings
+                                .map(w => `${w.materialName}: sisa ${w.currentStock.toLocaleString('id-ID')}/${w.minimumStock.toLocaleString('id-ID')} ${w.unit}`)
+                                .join(' • ')}
+                            </span>
                           </div>
                         </div>
                       )}

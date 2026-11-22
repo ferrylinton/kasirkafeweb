@@ -112,7 +112,7 @@ export function mapVendorDoc(doc: any): VendorRecord {
     address: rest.address,
     status: rest.status || 'ACTIVE',
     currency: rest.currency || 'IDR',
-    stockManagementMode: rest.stockManagementMode === 'RAW_MATERIAL' ? 'RAW_MATERIAL' : 'PRODUCT_STOCK',
+    stockManagementMode: rest.stockManagementMode === 'PRODUCT_STOCK' ? 'PRODUCT_STOCK' : 'RAW_MATERIAL',
     createdAt: rest.createdAt || new Date(),
     updatedAt: rest.updatedAt
   };

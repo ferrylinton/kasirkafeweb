@@ -32,7 +32,7 @@ export const RawMaterialStockScreen: React.FC = () => {
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [recipes, setRecipes] = useState<ProductRecipe[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('PRODUCT_STOCK');
+  const [stockManagementMode, setStockManagementMode] = useState<StockManagementMode>('RAW_MATERIAL');
   const [switchingMode, setSwitchingMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -134,6 +134,7 @@ export const RawMaterialStockScreen: React.FC = () => {
       if (data.success) {
         setStockManagementMode(data.stockManagementMode || targetMode);
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(
           data.message ||
             (targetMode === 'RAW_MATERIAL'
@@ -177,6 +178,7 @@ export const RawMaterialStockScreen: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(data.message || 'Data bahan baku berhasil disimpan!', 'success');
         setShowMaterialModal(false);
         setEditingMaterial(null);
@@ -204,6 +206,7 @@ export const RawMaterialStockScreen: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(data.message || 'Bahan baku berhasil dihapus', 'success');
         setDeletingMaterial(null);
         await loadMaterials();
@@ -283,26 +286,52 @@ export const RawMaterialStockScreen: React.FC = () => {
     return merged;
   };
 
-  // Filtered Materials
+  const stockStatusCounts = useMemo(() => {
+    let depleted = 0;
+    let low = 0;
+    let safe = 0;
+    for (const m of materials) {
+      if (m.stock <= 0) depleted++;
+      else if (m.stock <= m.minimumStock) low++;
+      else safe++;
+    }
+    return { total: materials.length, depleted, low, safe };
+  }, [materials]);
+
+  const urgentMaterials = useMemo(() => {
+    return materials
+      .filter(m => m.stock <= m.minimumStock)
+      .sort((a, b) => a.stock - b.stock);
+  }, [materials]);
+
+  // Filtered & Priority-Sorted Materials (Out-of-stock & Low-stock light up at top)
   const filteredMaterials = useMemo(() => {
-    return materials.filter(m => {
-      const query = materialSearch.toLowerCase();
-      const matchSearch =
-        m.name.toLowerCase().includes(query) ||
-        (m.category && m.category.toLowerCase().includes(query)) ||
-        (m.notes && m.notes.toLowerCase().includes(query));
+    return materials
+      .filter(m => {
+        const query = materialSearch.toLowerCase();
+        const matchSearch =
+          m.name.toLowerCase().includes(query) ||
+          (m.category && m.category.toLowerCase().includes(query)) ||
+          (m.notes && m.notes.toLowerCase().includes(query));
 
-      let matchStatus = true;
-      if (statusFilter === 'depleted') {
-        matchStatus = m.stock <= 0;
-      } else if (statusFilter === 'low') {
-        matchStatus = m.stock > 0 && m.stock <= m.minimumStock;
-      } else if (statusFilter === 'safe') {
-        matchStatus = m.stock > m.minimumStock;
-      }
+        let matchStatus = true;
+        if (statusFilter === 'depleted') {
+          matchStatus = m.stock <= 0;
+        } else if (statusFilter === 'low') {
+          matchStatus = m.stock > 0 && m.stock <= m.minimumStock;
+        } else if (statusFilter === 'safe') {
+          matchStatus = m.stock > m.minimumStock;
+        }
 
-      return matchSearch && matchStatus;
-    });
+        return matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        const rank = (m: RawMaterial) => (m.stock <= 0 ? 0 : m.stock <= m.minimumStock ? 1 : 2);
+        const rA = rank(a);
+        const rB = rank(b);
+        if (rA !== rB) return rA - rB;
+        return a.name.localeCompare(b.name);
+      });
   }, [materials, materialSearch, statusFilter]);
 
   // Unauthorized view
@@ -429,11 +458,145 @@ export const RawMaterialStockScreen: React.FC = () => {
           </div>
         </div>
 
+        {/* Glowing Low-Stock & Out-of-Stock Alert Spotlight */}
+        {urgentMaterials.length > 0 && (
+          <div className="p-4 rounded-2xl border-2 border-amber-400/90 dark:border-amber-500/70 bg-gradient-to-r from-amber-50 via-orange-50/70 to-red-50/50 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-red-950/20 shadow-md shadow-amber-500/15 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm relative">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 animate-ping" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                    <span>Peringatan Bahan & Perlengkapan Menipis Sebelum Habis</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                      {urgentMaterials.length} Item
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300/90">
+                    Item di bawah ini menyentuh batas minimum atau habis. Segera restock agar menu kasir tetap tersedia.
+                  </p>
+                </div>
+              </div>
+
+              {isManager && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/pembelian-bahan')}
+                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Restock Sekarang</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {urgentMaterials.map(m => {
+                const isZero = m.stock <= 0;
+                const linkedCount = getLinkedProductsForMaterial(m).length;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setStatusFilter(isZero ? 'depleted' : 'low')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all cursor-pointer ${
+                      isZero
+                        ? 'bg-red-100 dark:bg-red-950/70 border-red-400 dark:border-red-700 text-red-800 dark:text-red-200 shadow-xs'
+                        : 'bg-amber-100/90 dark:bg-amber-950/60 border-amber-400 dark:border-amber-700 text-amber-900 dark:text-amber-200 shadow-xs'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${isZero ? 'bg-red-600 animate-ping' : 'bg-amber-500 animate-pulse'}`} />
+                    <span>{m.name}</span>
+                    <span className="font-black">
+                      {m.stock.toLocaleString('id-ID')}/{m.minimumStock.toLocaleString('id-ID')} {m.unit}
+                    </span>
+                    {linkedCount > 0 && (
+                      <span className="text-[10px] opacity-80">({linkedCount} menu)</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Clickable KPI / Status Filter Pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'all'
+                ? 'border-accent bg-orange-50/70 dark:bg-orange-950/30 ring-2 ring-accent/20'
+                : 'border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40 hover:border-stone-300'
+            }`}
+          >
+            <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 block">Semua Bahan &amp; Kemasan</span>
+            <span className="text-xl font-black text-stone-900 dark:text-stone-100 font-heading">{stockStatusCounts.total}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('safe')}
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'safe'
+                ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20'
+                : 'border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40 hover:border-emerald-300'
+            }`}
+          >
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 block">Stok Aman</span>
+            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-heading">{stockStatusCounts.safe}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('low')}
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+              stockStatusCounts.low > 0
+                ? statusFilter === 'low'
+                  ? 'border-amber-500 bg-amber-100/90 dark:bg-amber-950/50 ring-2 ring-amber-500/40 shadow-md shadow-amber-500/20'
+                  : 'border-amber-400 bg-amber-50/90 dark:bg-amber-950/35 shadow-sm shadow-amber-500/15 hover:border-amber-500'
+                : statusFilter === 'low'
+                ? 'border-amber-500 bg-amber-50/70'
+                : 'border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40'
+            }`}
+          >
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+              <span>Menipis (Alert)</span>
+              {stockStatusCounts.low > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+            </span>
+            <span className="text-xl font-black text-amber-600 dark:text-amber-400 font-heading">{stockStatusCounts.low}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('depleted')}
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+              stockStatusCounts.depleted > 0
+                ? statusFilter === 'depleted'
+                  ? 'border-red-500 bg-red-100/90 dark:bg-red-950/50 ring-2 ring-red-500/40 shadow-md shadow-red-500/20'
+                  : 'border-red-400 bg-red-50/90 dark:bg-red-950/35 shadow-sm shadow-red-500/15 hover:border-red-500'
+                : statusFilter === 'depleted'
+                ? 'border-red-500 bg-red-50/70'
+                : 'border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40'
+            }`}
+          >
+            <span className="text-[11px] font-bold text-red-700 dark:text-red-300 flex items-center gap-1.5">
+              <span>Habis (0)</span>
+              {stockStatusCounts.depleted > 0 && <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />}
+            </span>
+            <span className="text-xl font-black text-red-600 dark:text-red-400 font-heading">{stockStatusCounts.depleted}</span>
+          </button>
+        </div>
+
         {/* Search & Filter Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading">
-              Daftar Stok Bahan Baku ({filteredMaterials.length})
+              Daftar Stok Bahan Baku &amp; Perlengkapan ({filteredMaterials.length})
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
               Kuantiti bertambah otomatis via Faktur Pembelian dan berkurang otomatis via Kasir Penjualan.
@@ -447,7 +610,7 @@ export const RawMaterialStockScreen: React.FC = () => {
                 type="text"
                 value={materialSearch}
                 onChange={e => setMaterialSearch(e.target.value)}
-                placeholder="Cari nama bahan baku..."
+                placeholder="Cari nama bahan atau kemasan..."
                 className="w-full pl-9 pr-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
@@ -525,11 +688,30 @@ export const RawMaterialStockScreen: React.FC = () => {
                   const isDepleted = m.stock <= 0;
                   const isLow = m.stock > 0 && m.stock <= m.minimumStock;
                   const linkedProducts = getLinkedProductsForMaterial(m);
+                  const meterPct = m.minimumStock > 0 ? Math.min(100, Math.round((m.stock / (m.minimumStock * 2)) * 100)) : (m.stock > 0 ? 100 : 0);
 
                   return (
-                    <tr key={m.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-850/60 transition-colors">
+                    <tr
+                      key={m.id}
+                      className={`transition-colors ${
+                        isDepleted
+                          ? 'bg-red-50/85 dark:bg-red-950/30 border-l-4 border-l-red-600 hover:bg-red-100/70 dark:hover:bg-red-950/45'
+                          : isLow
+                          ? 'bg-amber-50/90 dark:bg-amber-950/25 border-l-4 border-l-amber-500 hover:bg-amber-100/70 dark:hover:bg-amber-950/40'
+                          : 'hover:bg-stone-50/60 dark:hover:bg-stone-850/60'
+                      }`}
+                    >
                       <td className="p-3">
-                        <div className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">{m.name}</div>
+                        <div className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm flex items-center gap-1.5">
+                          {(isDepleted || isLow) && (
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                isDepleted ? 'bg-red-600 animate-ping' : 'bg-amber-500 animate-pulse'
+                              }`}
+                            />
+                          )}
+                          <span>{m.name}</span>
+                        </div>
                         {m.notes && <div className="text-[10px] text-stone-400 mt-0.5 max-w-xs truncate">{m.notes}</div>}
                       </td>
                       <td className="p-3">
@@ -538,24 +720,34 @@ export const RawMaterialStockScreen: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3 font-black text-sm whitespace-nowrap">
-                        <span className={isDepleted ? 'text-red-600 font-black' : isLow ? 'text-amber-600 font-bold' : 'text-stone-900 dark:text-stone-100'}>
-                          {m.stock.toLocaleString('id-ID')}
-                        </span>
-                        <span className="text-xs font-semibold text-stone-500 ml-1">{m.unit}</span>
+                        <div>
+                          <span className={isDepleted ? 'text-red-600 font-black' : isLow ? 'text-amber-700 dark:text-amber-400 font-black' : 'text-stone-900 dark:text-stone-100'}>
+                            {m.stock.toLocaleString('id-ID')}
+                          </span>
+                          <span className="text-xs font-semibold text-stone-500 ml-1">{m.unit}</span>
+                        </div>
+                        <div className="mt-1.5 w-24 h-1.5 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              isDepleted ? 'bg-red-600 w-0' : isLow ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${isDepleted ? 0 : Math.max(8, meterPct)}%` }}
+                          />
+                        </div>
                       </td>
                       <td className="p-3 text-stone-600 dark:text-stone-400 whitespace-nowrap">
                         {m.minimumStock.toLocaleString('id-ID')} {m.unit}
                       </td>
                       <td className="p-3">
                         {isDepleted ? (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950/80 text-red-600 flex items-center gap-1 w-fit animate-pulse">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950/80 text-red-600 border border-red-300 dark:border-red-700 flex items-center gap-1 w-fit animate-pulse">
                             <AlertTriangle className="w-3 h-3" />
                             <span>Habis (0)</span>
                           </span>
                         ) : isLow ? (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 flex items-center gap-1 w-fit">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-200/90 dark:bg-amber-950/90 text-amber-900 dark:text-amber-300 border border-amber-400 dark:border-amber-600 flex items-center gap-1 w-fit animate-pulse shadow-xs">
                             <AlertTriangle className="w-3 h-3" />
-                            <span>Menipis</span>
+                            <span>Menipis - Segera Beli</span>
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center gap-1 w-fit">
@@ -579,7 +771,13 @@ export const RawMaterialStockScreen: React.FC = () => {
                                 <span>{linkedProducts.length} produk otomatis Habis (0)</span>
                               </span>
                             )}
-                            {stockManagementMode === 'RAW_MATERIAL' && !isDepleted && (
+                            {stockManagementMode === 'RAW_MATERIAL' && isLow && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{linkedProducts.length} menu menyala Menipis</span>
+                              </span>
+                            )}
+                            {stockManagementMode === 'RAW_MATERIAL' && !isDepleted && !isLow && (
                               <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block">
                                 Menyusun {linkedProducts.length} menu aktif
                               </span>

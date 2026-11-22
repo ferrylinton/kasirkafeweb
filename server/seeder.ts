@@ -1170,18 +1170,23 @@ export async function seedDatabase() {
   const db = getDB();
   if (db) {
     try {
-      // 0. Vendors - ensure all initial vendors use _id (ObjectId) and remove code & id
+      // 0. Vendors - ensure all initial vendors use _id (ObjectId) and default to RAW_MATERIAL stock mode
       for (const v of initialVendors) {
         await db.collection('vendors').updateOne(
           { _id: v._id },
           { 
             $set: { name: v.name, status: v.status, currency: v.currency, updatedAt: v.updatedAt },
-            $setOnInsert: { _id: v._id, createdAt: v.createdAt },
+            $setOnInsert: { _id: v._id, createdAt: v.createdAt, stockManagementMode: 'RAW_MATERIAL' },
             $unset: { code: '', id: '' }
           },
           { upsert: true }
         );
       }
+      // Ensure any vendor without stockManagementMode defaults to RAW_MATERIAL
+      await db.collection('vendors').updateMany(
+        { stockManagementMode: { $exists: false } },
+        { $set: { stockManagementMode: 'RAW_MATERIAL' } }
+      );
       // Ensure all vendor documents remove code and id
       await db.collection('vendors').updateMany({}, { $unset: { code: '', id: '' } });
       console.log('[Seeder] Vendors seeded and synced in MongoDB successfully.');
@@ -1264,13 +1269,10 @@ export async function seedDatabase() {
         await db.collection('product_stocks').updateOne(
           { _id: id },
           {
-            $set: {
-              productId: productId.toString(),
-              ...stockData,
-              updatedAt: new Date()
-            },
             $setOnInsert: {
-              _id: id
+              _id: id,
+              productId: productId.toString(),
+              ...stockData
             }
           },
           { upsert: true }
@@ -1326,92 +1328,66 @@ export async function seedDatabase() {
         console.log('[Seeder] Saved/hold orders seeded in MongoDB successfully.');
       }
 
-      // 10. Raw Materials, Purchases, and Product Recipes
-      const rawMatCount = await db.collection('raw_materials').countDocuments();
-      if (rawMatCount === 0) {
-        const defaultRawMaterials = [
-          {
-            name: 'Biji Kopi Arabika Gayo',
-            category: 'KOPI',
-            unit: 'gram',
-            stock: 5000,
-            minimumStock: 500,
-            avgCostPerUnit: 250,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Susu Segar Pasteurisasi (Fresh Milk)',
-            category: 'SUSU',
-            unit: 'ml',
-            stock: 10000,
-            minimumStock: 1000,
-            avgCostPerUnit: 22,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Sirup Gula Aren Murni',
-            category: 'SIRUP_PEMANIS',
-            unit: 'ml',
-            stock: 3000,
-            minimumStock: 300,
-            avgCostPerUnit: 45,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Pure Matcha Uji Powder',
-            category: 'TEH_BUAH',
-            unit: 'gram',
-            stock: 1500,
-            minimumStock: 200,
-            avgCostPerUnit: 400,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Daun Teh Melati Premium',
-            category: 'TEH_BUAH',
-            unit: 'gram',
-            stock: 2000,
-            minimumStock: 200,
-            avgCostPerUnit: 120,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Sirup Karamel Salted',
-            category: 'SIRUP_PEMANIS',
-            unit: 'ml',
-            stock: 2500,
-            minimumStock: 250,
-            avgCostPerUnit: 50,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            name: 'Cup Minuman 16oz & Tutup',
-            category: 'KEMASAN',
-            unit: 'pcs',
-            stock: 400,
-            minimumStock: 50,
-            avgCostPerUnit: 850,
-            vendorId: 'vnd_kasirkafe_central',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
-        ];
-        const insertedMats = await db.collection('raw_materials').insertMany(defaultRawMaterials);
-        console.log('[Seeder] Raw materials seeded in MongoDB successfully.');
+      // 10. Raw Materials & Packaging Supplies (Idempotent upsert by vendorId + name, preserves existing stock)
+      const defaultRawMaterials = [
+        // --- Vendor 1: KasirKafe Coffee & Boba (Pusat) ---
+        { name: 'Biji Kopi Arabika Gayo', category: 'KOPI', unit: 'gram', stock: 5000, minimumStock: 500, avgCostPerUnit: 250, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Susu Segar Pasteurisasi (Fresh Milk)', category: 'SUSU', unit: 'ml', stock: 10000, minimumStock: 1000, avgCostPerUnit: 22, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Sirup Gula Aren Murni', category: 'SIRUP_PEMANIS', unit: 'ml', stock: 3000, minimumStock: 300, avgCostPerUnit: 45, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Pure Matcha Uji Powder', category: 'TEH_BUAH', unit: 'gram', stock: 1500, minimumStock: 200, avgCostPerUnit: 400, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Daun Teh Melati Premium', category: 'TEH_BUAH', unit: 'gram', stock: 2000, minimumStock: 200, avgCostPerUnit: 120, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Sirup Karamel Salted', category: 'SIRUP_PEMANIS', unit: 'ml', stock: 2500, minimumStock: 250, avgCostPerUnit: 50, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Cup Minuman 16oz & Tutup', category: 'KEMASAN', unit: 'pcs', stock: 400, minimumStock: 50, avgCostPerUnit: 850, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Sedotan & Cup Sleeve', category: 'KEMASAN', unit: 'pcs', stock: 240, minimumStock: 50, avgCostPerUnit: 350, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Daun Teh Earl Grey Bergamot', category: 'TEH_BUAH', unit: 'gram', stock: 1200, minimumStock: 200, avgCostPerUnit: 180, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Boba Brown Sugar Pearl', category: 'TOPPING', unit: 'gram', stock: 1800, minimumStock: 350, avgCostPerUnit: 95, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Puree Mangga Harum Manis', category: 'TEH_BUAH', unit: 'ml', stock: 2400, minimumStock: 400, avgCostPerUnit: 55, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Puree Buah Naga & Berry', category: 'TEH_BUAH', unit: 'ml', stock: 420, minimumStock: 450, avgCostPerUnit: 65, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Adonan Croissant Butter Beku', category: 'LAINNYA', unit: 'pcs', stock: 24, minimumStock: 8, avgCostPerUnit: 8500, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Adonan Choco Danish Beku', category: 'LAINNYA', unit: 'pcs', stock: 18, minimumStock: 8, avgCostPerUnit: 9500, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Kentang French Fries & Minyak Truffle', category: 'LAINNYA', unit: 'gram', stock: 3000, minimumStock: 600, avgCostPerUnit: 65, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Singkong & Keju Cheddar Parut', category: 'LAINNYA', unit: 'gram', stock: 2500, minimumStock: 500, avgCostPerUnit: 55, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Adonan Red Velvet Pastry', category: 'LAINNYA', unit: 'pcs', stock: 0, minimumStock: 8, avgCostPerUnit: 10000, vendorId: 'vnd_kasirkafe_central' },
+        { name: 'Kotak & Kemasan Cemilan', category: 'KEMASAN', unit: 'pcs', stock: 35, minimumStock: 40, avgCostPerUnit: 1100, vendorId: 'vnd_kasirkafe_central' },
 
-        // Seed initial purchase orders
+        // --- Vendor 2: Kopi Kulo & Toast (Kemang) ---
+        { name: 'Biji Kopi Espresso Kulo', category: 'KOPI', unit: 'gram', stock: 4000, minimumStock: 500, avgCostPerUnit: 240, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Susu Segar Creamy Kulo', category: 'SUSU', unit: 'ml', stock: 8500, minimumStock: 1000, avgCostPerUnit: 22, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Sirup Gula Aren Organik Kulo', category: 'SIRUP_PEMANIS', unit: 'ml', stock: 2800, minimumStock: 400, avgCostPerUnit: 45, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Alpukat Segar & Es Krim Cokelat', category: 'TEH_BUAH', unit: 'gram', stock: 2200, minimumStock: 500, avgCostPerUnit: 75, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Sirup Baileys Non-Alkohol', category: 'SIRUP_PEMANIS', unit: 'ml', stock: 450, minimumStock: 500, avgCostPerUnit: 90, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Roti Toast Tebal & Keju Mozarella', category: 'LAINNYA', unit: 'pcs', stock: 25, minimumStock: 8, avgCostPerUnit: 9000, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Adonan Croffle & Gula Palem', category: 'LAINNYA', unit: 'pcs', stock: 22, minimumStock: 8, avgCostPerUnit: 8500, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Cup Kulo 16oz, Tutup & Sedotan', category: 'KEMASAN', unit: 'pcs', stock: 280, minimumStock: 50, avgCostPerUnit: 950, vendorId: 'vnd_kopi_kulo_kemang' },
+        { name: 'Box Toast & Tisu Takeaway', category: 'KEMASAN', unit: 'pcs', stock: 28, minimumStock: 35, avgCostPerUnit: 1200, vendorId: 'vnd_kopi_kulo_kemang' },
+
+        // --- Vendor 3: Teh Poci & Dimsum Nusantara (Bekasi) ---
+        { name: 'Daun Teh Melati Seduh Tegal', category: 'TEH_BUAH', unit: 'gram', stock: 3500, minimumStock: 400, avgCostPerUnit: 110, vendorId: 'vnd_tehpoci_nusantara' },
+        { name: 'Gula Batu Kristal Asli', category: 'SIRUP_PEMANIS', unit: 'gram', stock: 4000, minimumStock: 500, avgCostPerUnit: 35, vendorId: 'vnd_tehpoci_nusantara' },
+        { name: 'Dimsum Hakau Udang Segar', category: 'LAINNYA', unit: 'pcs', stock: 120, minimumStock: 32, avgCostPerUnit: 3800, vendorId: 'vnd_tehpoci_nusantara' },
+        { name: 'Siomay Dimsum Ayam Udang', category: 'LAINNYA', unit: 'pcs', stock: 140, minimumStock: 36, avgCostPerUnit: 3200, vendorId: 'vnd_tehpoci_nusantara' },
+        { name: 'Cup Poci Jumbo 22oz & Sedotan', category: 'KEMASAN', unit: 'pcs', stock: 320, minimumStock: 60, avgCostPerUnit: 800, vendorId: 'vnd_tehpoci_nusantara' },
+        { name: 'Box Dimsum, Sumpit & Saus Cabai', category: 'KEMASAN', unit: 'pcs', stock: 24, minimumStock: 30, avgCostPerUnit: 1300, vendorId: 'vnd_tehpoci_nusantara' }
+      ];
+
+      for (const mat of defaultRawMaterials) {
+        await db.collection('raw_materials').updateOne(
+          { vendorId: mat.vendorId, name: mat.name },
+          {
+            $setOnInsert: {
+              ...mat,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+      console.log('[Seeder] Raw materials & supplies synced in MongoDB successfully.');
+
+      // Seed initial purchase orders only if empty
+      const purchaseCount = await db.collection('raw_material_purchases').countDocuments();
+      if (purchaseCount === 0) {
         const matDocs = await db.collection('raw_materials').find({ vendorId: 'vnd_kasirkafe_central' }).toArray();
         const matByName = new Map(matDocs.map(m => [m.name, m]));
 
@@ -1494,82 +1470,343 @@ export async function seedDatabase() {
         console.log('[Seeder] Raw material purchases seeded in MongoDB successfully.');
       }
 
-      // 11. Product Recipes (BOM)
-      const recipeCount = await db.collection('product_recipes').countDocuments();
-      if (recipeCount === 0) {
-        const matDocs = await db.collection('raw_materials').find({ vendorId: 'vnd_kasirkafe_central' }).toArray();
-        const matByName = new Map(matDocs.map(m => [m.name, m]));
+      // 11. Product Recipes (BOM) across all vendors & categories (Idempotent upsert by vendorId + productId)
+      const allMatDocs = await db.collection('raw_materials').find({}).toArray();
+      const matLookup = (vId: string, name: string) =>
+        allMatDocs.find(m => m.vendorId === vId && m.name === name);
 
-        const kopiMat = matByName.get('Biji Kopi Arabika Gayo');
-        const susuMat = matByName.get('Susu Segar Pasteurisasi (Fresh Milk)');
-        const arenMat = matByName.get('Sirup Gula Aren Murni');
-        const matchaMat = matByName.get('Pure Matcha Uji Powder');
-        const tehMat = matByName.get('Daun Teh Melati Premium');
-        const caramelMat = matByName.get('Sirup Karamel Salted');
-        const cupMat = matByName.get('Cup Minuman 16oz & Tutup');
+      const ing = (vId: string, name: string, quantityNeeded: number, unit: string) => {
+        const doc = matLookup(vId, name);
+        return {
+          materialId: doc?._id?.toString() || '',
+          materialName: name,
+          quantityNeeded,
+          unit
+        };
+      };
 
-        const initialRecipes = [
+      const initialRecipes = [
+        // --- Vendor 1: KasirKafe Central ---
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb899',
+          productName: 'Espresso Latte',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Biji Kopi Arabika Gayo', 18, 'gram'),
+            ing('vnd_kasirkafe_central', 'Susu Segar Pasteurisasi (Fresh Milk)', 150, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Extract espresso 18g double shot, steam milk 150ml, sajikan dengan cup 16oz + sleeve',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89a',
+          productName: 'Aren Cold Brew',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Biji Kopi Arabika Gayo', 20, 'gram'),
+            ing('vnd_kasirkafe_central', 'Sirup Gula Aren Murni', 30, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Tuang 30ml gula aren ke dasar cup, masukkan es batu, tuang 150ml cold brew concentrate',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89b',
+          productName: 'Caramel Macchiato Latte',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Biji Kopi Arabika Gayo', 18, 'gram'),
+            ing('vnd_kasirkafe_central', 'Susu Segar Pasteurisasi (Fresh Milk)', 140, 'ml'),
+            ing('vnd_kasirkafe_central', 'Sirup Karamel Salted', 25, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Sirup karamel di dinding cup, tuang susu dingin & es, float espresso di atas',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89c',
+          productName: 'Matcha Jasmine Tea',
+          category: 'teh',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Pure Matcha Uji Powder', 10, 'gram'),
+            ing('vnd_kasirkafe_central', 'Daun Teh Melati Premium', 5, 'gram'),
+            ing('vnd_kasirkafe_central', 'Susu Segar Pasteurisasi (Fresh Milk)', 120, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Seduh jasmine tea konsentrat, whisk matcha powder hingga frothy, gabungkan di cup dingin',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89d',
+          productName: 'Earl Grey Milk Tea',
+          category: 'teh',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Daun Teh Earl Grey Bergamot', 8, 'gram'),
+            ing('vnd_kasirkafe_central', 'Susu Segar Pasteurisasi (Fresh Milk)', 130, 'ml'),
+            ing('vnd_kasirkafe_central', 'Boba Brown Sugar Pearl', 45, 'gram'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Seduh teh earl grey, masukkan boba brown sugar, tuang fresh milk dingin',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89e',
+          productName: 'Jasmine Green Tea',
+          category: 'teh',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Daun Teh Melati Premium', 10, 'gram'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Seduh daun teh melati dengan air 80C, saring dan sajikan dengan es batu',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb89f',
+          productName: 'Tropical Mango',
+          category: 'jus',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Puree Mangga Harum Manis', 120, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Blend puree mangga segar bersama es batu hingga halus, sajikan dingin',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb8a0',
+          productName: 'Dragonfruit Berry',
+          category: 'jus',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Puree Buah Naga & Berry', 120, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Campurkan puree buah naga & stroberi dengan es batu dan air soda',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb8a1',
+          productName: 'Mango Berry Breeze',
+          category: 'jus',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Puree Mangga Harum Manis', 70, 'ml'),
+            ing('vnd_kasirkafe_central', 'Puree Buah Naga & Berry', 60, 'ml'),
+            ing('vnd_kasirkafe_central', 'Cup Minuman 16oz & Tutup', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Sedotan & Cup Sleeve', 1, 'pcs')
+          ],
+          instructions: 'Layer puree mangga di bawah dan berry breeze di atas dengan es serut',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838bb2a71518d2beb8a2',
+          productName: 'Croissant Butter Gold',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Adonan Croissant Butter Beku', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Kotak & Kemasan Cemilan', 1, 'pcs')
+          ],
+          instructions: 'Panggang adonan croissant 12 menit suhu 180C hingga keemasan, kemas di kotak cemilan',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838cb2a71518d2beb8a3',
+          productName: 'Choco Danish Pastry',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Adonan Choco Danish Beku', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Kotak & Kemasan Cemilan', 1, 'pcs')
+          ],
+          instructions: 'Panggang choco danish 12 menit, sajikan hangat dalam kotak cemilan',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838cb2a71518d2beb8a4',
+          productName: 'French Fries Truffle',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Kentang French Fries & Minyak Truffle', 150, 'gram'),
+            ing('vnd_kasirkafe_central', 'Kotak & Kemasan Cemilan', 1, 'pcs')
+          ],
+          instructions: 'Goreng kentang 3 menit hingga renyah, tabur oregano & minyak truffle',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838cb2a71518d2beb8a5',
+          productName: 'Singkong Keju Gurih',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Singkong & Keju Cheddar Parut', 160, 'gram'),
+            ing('vnd_kasirkafe_central', 'Kotak & Kemasan Cemilan', 1, 'pcs')
+          ],
+          instructions: 'Goreng singkong hingga merekah, beri taburan keju cheddar parut',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kasirkafe_central',
+          productId: '6ab5838cb2a71518d2beb8a6',
+          productName: 'Red Velvet Pastry',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kasirkafe_central', 'Adonan Red Velvet Pastry', 1, 'pcs'),
+            ing('vnd_kasirkafe_central', 'Kotak & Kemasan Cemilan', 1, 'pcs')
+          ],
+          instructions: 'Panggang adonan red velvet dan oles cream cheese glaze',
+          isAutoDeduct: true
+        },
+
+        // --- Vendor 2: Kopi Kulo (Kemang) ---
+        {
+          vendorId: 'vnd_kopi_kulo_kemang',
+          productId: '6ab5838cb2a71518d2beb8a7',
+          productName: 'Kulo Avocatto Chocolate',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kopi_kulo_kemang', 'Biji Kopi Espresso Kulo', 18, 'gram'),
+            ing('vnd_kopi_kulo_kemang', 'Alpukat Segar & Es Krim Cokelat', 100, 'gram'),
+            ing('vnd_kopi_kulo_kemang', 'Cup Kulo 16oz, Tutup & Sedotan', 1, 'pcs')
+          ],
+          instructions: 'Tuang jus alpukat kental, tambah 1 scoop es krim cokelat dan double shot espresso',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kopi_kulo_kemang',
+          productId: '6ab5838cb2a71518d2beb8a8',
+          productName: 'Kulo Baileys Cream Latte',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kopi_kulo_kemang', 'Biji Kopi Espresso Kulo', 18, 'gram'),
+            ing('vnd_kopi_kulo_kemang', 'Susu Segar Creamy Kulo', 150, 'ml'),
+            ing('vnd_kopi_kulo_kemang', 'Sirup Baileys Non-Alkohol', 25, 'ml'),
+            ing('vnd_kopi_kulo_kemang', 'Cup Kulo 16oz, Tutup & Sedotan', 1, 'pcs')
+          ],
+          instructions: 'Campur susu creamy dan sirup Baileys non-alkohol, tuang espresso shot',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kopi_kulo_kemang',
+          productId: '6ab5838cb2a71518d2beb8a9',
+          productName: 'Kopi Kulo Gula Aren',
+          category: 'kopi',
+          ingredients: [
+            ing('vnd_kopi_kulo_kemang', 'Biji Kopi Espresso Kulo', 18, 'gram'),
+            ing('vnd_kopi_kulo_kemang', 'Susu Segar Creamy Kulo', 140, 'ml'),
+            ing('vnd_kopi_kulo_kemang', 'Sirup Gula Aren Organik Kulo', 30, 'ml'),
+            ing('vnd_kopi_kulo_kemang', 'Cup Kulo 16oz, Tutup & Sedotan', 1, 'pcs')
+          ],
+          instructions: 'Racik es kopi susu gula aren khas Kulo',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kopi_kulo_kemang',
+          productId: '6ab5838cb2a71518d2beb8aa',
+          productName: 'Toast Keju Melted Spesial',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kopi_kulo_kemang', 'Roti Toast Tebal & Keju Mozarella', 1, 'pcs'),
+            ing('vnd_kopi_kulo_kemang', 'Box Toast & Tisu Takeaway', 1, 'pcs')
+          ],
+          instructions: 'Panggang roti toast hingga keju mozarella meleleh sempurna',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_kopi_kulo_kemang',
+          productId: '6ab5838cb2a71518d2beb8ab',
+          productName: 'Croffle Gula Palem Karamel',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_kopi_kulo_kemang', 'Adonan Croffle & Gula Palem', 1, 'pcs'),
+            ing('vnd_kopi_kulo_kemang', 'Box Toast & Tisu Takeaway', 1, 'pcs')
+          ],
+          instructions: 'Press adonan croffle berbalut gula palem di waffle iron hingga karamelisasi',
+          isAutoDeduct: true
+        },
+
+        // --- Vendor 3: Teh Poci & Dimsum Nusantara (Bekasi) ---
+        {
+          vendorId: 'vnd_tehpoci_nusantara',
+          productId: '6ab5838cb2a71518d2beb8ac',
+          productName: 'Teh Poci Seduh Gula Batu Asli',
+          category: 'teh',
+          ingredients: [
+            ing('vnd_tehpoci_nusantara', 'Daun Teh Melati Seduh Tegal', 12, 'gram'),
+            ing('vnd_tehpoci_nusantara', 'Gula Batu Kristal Asli', 25, 'gram'),
+            ing('vnd_tehpoci_nusantara', 'Cup Poci Jumbo 22oz & Sedotan', 1, 'pcs')
+          ],
+          instructions: 'Seduh daun teh melati dalam poci tanah liat dengan gula batu kristal',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_tehpoci_nusantara',
+          productId: '6ab5838db2a71518d2beb8ad',
+          productName: 'Es Teh Melati Jumbo Segar',
+          category: 'teh',
+          ingredients: [
+            ing('vnd_tehpoci_nusantara', 'Daun Teh Melati Seduh Tegal', 10, 'gram'),
+            ing('vnd_tehpoci_nusantara', 'Gula Batu Kristal Asli', 20, 'gram'),
+            ing('vnd_tehpoci_nusantara', 'Cup Poci Jumbo 22oz & Sedotan', 1, 'pcs')
+          ],
+          instructions: 'Tuang teh melati hangat ke gelas jumbo berisi es batu dan gula batu cair',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_tehpoci_nusantara',
+          productId: '6ab5838db2a71518d2beb8ae',
+          productName: 'Dimsum Hakau Udang Kukus (4 Pcs)',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_tehpoci_nusantara', 'Dimsum Hakau Udang Segar', 4, 'pcs'),
+            ing('vnd_tehpoci_nusantara', 'Box Dimsum, Sumpit & Saus Cabai', 1, 'pcs')
+          ],
+          instructions: 'Kukus 4 pcs hakau udang 8 menit hingga matang, kemas bersama sumpit & saus',
+          isAutoDeduct: true
+        },
+        {
+          vendorId: 'vnd_tehpoci_nusantara',
+          productId: '6ab5838db2a71518d2beb8af',
+          productName: 'Siomay Dimsum Ayam Udang (4 Pcs)',
+          category: 'cemilan',
+          ingredients: [
+            ing('vnd_tehpoci_nusantara', 'Siomay Dimsum Ayam Udang', 4, 'pcs'),
+            ing('vnd_tehpoci_nusantara', 'Box Dimsum, Sumpit & Saus Cabai', 1, 'pcs')
+          ],
+          instructions: 'Kukus 4 pcs siomay ayam udang 8 menit, sajikan hangat dengan saus cabai',
+          isAutoDeduct: true
+        }
+      ];
+
+      for (const recipe of initialRecipes) {
+        await db.collection('product_recipes').updateOne(
+          { vendorId: recipe.vendorId, productId: recipe.productId },
           {
-            vendorId: 'vnd_kasirkafe_central',
-            productId: '6ab5838bb2a71518d2beb899',
-            productName: 'Espresso Latte',
-            category: 'kopi',
-            ingredients: [
-              { materialId: kopiMat?._id.toString() || '', materialName: 'Biji Kopi Arabika Gayo', quantityNeeded: 18, unit: 'gram' },
-              { materialId: susuMat?._id.toString() || '', materialName: 'Susu Segar Pasteurisasi (Fresh Milk)', quantityNeeded: 150, unit: 'ml' },
-              { materialId: cupMat?._id.toString() || '', materialName: 'Cup Minuman 16oz & Tutup', quantityNeeded: 1, unit: 'pcs' }
-            ],
-            instructions: 'Extract espresso 18g double shot, steam milk 150ml to 65C, pour latte art',
-            isAutoDeduct: true,
-            updatedAt: new Date()
+            $setOnInsert: {
+              ...recipe,
+              updatedAt: new Date()
+            }
           },
-          {
-            vendorId: 'vnd_kasirkafe_central',
-            productId: '6ab5838bb2a71518d2beb89a',
-            productName: 'Aren Cold Brew',
-            category: 'kopi',
-            ingredients: [
-              { materialId: kopiMat?._id.toString() || '', materialName: 'Biji Kopi Arabika Gayo', quantityNeeded: 20, unit: 'gram' },
-              { materialId: arenMat?._id.toString() || '', materialName: 'Sirup Gula Aren Murni', quantityNeeded: 30, unit: 'ml' },
-              { materialId: cupMat?._id.toString() || '', materialName: 'Cup Minuman 16oz & Tutup', quantityNeeded: 1, unit: 'pcs' }
-            ],
-            instructions: 'Tuang 30ml gula aren ke dasar cup, masukkan es batu, tuang 150ml cold brew concentrate',
-            isAutoDeduct: true,
-            updatedAt: new Date()
-          },
-          {
-            vendorId: 'vnd_kasirkafe_central',
-            productId: '6ab5838bb2a71518d2beb89b',
-            productName: 'Caramel Macchiato Latte',
-            category: 'kopi',
-            ingredients: [
-              { materialId: kopiMat?._id.toString() || '', materialName: 'Biji Kopi Arabika Gayo', quantityNeeded: 18, unit: 'gram' },
-              { materialId: susuMat?._id.toString() || '', materialName: 'Susu Segar Pasteurisasi (Fresh Milk)', quantityNeeded: 140, unit: 'ml' },
-              { materialId: caramelMat?._id.toString() || '', materialName: 'Sirup Karamel Salted', quantityNeeded: 25, unit: 'ml' },
-              { materialId: cupMat?._id.toString() || '', materialName: 'Cup Minuman 16oz & Tutup', quantityNeeded: 1, unit: 'pcs' }
-            ],
-            instructions: 'Sirup karamel di dinding cup, tuang susu dingin & es, float espresso di atas',
-            isAutoDeduct: true,
-            updatedAt: new Date()
-          },
-          {
-            vendorId: 'vnd_kasirkafe_central',
-            productId: '6ab5838bb2a71518d2beb89c',
-            productName: 'Matcha Jasmine Tea',
-            category: 'teh',
-            ingredients: [
-              { materialId: matchaMat?._id.toString() || '', materialName: 'Pure Matcha Uji Powder', quantityNeeded: 10, unit: 'gram' },
-              { materialId: tehMat?._id.toString() || '', materialName: 'Daun Teh Melati Premium', quantityNeeded: 5, unit: 'gram' },
-              { materialId: cupMat?._id.toString() || '', materialName: 'Cup Minuman 16oz & Tutup', quantityNeeded: 1, unit: 'pcs' }
-            ],
-            instructions: 'Seduh jasmine tea konsentrat, whisk matcha powder hingga frothy, gabungkan di cup dingin',
-            isAutoDeduct: true,
-            updatedAt: new Date()
-          }
-        ];
-        await db.collection('product_recipes').insertMany(initialRecipes);
-        console.log('[Seeder] Product recipes (BOM) seeded in MongoDB successfully.');
+          { upsert: true }
+        );
       }
+      console.log('[Seeder] Product recipes (BOM) synced across all vendors in MongoDB successfully.');
 
       // 12. Universal Vendor Partition Migration across all collections
       await db.collection('saved_orders').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });

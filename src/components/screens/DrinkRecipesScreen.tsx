@@ -43,6 +43,7 @@ export const DrinkRecipesScreen: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'beverages' | 'snacks' | 'low_stock'>('all');
 
   // Modal: Recipe Editor
   const [editingRecipeProduct, setEditingRecipeProduct] = useState<Product | null>(null);
@@ -98,6 +99,11 @@ export const DrinkRecipesScreen: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    const handleInventoryUpdated = () => {
+      loadData();
+    };
+    window.addEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
+    return () => window.removeEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
   }, [token]);
 
   // Helper: Find recipe for a product reliably by productId or normalized name
@@ -116,15 +122,40 @@ export const DrinkRecipesScreen: React.FC = () => {
     );
   };
 
-  // Filtered beverage / recipe rows
+  const isRecipeProductLowOrOut = (prod: Product) => {
+    const recipe = findRecipeForProduct(prod);
+    const hasLowMat = recipe?.ingredients?.some(ing => {
+      const mat = findMaterial(ing.materialId, ing.materialName);
+      return !mat || mat.stock < ing.quantityNeeded || mat.stock <= (mat.minimumStock || 0);
+    });
+    const maxServings = prod.maxServingsPossible ?? prod.stock;
+    const threshold = prod.lowStockThreshold || 10;
+    return (
+      !prod.isAvailable ||
+      Boolean(prod.hasLowStockIngredient) ||
+      Boolean(prod.isLowStock) ||
+      Boolean(hasLowMat) ||
+      (recipe && maxServings <= threshold)
+    );
+  };
+
+  // Filtered menu / recipe rows (all categories including drinks & snacks + supplies)
   const filteredBeverages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
     return products
       .filter(prod => {
         const cat = (prod.category || '').trim().toLowerCase();
-        const hasLinkedRecipe = Boolean(findRecipeForProduct(prod));
-        return BEVERAGE_CATEGORIES.has(cat) || Boolean(prod.hasRecipe) || hasLinkedRecipe;
+        if (categoryFilter === 'beverages') {
+          return BEVERAGE_CATEGORIES.has(cat);
+        }
+        if (categoryFilter === 'snacks') {
+          return !BEVERAGE_CATEGORIES.has(cat);
+        }
+        if (categoryFilter === 'low_stock') {
+          return isRecipeProductLowOrOut(prod);
+        }
+        return true;
       })
       .filter(prod => {
         if (!query) return true;
@@ -137,7 +168,7 @@ export const DrinkRecipesScreen: React.FC = () => {
         );
         return matchProduct || Boolean(matchIngredient);
       });
-  }, [products, recipes, searchQuery]);
+  }, [products, recipes, materials, searchQuery, categoryFilter]);
 
   // Open Recipe Modal
   const handleOpenRecipeModal = (prod: Product) => {
@@ -242,7 +273,8 @@ export const DrinkRecipesScreen: React.FC = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         clearClientCatalogCache();
-        showToast(`Resep racikan untuk '${editingRecipeProduct.name}' berhasil disimpan!`, 'success');
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
+        showToast(`Resep racikan & supplies untuk '${editingRecipeProduct.name}' berhasil disimpan!`, 'success');
         setEditingRecipeProduct(null);
         await loadData();
       } else {
@@ -276,14 +308,14 @@ export const DrinkRecipesScreen: React.FC = () => {
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
       {/* Main Recipes Table Card */}
       <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
-        {/* Search & Refresh Toolbar */}
+        {/* Search, Filter Tabs & Refresh Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-stone-900 dark:text-stone-100 font-heading">
-              Daftar Resep & Racikan Minuman ({filteredBeverages.length})
+              Daftar Resep Menu, Bahan & Kemasan ({filteredBeverages.length})
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              Komposisi bahan baku per porsi, estimasi HPP bahan, dan sinkronisasi ketersediaan stok kasir.
+              Komposisi bahan baku & kemasan (supplies) per porsi, estimasi HPP, dan sinkronisasi otomatis ke stok kasir.
             </p>
           </div>
 
@@ -294,7 +326,7 @@ export const DrinkRecipesScreen: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari menu minuman atau bahan..."
+                placeholder="Cari menu, bahan baku, atau kemasan..."
                 className="w-full pl-9 pr-3 py-2 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
@@ -309,6 +341,46 @@ export const DrinkRecipesScreen: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
+        </div>
+
+        {/* Category & Low-Stock Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'all' as const, label: `Semua Menu (${products.length})` },
+            { id: 'beverages' as const, label: 'Minuman' },
+            { id: 'snacks' as const, label: 'Cemilan & Makanan' },
+            {
+              id: 'low_stock' as const,
+              label: `Bahan Menipis / Habis (${products.filter(isRecipeProductLowOrOut).length})`
+            }
+          ].map(tab => {
+            const active = categoryFilter === tab.id;
+            const isWarningTab = tab.id === 'low_stock';
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCategoryFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  active
+                    ? isWarningTab
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/25'
+                      : 'bg-accent text-white border-accent shadow-xs'
+                    : isWarningTab
+                    ? 'bg-amber-50/80 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/70 hover:bg-amber-100'
+                    : 'bg-stone-50 dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                {isWarningTab && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${active ? 'bg-white' : 'bg-amber-500'}`} />
+                  </span>
+                )}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Loading, Empty, or Table View */}
@@ -351,13 +423,34 @@ export const DrinkRecipesScreen: React.FC = () => {
                   const recipe = findRecipeForProduct(prod);
                   const ingredients = recipe?.ingredients || [];
                   const maxServings = prod.maxServingsPossible ?? prod.stock;
+                  const threshold = prod.lowStockThreshold || 10;
+                  const hasLowIngredient = ingredients.some(ing => {
+                    const mat = findMaterial(ing.materialId, ing.materialName);
+                    return mat && mat.stock >= ing.quantityNeeded && mat.stock <= (mat.minimumStock || 0);
+                  });
+                  const isOut = !prod.isAvailable || prod.rawMaterialAvailable === false || prod.stock <= 0;
+                  const isLow =
+                    !isOut &&
+                    (Boolean(prod.hasLowStockIngredient) ||
+                      Boolean(prod.isLowStock) ||
+                      hasLowIngredient ||
+                      (Boolean(recipe) && maxServings > 0 && maxServings <= threshold));
                   const estimatedCost = ingredients.reduce((sum, ing) => {
                     const mat = findMaterial(ing.materialId, ing.materialName);
                     return sum + (Number(ing.quantityNeeded) || 0) * (mat?.avgCostPerUnit || 0);
                   }, 0);
 
                   return (
-                    <tr key={prod.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-850/60 transition-colors align-top">
+                    <tr
+                      key={prod.id}
+                      className={`transition-colors align-top ${
+                        isOut
+                          ? 'bg-red-50/40 dark:bg-red-950/15 border-l-4 border-l-red-500 hover:bg-red-50/60'
+                          : isLow
+                          ? 'bg-amber-50/50 dark:bg-amber-950/20 border-l-4 border-l-amber-500 hover:bg-amber-50/80'
+                          : 'hover:bg-stone-50/60 dark:hover:bg-stone-850/60'
+                      }`}
+                    >
                       <td className="p-3">
                         <div className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
                           {prod.name}
@@ -384,22 +477,34 @@ export const DrinkRecipesScreen: React.FC = () => {
                             {ingredients.map((ing, iIdx) => {
                               const mat = findMaterial(ing.materialId, ing.materialName);
                               const currentStock = mat ? mat.stock : 0;
+                              const minStock = mat ? mat.minimumStock || 0 : 0;
                               const isEnough = mat ? currentStock >= ing.quantityNeeded : false;
+                              const isMatLow = isEnough && mat ? currentStock <= minStock : false;
 
                               return (
                                 <div
                                   key={`${ing.materialId}-${iIdx}`}
-                                  className={`text-[11px] flex items-center justify-between gap-3 px-2 py-1 rounded-lg ${
+                                  className={`text-[11px] flex items-center justify-between gap-3 px-2 py-1 rounded-lg border ${
                                     !isEnough
-                                      ? 'bg-red-100/70 dark:bg-red-950/50 text-red-700 dark:text-red-300 font-semibold'
-                                      : 'bg-stone-50 dark:bg-stone-850 text-stone-700 dark:text-stone-300'
+                                      ? 'bg-red-100/80 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800/70 font-semibold'
+                                      : isMatLow
+                                      ? 'bg-amber-100/90 dark:bg-amber-950/55 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700/80 font-semibold shadow-xs'
+                                      : 'bg-stone-50 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border-transparent'
                                   }`}
                                 >
-                                  <span className="truncate">{mat ? mat.name : ing.materialName}</span>
+                                  <span className="truncate flex items-center gap-1.5">
+                                    {isMatLow && (
+                                      <span className="relative flex h-2 w-2 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                                      </span>
+                                    )}
+                                    <span className="truncate">{mat ? mat.name : ing.materialName}</span>
+                                  </span>
                                   <span className="font-bold whitespace-nowrap">
                                     {ing.quantityNeeded} {mat ? mat.unit : ing.unit}{' '}
-                                    <span className="font-normal text-[10px] opacity-75">
-                                      (stok: {currentStock.toLocaleString('id-ID')})
+                                    <span className="font-normal text-[10px] opacity-80">
+                                      (stok: {currentStock.toLocaleString('id-ID')}{isMatLow ? ` / min ${minStock}` : ''})
                                     </span>
                                   </span>
                                 </div>
@@ -429,10 +534,18 @@ export const DrinkRecipesScreen: React.FC = () => {
                       </td>
 
                       <td className="p-3 space-y-1.5">
-                        {!prod.isAvailable ? (
+                        {isOut ? (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-950/80 text-red-600 inline-flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3" />
-                            <span>Tidak Tersedia</span>
+                            <span>Tidak Tersedia (Habis)</span>
+                          </span>
+                        ) : isLow ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 inline-flex items-center gap-1.5 shadow-xs">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                            </span>
+                            <span>Menipis (~{maxServings} porsi)</span>
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
@@ -450,7 +563,7 @@ export const DrinkRecipesScreen: React.FC = () => {
                           </div>
                         )}
 
-                        {!prod.isAvailable && prod.rawMaterialReason && (
+                        {isOut && prod.rawMaterialReason && (
                           <div className="text-[10px] text-red-600 dark:text-red-400 max-w-[200px]">
                             {prod.rawMaterialReason}
                           </div>

@@ -13,6 +13,7 @@ import { Order } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 interface CancelOrderModalProps {
   order: Order;
@@ -82,6 +83,8 @@ export const CancelOrderModal: React.FC<CancelOrderModalProps> = ({
       setIsSubmitting(false);
 
       if (data.success && data.order) {
+        clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(
           data.message ||
             (language === 'en'

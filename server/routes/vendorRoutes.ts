@@ -144,7 +144,7 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
       success: true,
       vendor: {
         ...vendor,
-        stockManagementMode: vendor.stockManagementMode || 'PRODUCT_STOCK',
+        stockManagementMode: vendor.stockManagementMode || 'RAW_MATERIAL',
         stats: {
           productCount,
           orderCount,
@@ -282,6 +282,7 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
       name: cleanName,
       status: status || 'ACTIVE',
       currency: currency || 'IDR',
+      stockManagementMode: 'RAW_MATERIAL',
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -292,6 +293,7 @@ vendorRouter.post('/', authMiddleware, requireAdmin, async (req: Request, res: R
       name: cleanName,
       status: status || 'ACTIVE',
       currency: currency || 'IDR',
+      stockManagementMode: 'RAW_MATERIAL',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -697,6 +699,7 @@ vendorRouter.post('/register', async (req: Request, res: Response) => {
       name: vendorName.trim(),
       status: 'ACTIVE',
       currency: currency || 'IDR',
+      stockManagementMode: 'RAW_MATERIAL',
       createdAt: new Date(),
       updatedAt: new Date()
     });

@@ -42,7 +42,7 @@ export const SettingsScreen: React.FC = () => {
   const canConfigureStock = user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const isManager = user?.role === 'MANAGER';
 
-  const [stockManagementMode, setStockManagementMode] = React.useState<StockManagementMode>('PRODUCT_STOCK');
+  const [stockManagementMode, setStockManagementMode] = React.useState<StockManagementMode>('RAW_MATERIAL');
   const [loadingStockConfig, setLoadingStockConfig] = React.useState<boolean>(false);
   const [savingStockConfig, setSavingStockConfig] = React.useState<boolean>(false);
   const [lastSyncedCount, setLastSyncedCount] = React.useState<number | null>(null);
@@ -94,6 +94,7 @@ export const SettingsScreen: React.FC = () => {
         setStockManagementMode(data.stockManagementMode || targetMode);
         setLastSyncedCount(typeof data.syncedCount === 'number' ? data.syncedCount : null);
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(
           data.message ||
             (targetMode === 'RAW_MATERIAL'

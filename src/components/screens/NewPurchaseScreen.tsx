@@ -194,6 +194,7 @@ export const NewPurchaseScreen: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(data.message || 'Faktur pembelian berhasil disimpan dan stok otomatis bertambah!', 'success');
         // Reset form
         setPurchaseForm({
@@ -239,6 +240,7 @@ export const NewPurchaseScreen: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(data.message || 'Bahan baku baru berhasil ditambahkan!', 'success');
         setShowMaterialModal(false);
         setMaterialForm({
@@ -365,6 +367,66 @@ export const NewPurchaseScreen: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick-Add Low-Stock Materials Banner */}
+          {(() => {
+            const urgentMaterials = materials.filter(m => m.stock <= (m.minimumStock || 0));
+            if (urgentMaterials.length === 0) return null;
+            return (
+              <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-700/70 space-y-2 shadow-sm shadow-amber-500/10">
+                <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900 dark:text-amber-200">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                  </span>
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>{urgentMaterials.length} Bahan Baku & Kemasan Menipis/Habis — Klik untuk Tambah ke Faktur</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {urgentMaterials.map(mat => {
+                    const isOut = mat.stock <= 0;
+                    const alreadyAdded = purchaseForm.items.some(it => it.materialId === mat.id);
+                    return (
+                      <button
+                        key={mat.id}
+                        type="button"
+                        onClick={() => {
+                          if (alreadyAdded) return;
+                          const recommendedQty = Math.max((mat.minimumStock || 100) * 3 - mat.stock, mat.minimumStock || 10, 10);
+                          const price = mat.avgCostPerUnit || 0;
+                          const emptyIdx = purchaseForm.items.findIndex(it => !it.materialId);
+                          const newItem = {
+                            materialId: mat.id,
+                            materialName: mat.name,
+                            quantity: recommendedQty,
+                            unit: mat.unit,
+                            unitPrice: price,
+                            subtotal: recommendedQty * price
+                          };
+                          if (emptyIdx >= 0) {
+                            const updated = [...purchaseForm.items];
+                            updated[emptyIdx] = newItem;
+                            setPurchaseForm({ ...purchaseForm, items: updated });
+                          } else {
+                            setPurchaseForm({ ...purchaseForm, items: [...purchaseForm.items, newItem] });
+                          }
+                        }}
+                        disabled={alreadyAdded}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-default ${
+                          isOut
+                            ? 'bg-red-100/90 dark:bg-red-950/70 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700 hover:bg-red-200'
+                            : 'bg-amber-100/90 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                        }`}
+                      >
+                        {alreadyAdded ? '✓ ' : '+ '}
+                        {mat.name} ({mat.stock}/{mat.minimumStock} {mat.unit})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Table of Purchase Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -399,11 +461,19 @@ export const NewPurchaseScreen: React.FC = () => {
                           className="w-full px-2.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs font-medium focus:ring-2 focus:ring-accent"
                         >
                           <option value="">-- Pilih Bahan Baku --</option>
-                          {materials.map(m => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} ({m.category}) — Stok skrg: {m.stock} {m.unit}
-                            </option>
-                          ))}
+                          {materials.map(m => {
+                            const statusPrefix =
+                              m.stock <= 0
+                                ? '[HABIS] '
+                                : m.stock <= (m.minimumStock || 0)
+                                ? '[MENIPIS] '
+                                : '';
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {statusPrefix}{m.name} ({m.category}) — Stok skrg: {m.stock} {m.unit}
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
                       <td className="p-3">

@@ -52,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [alertCount, setAlertCount] = useState<number>(0);
+  const [rawMaterialAlertCount, setRawMaterialAlertCount] = useState<number>(0);
 
   // Accordion Submenu (Toggle Expanded/Collapsed) for Pembelian Bahan Baku
   const isPembelianActive =
@@ -130,14 +131,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
         const data = await res.json();
         if (data.success && data.summary) {
           const totalAlerts = (data.summary.lowStockCount || 0) + (data.summary.outOfStockCount || 0);
+          const rawAlerts = (data.summary.rawMaterialLowCount || 0) + (data.summary.rawMaterialOutCount || 0);
           setAlertCount(totalAlerts);
+          setRawMaterialAlertCount(rawAlerts);
         }
       } catch (e) { }
     };
 
     checkAlerts();
+    const handleInventoryUpdated = () => checkAlerts();
+    window.addEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
     const interval = setInterval(checkAlerts, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
+    };
   }, [isManager, token, currentTab]);
 
   return (
@@ -356,6 +364,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                   <Boxes />
                   <span>Master Stok Bahan Baku</span>
                 </label>
+                {rawMaterialAlertCount > 0 && (
+                  <em>
+                    {rawMaterialAlertCount}
+                  </em>
+                )}
               </SidebarLink>
 
               <SidebarLink id="subnav-resep-minuman" to='resep-minuman' allowedRoles={[MANAGER]}>

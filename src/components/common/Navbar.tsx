@@ -101,6 +101,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'User Terkunci (Redis Lockout)';
       case 'admin-housekeeping':
         return 'Housekeeping & Retensi Data';
+      case 'pembelian-bahan':
+      case 'pembelian-baru':
+        return 'Faktur Pembelian Bahan Baku';
+      case 'riwayat-pembelian':
+        return 'Riwayat Pembelian Bahan';
+      case 'bahan-baku':
+      case 'stok-bahan':
+        return 'Master Stok Bahan Baku';
+      case 'resep-minuman':
+        return 'Resep & Takaran Produk';
       case 'profile':
         return t('navAccount');
       case 'settings':

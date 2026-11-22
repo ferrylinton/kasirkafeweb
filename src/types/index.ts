@@ -76,6 +76,29 @@ export interface Category {
   updatedAt?: string;
 }
 
+export interface LowStockIngredientWarning {
+  materialId: string;
+  materialName: string;
+  category: string;
+  currentStock: number;
+  minimumStock: number;
+  quantityNeeded: number;
+  unit: string;
+  status: 'OUT_OF_STOCK' | 'LOW_STOCK';
+}
+
+export interface RecipeIngredientBreakdown {
+  materialId: string;
+  materialName: string;
+  category: string;
+  quantityNeeded: number;
+  currentStock: number;
+  minimumStock: number;
+  unit: string;
+  possibleServings: number;
+  status: 'OUT_OF_STOCK' | 'LOW_STOCK' | 'HEALTHY';
+}
+
 export interface Product {
   id: string;
   vendorId?: string;
@@ -93,6 +116,11 @@ export interface Product {
   rawMaterialReason?: string;
   maxServingsPossible?: number;
   hasRecipe?: boolean;
+  hasLowStockIngredient?: boolean;
+  lowStockIngredients?: LowStockIngredientWarning[];
+  ingredientBreakdown?: RecipeIngredientBreakdown[];
+  isLowStock?: boolean;
+  isOutOfStock?: boolean;
   stockSource?: StockManagementMode;
   stockManagementMode?: StockManagementMode;
   updatedAt?: string;
@@ -174,6 +202,11 @@ export interface ProductStock {
   stockManagementMode?: StockManagementMode;
   rawMaterialAvailable?: boolean;
   rawMaterialReason?: string;
+  hasRecipe?: boolean;
+  hasLowStockIngredient?: boolean;
+  lowStockIngredients?: LowStockIngredientWarning[];
+  ingredientBreakdown?: RecipeIngredientBreakdown[];
+  isLowStock?: boolean;
   updatedAt?: string;
 }
 
@@ -195,6 +228,17 @@ export interface InventoryLog {
   createdAt: string;
 }
 
+export interface RawMaterialAlertItem {
+  id: string;
+  vendorId: string;
+  name: string;
+  category: string;
+  unit: string;
+  stock: number;
+  minimumStock: number;
+  status: 'OUT_OF_STOCK' | 'LOW_STOCK';
+}
+
 export interface InventoryAlertSummary {
   totalProducts: number;
   healthyCount: number;
@@ -204,6 +248,10 @@ export interface InventoryAlertSummary {
   totalStockValue: number;
   defaultThreshold: number;
   alerts: Product[];
+  rawMaterialAlerts?: RawMaterialAlertItem[];
+  rawMaterialLowCount?: number;
+  rawMaterialOutCount?: number;
+  combinedAlertCount?: number;
 }
 
 export interface CartItemModifier {

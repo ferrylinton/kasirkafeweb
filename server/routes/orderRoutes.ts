@@ -346,8 +346,8 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     }
 
     // ----------------------------------------------------
-    // SINKRONISASI BAHAN BAKU MINUMAN & VALIDASI KETERSEDIAAN
-    // Jika mode RAW_MATERIAL dan bahan habis/kurang, tolak pesanan
+    // SINKRONISASI BAHAN BAKU & PERLENGKAPAN RESEP
+    // Jika mode RAW_MATERIAL dan bahan/perlengkapan habis/kurang, tolak pesanan
     // ----------------------------------------------------
     const stockMode = await getVendorStockMode(db, vendorIdStr);
     const requiredMaterialsMap = new Map<string, {
@@ -359,6 +359,15 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
     }>();
     const recipeMatchedProductIds = new Set<string>();
     const matVendorFilter = buildVendorQuery(vendorIdStr);
+    const newlyTriggeredLowMaterials: Array<{
+      id: string;
+      name: string;
+      category: string;
+      unit: string;
+      stock: number;
+      minimumStock: number;
+      status: 'OUT_OF_STOCK' | 'LOW_STOCK';
+    }> = [];
 
     if (stockMode === 'RAW_MATERIAL') {
       try {
@@ -372,8 +381,15 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
           if (r.productName) recipeLookup.set(r.productName.toLowerCase().trim(), r);
         });
 
-        // Calculate total required ingredients across all ordered items
-        for (const item of items) {
+        const orderedUnits = [
+          ...items.map(it => ({ productId: it.productId, name: it.name, quantity: it.quantity })),
+          ...(discountItem
+            ? [{ productId: discountItem.productId, name: discountItem.name, quantity: 1 }]
+            : [])
+        ];
+
+        // Calculate total required ingredients & supplies across ordered items + promo item
+        for (const item of orderedUnits) {
           const recipe = recipeLookup.get(String(item.productId)) || recipeLookup.get(item.name?.toLowerCase().trim());
           if (recipe && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 && recipe.isAutoDeduct !== false) {
             recipeMatchedProductIds.add(String(item.productId));
@@ -383,6 +399,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
               const existing = requiredMaterialsMap.get(matKey);
               if (existing) {
                 existing.totalRequiredQty += neededForThis;
+                if (!existing.productName.includes(item.name)) {
+                  existing.productName = `${existing.productName}, ${item.name}`;
+                }
               } else {
                 requiredMaterialsMap.set(matKey, {
                   materialId: String(ing.materialId),
@@ -396,7 +415,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
           }
         }
 
-        // Check current raw material stocks
+        // Check current raw material & supply stocks
         for (const [, reqMat] of requiredMaterialsMap.entries()) {
           const idOrNameFilter: any = ObjectId.isValid(reqMat.materialId)
             ? { _id: new ObjectId(reqMat.materialId) }
@@ -410,7 +429,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
             return res.status(400).json({
               success: false,
               error: 'Bahan Baku Tidak Tersedia',
-              message: `Produk '${reqMat.productName}' tidak tersedia karena bahan baku '${reqMat.materialName}' tidak mencukupi (tersisa ${currentStock} ${reqMat.unit}, dibutuhkan ${reqMat.totalRequiredQty} ${reqMat.unit}). Harap hubungi Manager untuk pembelian bahan baku.`
+              message: `Produk '${reqMat.productName}' tidak tersedia karena stok '${reqMat.materialName}' tidak mencukupi (tersisa ${currentStock} ${reqMat.unit}, dibutuhkan ${reqMat.totalRequiredQty} ${reqMat.unit}). Harap hubungi Manager untuk pembelian stok.`
             });
           }
         }
@@ -461,7 +480,7 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       }
     }
 
-    // OTOMATIS: Kurangi stok bahan baku racikan minuman & sinkronkan stok produk
+    // OTOMATIS: Kurangi stok bahan baku & perlengkapan sesuai resep, lalu sinkronkan stok produk
     if (stockMode === 'RAW_MATERIAL' && requiredMaterialsMap.size > 0) {
       for (const [, reqMat] of requiredMaterialsMap.entries()) {
         try {
@@ -472,7 +491,8 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
 
           const currentMat = await db.collection('raw_materials').findOne(matQuery);
           if (currentMat) {
-            const prevMatStock = currentMat.stock || 0;
+            const prevMatStock = typeof currentMat.stock === 'number' ? currentMat.stock : 0;
+            const minMatStock = typeof currentMat.minimumStock === 'number' ? currentMat.minimumStock : 100;
             const nextMatStock = Math.max(0, prevMatStock - reqMat.totalRequiredQty);
 
             await db.collection('raw_materials').updateOne(
@@ -484,6 +504,18 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
                 }
               }
             );
+
+            if (nextMatStock <= minMatStock && (prevMatStock > minMatStock || nextMatStock <= 0)) {
+              newlyTriggeredLowMaterials.push({
+                id: currentMat._id.toString(),
+                name: currentMat.name,
+                category: currentMat.category || 'LAINNYA',
+                unit: currentMat.unit || reqMat.unit,
+                stock: nextMatStock,
+                minimumStock: minMatStock,
+                status: nextMatStock <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK'
+              });
+            }
 
             await db.collection('raw_material_logs').insertOne({
               vendorId: vendorIdStr,
@@ -520,13 +552,9 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
-    // Deduct stock for discount item if provided
-    if (discountItem) {
+    // Deduct stock for discount item if provided (only directly if not already deducted via recipe)
+    if (discountItem && !(stockMode === 'RAW_MATERIAL' && recipeMatchedProductIds.has(String(discountItem.productId)))) {
       try {
-        const query: any = ObjectId.isValid(discountItem.productId)
-          ? { _id: new ObjectId(discountItem.productId) }
-          : { _id: discountItem.productId };
-
         const promoProdIdStr = String(discountItem.productId);
         const stockRecord = await db.collection('product_stocks').findOne({ productId: promoProdIdStr });
         const prevStock = stockRecord?.stock ?? 0;
@@ -697,6 +725,30 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
       orderDoc.emailStatus = emailResult.success ? 'success' : 'failed';
     }
 
+    // Collect current low/out-of-stock materials & supplies to alert UI immediately
+    let allLowMaterials: any[] = [];
+    if (stockMode === 'RAW_MATERIAL') {
+      try {
+        const vendorMats = await db.collection('raw_materials').find(matVendorFilter).toArray();
+        allLowMaterials = vendorMats
+          .filter(m => (typeof m.stock === 'number' ? m.stock : 0) <= (typeof m.minimumStock === 'number' ? m.minimumStock : 100))
+          .map(m => {
+            const st = typeof m.stock === 'number' ? m.stock : 0;
+            const minSt = typeof m.minimumStock === 'number' ? m.minimumStock : 100;
+            return {
+              id: m._id.toString(),
+              name: m.name,
+              category: m.category || 'LAINNYA',
+              unit: m.unit || 'unit',
+              stock: st,
+              minimumStock: minSt,
+              status: st <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK'
+            };
+          })
+          .sort((a, b) => a.stock - b.stock);
+      } catch (e) {}
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Transaksi Berhasil!',
@@ -704,6 +756,10 @@ orderRouter.post('/', authMiddleware, async (req: Request, res: Response) => {
         id: orderId,
         ...orderDoc,
         vendorId: vendorIdStr // on Node.js code use 'id'
+      },
+      lowStockAlerts: {
+        newlyTriggered: newlyTriggeredLowMaterials,
+        allLowMaterials
       },
       emailSent: emailResult?.success ?? false,
       emailError: emailResult?.error
@@ -1305,12 +1361,23 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
       cancelledBy: cashierName
     };
 
-    // Restore stock for cancelled order items
+    // Restore stock for cancelled order items (and promo discountItem if present)
     const stockMode = await getVendorStockMode(db, activeVendorId);
     const matVendorFilter = buildVendorQuery(activeVendorId);
     let restoredRawMaterials = false;
 
-    if (Array.isArray(existingOrder.items)) {
+    const cancelUnits = [
+      ...(Array.isArray(existingOrder.items) ? existingOrder.items : []),
+      ...(existingOrder.discountItem
+        ? [{
+            productId: existingOrder.discountItem.productId,
+            name: existingOrder.discountItem.name,
+            quantity: 1
+          }]
+        : [])
+    ];
+
+    if (cancelUnits.length > 0) {
       const activeRecipes = stockMode === 'RAW_MATERIAL'
         ? await db.collection('product_recipes').find(matVendorFilter).toArray()
         : [];
@@ -1320,7 +1387,7 @@ orderRouter.post('/:id/cancel', authMiddleware, async (req: Request, res: Respon
         if (r.productName) recipeLookup.set(r.productName.toLowerCase().trim(), r);
       });
 
-      for (const item of existingOrder.items) {
+      for (const item of cancelUnits) {
         if (item.productId) {
           try {
             const prodIdStr = String(item.productId);

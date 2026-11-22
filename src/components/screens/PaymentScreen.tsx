@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Banknote, QrCode, CreditCard, Landmark, Check, Mail, Printer, Share2, AlertCircle, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Banknote, QrCode, CreditCard, Landmark, Check, Mail, Printer, AlertTriangle, X } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { ConfirmationModal } from '../common/ConfirmationModal';
-import { Order } from '../../types';
+import { Order, RawMaterialAlertItem } from '../../types';
+import { clearClientCatalogCache } from '../../utils/productCache';
 
 interface PaymentScreenProps {
   onBackToCart: () => void;
@@ -44,6 +45,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [postSaleLowAlerts, setPostSaleLowAlerts] = useState<RawMaterialAlertItem[]>([]);
 
   // Cash presets
   const cashPresets = [
@@ -100,10 +102,28 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
       setIsSubmitting(false);
 
       if (data.success && data.order) {
+        clearClientCatalogCache();
+        window.dispatchEvent(new CustomEvent('kasirkafe:inventory-updated'));
         showToast(t('paymentSuccessToast'), 'success');
         if (customerEmail && data.emailSent) {
           showToast(`Struk otomatis terkirim via SMTP ke ${customerEmail}`, 'info');
         }
+        const newlyTriggered: RawMaterialAlertItem[] = Array.isArray(data.lowStockAlerts?.newlyTriggered)
+          ? data.lowStockAlerts.newlyTriggered
+          : [];
+        const allLowMaterials: RawMaterialAlertItem[] = Array.isArray(data.lowStockAlerts?.allLowMaterials)
+          ? data.lowStockAlerts.allLowMaterials
+          : [];
+        setPostSaleLowAlerts(allLowMaterials);
+
+        if (newlyTriggered.length > 0) {
+          const names = newlyTriggered.slice(0, 3).map(m => `${m.name} (${m.stock} ${m.unit})`).join(', ');
+          showToast(
+            `Peringatan Stok Resep Menipis: ${names}${newlyTriggered.length > 3 ? ` +${newlyTriggered.length - 3} lainnya` : ''}`,
+            'warning'
+          );
+        }
+
         if (activeDraftId) {
           clearActiveDraft();
           loadSavedOrders();
@@ -121,6 +141,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
   const handleFinishTransaction = () => {
     clearCart();
     setCompletedOrder(null);
+    setPostSaleLowAlerts([]);
     onPaymentComplete();
   };
 
@@ -514,6 +535,39 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBackToCart, onPa
                     <>Struk otomatis dikirimkan ke <strong>{completedOrder.customer.email}</strong> via SMTP server!</>
                   )}
                 </span>
+              </div>
+            )}
+
+            {/* Low-Stock Ingredients & Supplies Alert */}
+            {postSaleLowAlerts.length > 0 && (
+              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/45 border border-amber-300 dark:border-amber-700/70 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5 shadow-sm shadow-amber-500/10">
+                <div className="flex items-center gap-2 font-extrabold">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                  </span>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Bahan & Kemasan Resep Menipis ({postSaleLowAlerts.length})</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {postSaleLowAlerts.slice(0, 5).map(mat => (
+                    <span
+                      key={mat.id}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                        mat.status === 'OUT_OF_STOCK' || mat.stock <= 0
+                          ? 'bg-red-100 dark:bg-red-950/70 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+                          : 'bg-amber-100/90 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                      }`}
+                    >
+                      {mat.name}: {mat.stock}/{mat.minimumStock} {mat.unit}
+                    </span>
+                  ))}
+                  {postSaleLowAlerts.length > 5 && (
+                    <span className="text-[10px] font-semibold opacity-80 self-center">
+                      +{postSaleLowAlerts.length - 5} lainnya
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 

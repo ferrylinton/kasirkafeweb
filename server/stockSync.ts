@@ -7,36 +7,62 @@ import {
 } from './vendorMiddleware';
 import { serverProductCache } from './cache/productCache';
 
+export interface LowStockIngredientWarning {
+  materialId: string;
+  materialName: string;
+  category: string;
+  currentStock: number;
+  minimumStock: number;
+  quantityNeeded: number;
+  unit: string;
+  status: 'OUT_OF_STOCK' | 'LOW_STOCK';
+}
+
+export interface RecipeIngredientBreakdown {
+  materialId: string;
+  materialName: string;
+  category: string;
+  quantityNeeded: number;
+  currentStock: number;
+  minimumStock: number;
+  unit: string;
+  possibleServings: number;
+  status: 'OUT_OF_STOCK' | 'LOW_STOCK' | 'HEALTHY';
+}
+
 export interface ComputedRawMaterialStockResult {
   stock: number;
   maxServingsPossible: number;
   rawMaterialAvailable: boolean;
   rawMaterialReason: string;
+  hasLowStockIngredient: boolean;
+  lowStockIngredients: LowStockIngredientWarning[];
+  ingredientBreakdown: RecipeIngredientBreakdown[];
 }
 
 /**
  * Reads the configured stock management mode for a vendor.
- * Defaults to 'PRODUCT_STOCK' when not explicitly configured.
+ * Defaults to 'RAW_MATERIAL' (Stock by Recipe) when not explicitly set to 'PRODUCT_STOCK'.
  */
 export async function getVendorStockMode(db: Db, vendorId?: string): Promise<StockManagementMode> {
   const resolved = resolveVendorId(vendorId);
   const vendor = await findVendorById(resolved);
-  if (vendor?.stockManagementMode === 'RAW_MATERIAL') {
-    return 'RAW_MATERIAL';
-  }
   if (vendor?.stockManagementMode === 'PRODUCT_STOCK') {
     return 'PRODUCT_STOCK';
+  }
+  if (vendor?.stockManagementMode === 'RAW_MATERIAL') {
+    return 'RAW_MATERIAL';
   }
   try {
     const query = ObjectId.isValid(resolved) && resolved.length === 24
       ? { _id: new ObjectId(resolved) }
       : { _id: resolved as any };
     const doc = await db.collection('vendors').findOne(query);
-    if (doc?.stockManagementMode === 'RAW_MATERIAL') {
-      return 'RAW_MATERIAL';
+    if (doc?.stockManagementMode === 'PRODUCT_STOCK') {
+      return 'PRODUCT_STOCK';
     }
   } catch (e) {}
-  return 'PRODUCT_STOCK';
+  return 'RAW_MATERIAL';
 }
 
 /**
@@ -66,8 +92,9 @@ export async function loadVendorRecipeAndMaterialMaps(db: Db, vendorId?: string)
 }
 
 /**
- * Computes product stock & availability strictly from raw material stocks for a recipe.
- * If ANY required ingredient is depleted (<= 0 or < quantityNeeded), stock is 0 (out of stock).
+ * Computes product stock, availability, and low-stock ingredient/supply warnings strictly from recipe materials.
+ * If ANY required ingredient or supply is depleted (<= 0 or < quantityNeeded), stock is 0 (out of stock).
+ * If ANY required ingredient or supply is at or below minimumStock (> 0 && <= minimumStock), hasLowStockIngredient is true.
  */
 export function computeRawMaterialProductStock(
   recipe: any,
@@ -78,12 +105,17 @@ export function computeRawMaterialProductStock(
       stock: 0,
       maxServingsPossible: 0,
       rawMaterialAvailable: true,
-      rawMaterialReason: ''
+      rawMaterialReason: '',
+      hasLowStockIngredient: false,
+      lowStockIngredients: [],
+      ingredientBreakdown: []
     };
   }
 
   let minServings = Infinity;
   const depletedIngredients: string[] = [];
+  const lowStockIngredients: LowStockIngredientWarning[] = [];
+  const ingredientBreakdown: RecipeIngredientBreakdown[] = [];
 
   for (const ing of recipe.ingredients) {
     const mat =
@@ -91,15 +123,61 @@ export function computeRawMaterialProductStock(
       rawMaterialMap.get(String(ing.materialName || '').toLowerCase().trim());
 
     const currentMatStock = mat ? (typeof mat.stock === 'number' ? mat.stock : 0) : 0;
+    const minMatStock = mat ? (typeof mat.minimumStock === 'number' ? mat.minimumStock : 100) : 0;
     const requiredQty = Number(ing.quantityNeeded) > 0 ? Number(ing.quantityNeeded) : 1;
-
-    if (currentMatStock <= 0 || currentMatStock < requiredQty) {
-      depletedIngredients.push(`${ing.materialName} (tersisa ${currentMatStock} ${ing.unit || ''})`.trim());
-    }
+    const matId = mat?._id ? mat._id.toString() : String(ing.materialId || '');
+    const matName = mat?.name || ing.materialName || 'Bahan';
+    const matCategory = mat?.category || 'LAINNYA';
+    const matUnit = mat?.unit || ing.unit || 'unit';
 
     const servingsForThisIng = Math.max(0, Math.floor(currentMatStock / requiredQty));
     if (servingsForThisIng < minServings) {
       minServings = servingsForThisIng;
+    }
+
+    const isOut = currentMatStock <= 0 || currentMatStock < requiredQty;
+    const isLow = !isOut && currentMatStock <= minMatStock;
+    const status: 'OUT_OF_STOCK' | 'LOW_STOCK' | 'HEALTHY' = isOut
+      ? 'OUT_OF_STOCK'
+      : isLow
+      ? 'LOW_STOCK'
+      : 'HEALTHY';
+
+    ingredientBreakdown.push({
+      materialId: matId,
+      materialName: matName,
+      category: matCategory,
+      quantityNeeded: requiredQty,
+      currentStock: currentMatStock,
+      minimumStock: minMatStock,
+      unit: matUnit,
+      possibleServings: servingsForThisIng,
+      status
+    });
+
+    if (isOut) {
+      depletedIngredients.push(`${matName} (tersisa ${currentMatStock} ${matUnit})`.trim());
+      lowStockIngredients.push({
+        materialId: matId,
+        materialName: matName,
+        category: matCategory,
+        currentStock: currentMatStock,
+        minimumStock: minMatStock,
+        quantityNeeded: requiredQty,
+        unit: matUnit,
+        status: 'OUT_OF_STOCK'
+      });
+    } else if (isLow) {
+      lowStockIngredients.push({
+        materialId: matId,
+        materialName: matName,
+        category: matCategory,
+        currentStock: currentMatStock,
+        minimumStock: minMatStock,
+        quantityNeeded: requiredQty,
+        unit: matUnit,
+        status: 'LOW_STOCK'
+      });
     }
   }
 
@@ -108,7 +186,10 @@ export function computeRawMaterialProductStock(
       stock: 0,
       maxServingsPossible: 0,
       rawMaterialAvailable: false,
-      rawMaterialReason: `Bahan baku habis/kurang: ${depletedIngredients.join(', ')}`
+      rawMaterialReason: `Bahan/perlengkapan habis: ${depletedIngredients.join(', ')}`,
+      hasLowStockIngredient: lowStockIngredients.length > 0,
+      lowStockIngredients,
+      ingredientBreakdown
     };
   }
 
@@ -116,13 +197,16 @@ export function computeRawMaterialProductStock(
     stock: minServings,
     maxServingsPossible: minServings,
     rawMaterialAvailable: true,
-    rawMaterialReason: ''
+    rawMaterialReason: '',
+    hasLowStockIngredient: lowStockIngredients.length > 0,
+    lowStockIngredients,
+    ingredientBreakdown
   };
 }
 
 /**
  * Synchronizes product_stocks documents with computed raw-material capacities
- * when the vendor is configured to manage stock via RawMaterialStockScreen ('RAW_MATERIAL').
+ * when the vendor is configured to manage stock via Recipe / Raw Materials ('RAW_MATERIAL').
  */
 export async function syncProductStocksFromRawMaterials(
   db: Db,
@@ -198,7 +282,7 @@ export async function syncProductStocksFromRawMaterials(
           newStock: computed.stock,
           change: diff,
           type: diff > 0 ? 'MANUAL_RESTOCK' : 'MANUAL_ADJUSTMENT',
-          reason: options.reason || 'Sinkronisasi otomatis dari Stok Bahan Baku',
+          reason: options.reason || 'Sinkronisasi otomatis dari Stok Bahan Baku & Resep',
           performedBy: options.performedBy || {
             id: 'system',
             name: 'Sistem Bahan Baku',

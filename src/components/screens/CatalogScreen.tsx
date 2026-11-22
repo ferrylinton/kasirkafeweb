@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, ScanBarcode, Sparkles, Coffee, CupSoda, GlassWater, Cookie, Plus, ShoppingBag, RotateCw, Zap } from 'lucide-react';
+import { Search, ScanBarcode, Sparkles, Coffee, CupSoda, GlassWater, Cookie, Plus, RotateCw, Zap, AlertTriangle } from 'lucide-react';
 import { Product, Category } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -11,7 +11,8 @@ import {
   getCachedCategories,
   setCachedCategories,
   getCachedProducts,
-  setCachedProducts
+  setCachedProducts,
+  clearClientCatalogCache
 } from '../../utils/productCache';
 
 interface CatalogScreenProps {
@@ -33,7 +34,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
   const [isFromCache, setIsFromCache] = useState<boolean>(false);
 
   // Load categories and products with stale-while-revalidate caching
-  const loadData = useCallback(async (forceRefresh = false) => {
+  const loadData = useCallback(async (forceRefresh = false, silent = false) => {
     // 1. Check local cache first for instant display
     if (!forceRefresh) {
       const cachedCat = getCachedCategories();
@@ -49,7 +50,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
       }
     }
 
-    if (forceRefresh) {
+    if (forceRefresh && !silent) {
       setIsRefreshing(true);
     }
 
@@ -72,12 +73,12 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
         setIsFromCache(prodData.cached === true);
       }
 
-      if (forceRefresh) {
+      if (forceRefresh && !silent) {
         showToast('Katalog & kategori berhasil disegarkan dari server!', 'success');
       }
     } catch (err) {
       console.warn('Could not fetch products, using cached/offline state');
-      if (forceRefresh) {
+      if (forceRefresh && !silent) {
         showToast('Gagal terhubung ke server, menggunakan data cache', 'warning');
       }
     } finally {
@@ -88,6 +89,15 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
 
   useEffect(() => {
     loadData(false);
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleInventoryUpdated = () => {
+      clearClientCatalogCache();
+      loadData(true, true);
+    };
+    window.addEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
+    return () => window.removeEventListener('kasirkafe:inventory-updated', handleInventoryUpdated);
   }, [loadData]);
 
   const handleCategorySelect = (categoryCode: string) => {
@@ -245,6 +255,37 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
         </div>
       </div>
 
+      {/* 3b. Low-Stock Warning Banner for Recipe Ingredients & Supplies */}
+      {!loading && (() => {
+        const lowStockList = products.filter(p => {
+          const threshold = p.lowStockThreshold || 10;
+          const depleted = p.rawMaterialAvailable === false || p.isAvailable === false || p.stock <= 0;
+          return !depleted && (p.stock <= threshold || Boolean(p.hasLowStockIngredient) || Boolean(p.isLowStock));
+        });
+        if (lowStockList.length === 0) return null;
+        return (
+          <div className="rounded-2xl bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-700/70 px-4 py-3 flex flex-wrap items-center justify-between gap-2 shadow-sm shadow-amber-500/10">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+              </span>
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="text-xs font-semibold text-amber-900 dark:text-amber-200 truncate">
+                <span className="font-extrabold">{lowStockList.length} menu menipis</span> sebelum bahan/kemasan habis:{' '}
+                <span className="font-normal">
+                  {lowStockList
+                    .slice(0, 3)
+                    .map(p => `${p.name} (${p.stock} porsi)`)
+                    .join(', ')}
+                  {lowStockList.length > 3 ? ` +${lowStockList.length - 3} lainnya` : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 4. Products Grid */}
       {loading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -266,18 +307,22 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
             const threshold = product.lowStockThreshold || 10;
             const isRawMaterialDepleted = product.rawMaterialAvailable === false || product.isAvailable === false;
             const isOutOfStock = product.stock <= 0 || isRawMaterialDepleted;
-            const isLowStock = !isOutOfStock && product.stock > 0 && product.stock <= threshold;
+            const isLowStock =
+              !isOutOfStock &&
+              (product.stock <= threshold ||
+                Boolean(product.hasLowStockIngredient) ||
+                Boolean(product.isLowStock));
 
             return (
               <div
                 key={product.id}
                 onClick={() => handleProductCardClick(product)}
-                className={`group cursor-pointer rounded-3xl bg-white dark:bg-[#251e1c] border p-3 sm:p-3.5 flex flex-col justify-between shadow-2xs transition-all active:scale-[0.99] ${
+                className={`group cursor-pointer rounded-3xl p-3 sm:p-3.5 flex flex-col justify-between transition-all active:scale-[0.99] ${
                   isOutOfStock
-                    ? 'border-red-300 dark:border-red-900/60 opacity-80'
+                    ? 'bg-white dark:bg-[#251e1c] border border-red-300 dark:border-red-900/60 opacity-80 shadow-2xs'
                     : isLowStock
-                    ? 'border-amber-300 dark:border-amber-800/80 hover:shadow-md'
-                    : 'border-stone-200/80 dark:border-stone-800 hover:shadow-md hover:border-stone-300 dark:hover:border-stone-700'
+                    ? 'bg-amber-50/40 dark:bg-amber-950/20 border-2 border-amber-400 dark:border-amber-500 ring-2 ring-amber-400/25 shadow-lg shadow-amber-500/20 hover:shadow-xl hover:shadow-amber-500/25'
+                    : 'bg-white dark:bg-[#251e1c] border border-stone-200/80 dark:border-stone-800 shadow-2xs hover:shadow-md hover:border-stone-300 dark:hover:border-stone-700'
                 }`}
               >
                 <div>
@@ -296,6 +341,15 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
                         {product.tag}
                       </span>
                     )}
+                    {isLowStock && (
+                      <span
+                        className="absolute top-2 right-2 flex h-3 w-3"
+                        title="Bahan baku atau kemasan mendekati batas minimum"
+                      >
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 ring-2 ring-white dark:ring-[#251e1c]" />
+                      </span>
+                    )}
 
                     {/* Stock badge */}
                     {isOutOfStock ? (
@@ -305,7 +359,8 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
                         </span>
                       </div>
                     ) : isLowStock ? (
-                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-1">
+                      <span className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-white shadow-md shadow-amber-500/30 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
                         <span>{t('stockRemaining')}: {product.stock}!</span>
                       </span>
                     ) : (
@@ -322,6 +377,11 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ onNavigateToCart }
                   <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 mt-0.5 leading-relaxed">
                     {product.description || 'Segar dan nikmat racikan barista berpengalaman.'}
                   </p>
+                  {isLowStock && product.lowStockIngredients && product.lowStockIngredients.length > 0 && (
+                    <p className="mt-1.5 px-2 py-1 rounded-lg bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300/80 dark:border-amber-700/70 text-[10px] font-bold text-amber-800 dark:text-amber-300 line-clamp-1">
+                      Menipis: {product.lowStockIngredients.map(i => i.materialName).slice(0, 2).join(', ')}
+                    </p>
+                  )}
                 </div>
 
                 {/* Price & Add button */}
