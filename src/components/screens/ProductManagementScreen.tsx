@@ -29,7 +29,7 @@ import {
   Database,
   ArrowRight
 } from 'lucide-react';
-import { Product, Category, ProductStock } from '../../types';
+import { Product, Category, ProductStock, ProductVariation } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
@@ -68,6 +68,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   const [products, setProducts] = useState<Product[]>([]);
   const [stocks, setStocks] = useState<ProductStock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [masterVariations, setMasterVariations] = useState<ProductVariation[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
 
@@ -97,7 +98,24 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
   const [prodTag, setProdTag] = useState<string>('');
   const [prodImage, setProdImage] = useState<string>('');
   const [prodIsAvailable, setProdIsAvailable] = useState<boolean>(true);
+  const [prodVariationIds, setProdVariationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const normalizeProductName = (name: string) => name.trim().replace(/\s+/g, ' ');
+  const normalizedProdName = normalizeProductName(prodName);
+  const isDuplicateProductName =
+    normalizedProdName.length > 0 &&
+    products.some(prod => {
+      if (editingProduct && !isDuplicating) {
+        const isSameProduct =
+          prod.id && editingProduct.id
+            ? prod.id === editingProduct.id
+            : normalizeProductName(prod.name).toLowerCase() ===
+              normalizeProductName(editingProduct.name).toLowerCase();
+        if (isSameProduct) return false;
+      }
+      return normalizeProductName(prod.name).toLowerCase() === normalizedProdName.toLowerCase();
+    });
 
   // Delete Modal State
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -122,7 +140,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         ? (selectedVendor === 'all' ? '?allVendors=true' : `?vendorId=${selectedVendor}`)
         : '';
 
-      const [prodRes, stockRes, catRes] = await Promise.all([
+      const [prodRes, stockRes, catRes, varRes] = await Promise.all([
         fetch(`/api/products${vendorParam}${vendorParam ? '&refresh=true' : '?refresh=true'}`, {
           headers: { Authorization: `Bearer ${token || ''}` }
         }),
@@ -131,13 +149,17 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         }),
         fetch('/api/products/categories?bypassCache=true', {
           headers: { Authorization: `Bearer ${token || ''}` }
+        }),
+        fetch(`/api/products/product-variations${vendorParam}`, {
+          headers: { Authorization: `Bearer ${token || ''}` }
         })
       ]);
 
-      const [prodData, stockData, catData] = await Promise.all([
+      const [prodData, stockData, catData, varData] = await Promise.all([
         prodRes.json(),
         stockRes.json(),
-        catRes.json()
+        catRes.json(),
+        varRes.json()
       ]);
 
       if (prodData.success && Array.isArray(prodData.products)) {
@@ -148,6 +170,9 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
       }
       if (catData.success && Array.isArray(catData.categories)) {
         setCategories(catData.categories);
+      }
+      if (varData.success && Array.isArray(varData.variations)) {
+        setMasterVariations(varData.variations);
       }
     } catch (err) {
       console.error('Failed to load products:', err);
@@ -187,6 +212,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     setProdTag('Best Seller');
     setProdImage('');
     setProdIsAvailable(true);
+    setProdVariationIds([]);
     setIsModalOpen(true);
   };
 
@@ -208,6 +234,13 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     setProdTag(product.tag || '');
     setProdImage(product.image || '');
     setProdIsAvailable(product.isAvailable !== false);
+    setProdVariationIds(
+      Array.isArray(product.variationIds)
+        ? product.variationIds
+        : Array.isArray(product.variations)
+          ? product.variations.map(v => v.id).filter(Boolean)
+          : []
+    );
     setIsModalOpen(true);
   };
 
@@ -229,6 +262,13 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     setProdTag(product.tag || '');
     setProdImage(product.image || '');
     setProdIsAvailable(true);
+    setProdVariationIds(
+      Array.isArray(product.variationIds)
+        ? product.variationIds
+        : Array.isArray(product.variations)
+          ? product.variations.map(v => v.id).filter(Boolean)
+          : []
+    );
     setIsModalOpen(true);
   };
 
@@ -237,8 +277,12 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     e.preventDefault();
     if (isReadOnly) return;
 
-    if (!prodName.trim()) {
+    if (!normalizedProdName) {
       showToast('Nama produk wajib diisi', 'warning');
+      return;
+    }
+    if (isDuplicateProductName) {
+      showToast(`Produk dengan nama '${normalizedProdName}' sudah ada! Gunakan nama lain.`, 'error');
       return;
     }
     if (prodPrice < 0) {
@@ -249,7 +293,7 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
     setIsSaving(true);
     try {
       const payload = {
-        name: prodName.trim(),
+        name: normalizedProdName,
         category: prodCategory.toLowerCase().trim(),
         price: Number(prodPrice),
         stock: Math.max(0, Math.floor(Number(prodStock))),
@@ -257,7 +301,8 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
         description: prodDescription.trim(),
         tag: prodTag.trim(),
         image: prodImage.trim(),
-        isAvailable: prodIsAvailable
+        isAvailable: prodIsAvailable,
+        variationIds: prodVariationIds
       };
 
       let res: Response;
@@ -1464,8 +1509,18 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                   value={prodName}
                   onChange={e => setProdName(e.target.value)}
                   placeholder="Contoh: Espresso Latte, Aren Cold Brew, Dimsum..."
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-accent"
+                  className={`w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-900 border text-sm font-semibold focus:outline-none focus:ring-2 ${
+                    isDuplicateProductName
+                      ? 'border-rose-500 dark:border-rose-500 focus:ring-rose-500'
+                      : 'border-stone-200 dark:border-stone-700 focus:ring-accent'
+                  }`}
                 />
+                {isDuplicateProductName && (
+                  <p className="mt-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Nama produk '{normalizedProdName}' sudah ada. Nama produk harus unik.</span>
+                  </p>
+                )}
               </div>
 
               {/* Kategori & Harga Jual */}
@@ -1648,6 +1703,57 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 />
               </div>
 
+              {/* Variasi Produk */}
+              <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-accent" />
+                    <span>Variasi Produk (Opsional)</span>
+                  </label>
+                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
+                    {prodVariationIds.length} dipilih
+                  </span>
+                </div>
+                {masterVariations.length === 0 ? (
+                  <p className="text-[11px] text-stone-400">
+                    Belum ada master variasi produk. Anda dapat menambahkannya di menu Variasi Produk.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                    {masterVariations.map(mv => {
+                      const isChecked = prodVariationIds.includes(mv.id);
+                      return (
+                        <label
+                          key={mv.id}
+                          className={`p-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all flex items-center gap-2 ${
+                            isChecked
+                              ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-500/80 text-orange-900 dark:text-orange-200'
+                              : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setProdVariationIds(prev => [...prev, mv.id]);
+                              } else {
+                                setProdVariationIds(prev => prev.filter(id => id !== mv.id));
+                              }
+                            }}
+                            className="w-3.5 h-3.5 accent-orange-500 rounded shrink-0"
+                          />
+                          <span className="truncate flex-1">{mv.name}</span>
+                          <span className="text-[10px] text-stone-400 shrink-0">
+                            {mv.options?.length || 0} opsi
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Status Ketersediaan Checkbox */}
               <div className="flex items-center gap-3 pt-2">
                 <input
@@ -1674,8 +1780,8 @@ export const ProductManagementScreen: React.FC<ProductManagementScreenProps> = (
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-md hover:opacity-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                  disabled={isSaving || !normalizedProdName || isDuplicateProductName}
+                  className="px-6 py-2.5 rounded-2xl bg-accent text-white text-xs font-bold shadow-md hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {isSaving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>

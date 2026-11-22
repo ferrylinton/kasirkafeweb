@@ -378,13 +378,13 @@ export const RawMaterialStockScreen: React.FC = () => {
                 <span>
                   {stockManagementMode === 'RAW_MATERIAL'
                     ? 'Sumber Stok Produk Aktif: Stok Bahan Baku (Otomatis)'
-                    : 'Sumber Stok Produk Aktif: Stok Produk Manual (ProductStockScreen)'}
+                    : 'Sumber Stok Produk Aktif: Stok Produk Manual'}
                 </span>
               </div>
               <p className="text-stone-600 dark:text-stone-400 mt-0.5">
                 {stockManagementMode === 'RAW_MATERIAL'
                   ? 'Stok produk ber-resep dihitung otomatis dari sisa bahan baku ini. Jika salah satu bahan baku habis (0 / kurang dari takaran), stok produk terkait otomatis habis (0), dan akan terisi ulang saat mencatat Pembelian Stok Bahan Baku.'
-                  : 'Saat ini stok produk masih dikelola manual di halaman Stok Produk. Aktifkan mode Stok Bahan Baku agar stok produk otomatis mengikuti ketersediaan bahan baku & faktur pembelian.'}
+                  : 'Saat ini stok produk masih dikelola manual per produk. Aktifkan mode Stok Bahan Baku agar stok produk otomatis mengikuti ketersediaan bahan baku & faktur pembelian.'}
               </p>
             </div>
           </div>

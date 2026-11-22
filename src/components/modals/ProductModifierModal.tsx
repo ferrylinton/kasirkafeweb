@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Minus, Check, Coffee, CupSoda, GlassWater, Cookie, Info, Sparkles, Tag } from 'lucide-react';
-import { Product, CartItemModifier, Category, CategoryVariation, VariationOption } from '../../types';
+import { Product, CartItemModifier, Category, ProductVariation, VariationOption } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../common/Toast';
@@ -29,7 +29,9 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     return cached?.categories || [];
   });
 
-  // If categories weren't passed or cached, fetch them
+  const [masterVariations, setMasterVariations] = useState<ProductVariation[]>([]);
+
+  // If categories weren't passed or cached, fetch them (for category display label)
   useEffect(() => {
     if (propCategories && propCategories.length > 0) {
       setCategoriesList(propCategories);
@@ -45,7 +47,22 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     }
   }, [propCategories]);
 
-  // Find matching category from database
+  // Fetch master product variations when product has variationIds without hydrated variations
+  useEffect(() => {
+    if (!product) return;
+    if (Array.isArray(product.variationIds) && product.variationIds.length > 0 && (!product.variations || product.variations.length === 0)) {
+      fetch('/api/products/product-variations')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.variations)) {
+            setMasterVariations(data.variations);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [product?.id]);
+
+  // Find matching category from database for display name
   const matchingCategory = useMemo(() => {
     if (!product) return null;
     const pCat = (product.category || '').toLowerCase().trim();
@@ -54,68 +71,24 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     );
   }, [product, categoriesList]);
 
-  // Determine if category has variations in DB
-  const categoryVariations: CategoryVariation[] = useMemo(() => {
+  // Determine variations directly from Product / ProductVariation
+  const productVariations: ProductVariation[] = useMemo(() => {
     if (!product) return [];
-    if (matchingCategory && Array.isArray(matchingCategory.variations)) {
-      return matchingCategory.variations;
+
+    if (Array.isArray(product.variations)) {
+      return product.variations;
     }
 
-    // Fallback if category not found in DB list yet:
-    const pCat = (product.category || '').toLowerCase().trim();
-    const isKopi = pCat === 'kopi' || pCat.includes('kopi') || pCat.includes('coffee');
-    const isTeh = pCat === 'teh' || pCat.includes('teh') || pCat.includes('tea');
-    const isJus = pCat === 'jus' || pCat.includes('jus') || pCat.includes('juice');
-    const isCemilan = pCat === 'cemilan' || pCat.includes('cemilan') || pCat.includes('snack') || pCat.includes('pastry');
-
-    if (isCemilan) {
-      return []; // Cemilan tidak ada variasi
+    if (Array.isArray(product.variationIds)) {
+      if (product.variationIds.length === 0) return [];
+      const varMap = new Map(masterVariations.map(v => [v.id, v]));
+      return product.variationIds
+        .map(id => varMap.get(id))
+        .filter((v): v is ProductVariation => Boolean(v));
     }
 
-    const standardSize: CategoryVariation = {
-      id: 'var_ukuran',
-      name: 'Ukuran Cup',
-      options: [
-        { id: 'opt_reg', name: 'Regular 12oz', extraPrice: 0, isDefault: true },
-        { id: 'opt_large', name: 'Large 16oz', extraPrice: 5000 },
-        { id: 'opt_jumbo', name: 'Jumbo 22oz', extraPrice: 9000 }
-      ]
-    };
-
-    const standardIce: CategoryVariation = {
-      id: 'var_es',
-      name: 'Level Es',
-      options: [
-        { id: 'opt_norm_ice', name: 'Normal Ice', extraPrice: 0, isDefault: true },
-        { id: 'opt_less_ice', name: 'Less Ice', extraPrice: 0 },
-        { id: 'opt_no_ice', name: 'No Ice', extraPrice: 0 }
-      ]
-    };
-
-    const standardSugar: CategoryVariation = {
-      id: 'var_gula',
-      name: 'Tingkat Gula',
-      options: [
-        { id: 'opt_norm_sug', name: '100% Normal', extraPrice: 0, isDefault: true },
-        { id: 'opt_less_sug', name: '50% Less Sugar', extraPrice: 0 },
-        { id: 'opt_no_sug', name: '0% No Sugar', extraPrice: 0 }
-      ]
-    };
-
-    const standardShot: CategoryVariation = {
-      id: 'var_shot',
-      name: 'Espresso Shot',
-      options: [
-        { id: 'opt_norm_shot', name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
-        { id: 'opt_extra1_shot', name: '+1 Extra Shot', extraPrice: 5000 },
-        { id: 'opt_extra2_shot', name: '+2 Extra Shot', extraPrice: 10000 }
-      ]
-    };
-
-    if (isKopi) return [standardSize, standardIce, standardSugar, standardShot];
-    if (isTeh || isJus) return [standardSize, standardIce, standardSugar];
     return [];
-  }, [product, matchingCategory]);
+  }, [product, masterVariations]);
 
   // State: Selected option per variation id (mapping varId -> selected option)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, VariationOption>>({});
@@ -132,7 +105,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
 
       // Initialize default selections for variations
       const initialSelections: Record<string, VariationOption> = {};
-      categoryVariations.forEach(v => {
+      productVariations.forEach(v => {
         if (v.options && v.options.length > 0) {
           const defaultOpt = v.options.find(o => o.isDefault) || v.options[0];
           initialSelections[v.id] = defaultOpt;
@@ -140,7 +113,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
       });
       setSelectedOptions(initialSelections);
     }
-  }, [product?.id, categoryVariations]);
+  }, [product?.id, productVariations]);
 
   if (!product) return null;
 
@@ -151,7 +124,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
     categoryLower.includes('snack') ||
     categoryLower.includes('pastry');
 
-  const hasVariations = categoryVariations.length > 0;
+  const hasVariations = productVariations.length > 0;
 
   // Calculate extra price from selected variation options
   const totalVariationsExtra = Object.values(selectedOptions).reduce(
@@ -195,7 +168,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
       let shotExtraVal = 0;
 
       Object.entries(selectedOptions).forEach(([varId, opt]) => {
-        const v = categoryVariations.find(item => item.id === varId);
+        const v = productVariations.find(item => item.id === varId);
         const vName = (v?.name || '').toLowerCase();
         if (vName.includes('ukuran') || vName.includes('size')) {
           sizeVal = opt.name;
@@ -329,7 +302,7 @@ export const ProductModifierModal: React.FC<ProductModifierModalProps> = ({
               </div>
             ) : (
               <div className="space-y-5">
-                {categoryVariations.map((v, vIdx) => {
+                {productVariations.map((v, vIdx) => {
                   const currentSelected = selectedOptions[v.id];
                   return (
                     <div key={v.id || vIdx}>

@@ -2,6 +2,7 @@ import { getDB } from './db';
 import { hashPassword } from './auth';
 import { DEFAULT_RULES } from './discounts';
 import { generateHistoricalOrders } from './orderGenerator';
+import { buildVendorQuery, resolveVendorId } from './vendorMiddleware';
 import { ObjectId } from 'mongodb';
 
 export async function seedDatabase() {
@@ -170,50 +171,42 @@ export async function seedDatabase() {
     {
       name: 'Kopi',
       description: 'Espresso, Latte, Cold Brew pilihan biji Arabika',
-      vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
       name: 'Teh',
       description: 'Artisan Matcha, Jasmine, Earl Grey wangi menenangkan',
-      vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
       name: 'Jus',
       description: '100% Buah segar cold-pressed alami tanpa pemanis buatan',
-      vendorId: 'vnd_kasirkafe_central',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
       name: 'Cemilan',
       description: 'Pastry renyah, kue lezat, dan finger food pendamping',
-      vendorId: 'vnd_kasirkafe_central',
-      variations: []
+      vendorId: 'vnd_kasirkafe_central'
     },
     {
       name: 'Kopi',
       description: 'Signature Kulo Es Kopi Susu & Avocatto',
-      vendorId: 'vnd_kopi_kulo_kemang',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation, standardShotVariation]
+      vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
       name: 'Cemilan',
       description: 'Cemilan roti bakar dan snack pendamping',
-      vendorId: 'vnd_kopi_kulo_kemang',
-      variations: []
+      vendorId: 'vnd_kopi_kulo_kemang'
     },
     {
       name: 'Teh',
       description: 'Teh Poci Melati Asli Seduh Tradisional',
-      vendorId: 'vnd_tehpoci_nusantara',
-      variations: [standardDrinkSizeVariation, standardIceVariation, standardSugarVariation]
+      vendorId: 'vnd_tehpoci_nusantara'
     },
     {
       name: 'Cemilan',
       description: 'Dimsum kukus dan goreng spesial',
-      vendorId: 'vnd_tehpoci_nusantara',
-      variations: []
+      vendorId: 'vnd_tehpoci_nusantara'
     }
   ];
 
@@ -1214,28 +1207,131 @@ export async function seedDatabase() {
       // Ensure vendorId is set on legacy users
       console.log('[Seeder] Users verified and synced in MongoDB.');
 
-      // 2. Categories & Variations
+      // 2. Categories & Product Variations (strictly decoupled: categories have NO variations)
+      const normalizeSeedName = (val: string) => val.trim().replace(/\s+/g, ' ');
+
+      // 2a. Deduplicate existing categories in MongoDB per (vendorId, lowercase normalized name)
+      const allExistingCats = await db.collection('categories').find({}).toArray();
+      const catGroupMap = new Map<string, any>();
+      const catDuplicateIds: any[] = [];
+
+      for (const c of allExistingCats) {
+        const normVendor = resolveVendorId(c.vendorId ? String(c.vendorId) : 'vnd_kasirkafe_central');
+        const normName = normalizeSeedName(String(c.name || ''));
+        if (!normName) {
+          catDuplicateIds.push(c._id);
+          continue;
+        }
+        const key = `${normVendor}::${normName.toLowerCase()}`;
+        const existing = catGroupMap.get(key);
+
+        if (!existing) {
+          catGroupMap.set(key, c);
+        } else {
+          catDuplicateIds.push(c._id);
+        }
+      }
+
+      if (catDuplicateIds.length > 0) {
+        await db.collection('categories').deleteMany({ _id: { $in: catDuplicateIds } });
+        console.log(`[Seeder] Cleaned up ${catDuplicateIds.length} duplicate/invalid category records.`);
+      }
+
+      // 2b. Upsert initialCategories safely using buildVendorQuery (without any variation fields)
       for (const cat of initialCategories) {
+        const resolvedVId = resolveVendorId(cat.vendorId);
         await db.collection('categories').updateOne(
-          { name: cat.name, vendorId: cat.vendorId },
+          { $and: [buildVendorQuery(cat.vendorId), { name: { $regex: `^\\s*${cat.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, $options: 'i' } }] },
           {
             $set: {
-              variations: cat.variations,
+              vendorId: resolvedVId,
               name: cat.name,
               description: cat.description,
               updatedAt: new Date()
             },
             $setOnInsert: {
-              vendorId: cat.vendorId,
               createdAt: new Date()
             }
           },
           { upsert: true }
         );
       }
-      // Remove legacy code and icon fields from categories collection
-      await db.collection('categories').updateMany({}, { $unset: { code: '', icon: '' } });
-      console.log('[Seeder] Categories and Variations synced in MongoDB successfully (code & icon removed).');
+      // Remove legacy code, icon, and all variation-related fields from categories collection
+      await db.collection('categories').updateMany(
+        {},
+        {
+          $unset: {
+            code: '',
+            icon: '',
+            variations: '',
+            productVariationIds: '',
+            variationIds: '',
+            productVariationId: '',
+            categoryVariationIds: ''
+          }
+        }
+      );
+
+      // 2c. Seed default product_variations per vendor if missing, clean categoryIds, and drop legacy category_variations
+      const standardVariationTemplates = [
+        standardDrinkSizeVariation,
+        standardIceVariation,
+        standardSugarVariation,
+        standardShotVariation
+      ];
+      const existingProdVarsCount = await db.collection('product_variations').countDocuments();
+      if (existingProdVarsCount === 0) {
+        const legacyCatVars = await db.collection('category_variations').find({}).toArray().catch(() => []);
+        const pvMap = new Map<string, any>();
+
+        for (const lv of legacyCatVars) {
+          const normVendor = resolveVendorId(lv.vendorId ? String(lv.vendorId) : 'vnd_kasirkafe_central');
+          const normName = normalizeSeedName(String(lv.name || ''));
+          if (!normName) continue;
+          const key = `${normVendor}::${normName.toLowerCase()}`;
+          if (!pvMap.has(key)) {
+            pvMap.set(key, {
+              id: lv.id || `var_${new ObjectId().toString()}`,
+              vendorId: normVendor,
+              name: normName,
+              type: lv.type || 'SINGLE_SELECT',
+              required: !!lv.required,
+              options: Array.isArray(lv.options) ? lv.options : [],
+              createdAt: lv.createdAt || new Date(),
+              updatedAt: lv.updatedAt || new Date()
+            });
+          }
+        }
+
+        const vendorIdsToSeed = Array.from(new Set(initialCategories.map(c => resolveVendorId(c.vendorId))));
+        for (const vId of vendorIdsToSeed) {
+          for (const tmpl of standardVariationTemplates) {
+            const key = `${vId}::${tmpl.name.toLowerCase()}`;
+            if (!pvMap.has(key)) {
+              pvMap.set(key, {
+                id: `${tmpl.id}_${vId === 'vnd_kasirkafe_central' ? 'central' : vId}`,
+                vendorId: vId,
+                name: tmpl.name,
+                type: tmpl.type,
+                required: tmpl.required,
+                options: tmpl.options,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+            }
+          }
+        }
+
+        const pvDocs = Array.from(pvMap.values());
+        if (pvDocs.length > 0) {
+          await db.collection('product_variations').insertMany(pvDocs);
+          console.log(`[Seeder] Seeded ${pvDocs.length} deduplicated records in product_variations.`);
+        }
+      }
+      // Ensure categoryIds is removed from all product_variations docs & drop legacy category_variations collection
+      await db.collection('product_variations').updateMany({}, { $unset: { categoryIds: '' } });
+      await db.collection('category_variations').drop().catch(() => {});
+      console.log('[Seeder] Categories (no variations) and Product Variations synced in MongoDB successfully.');
 
       // 3. Products (on table use '_id', on node js code use 'id')
       for (const p of initialProducts) {
@@ -1261,6 +1357,69 @@ export async function seedDatabase() {
       await db.collection('products').updateMany({ vendorId: null }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       // Ensure stock is removed from product table, stored in new product_stocks table
       await db.collection('products').updateMany({}, { $unset: { stock: '', lowStockThreshold: '' } });
+
+      // 3b. Backfill variationIds onto products ONLY if missing (so user edits are preserved)
+      const allPvDocs = await db.collection('product_variations').find({}).toArray();
+      const pvIdByVendorAndName = new Map<string, Map<string, string>>();
+      for (const pv of allPvDocs) {
+        const vId = resolveVendorId(pv.vendorId ? String(pv.vendorId) : 'vnd_kasirkafe_central');
+        if (!pvIdByVendorAndName.has(vId)) {
+          pvIdByVendorAndName.set(vId, new Map<string, string>());
+        }
+        const normName = normalizeSeedName(String(pv.name || '')).toLowerCase();
+        const pvId = String(pv.id || pv._id?.toString() || '');
+        if (normName && pvId && !pvIdByVendorAndName.get(vId)!.has(normName)) {
+          pvIdByVendorAndName.get(vId)!.set(normName, pvId);
+        }
+      }
+
+      const productsMissingVars = await db.collection('products').find({ variationIds: { $exists: false } }).toArray();
+      for (const prod of productsMissingVars) {
+        const vId = resolveVendorId(prod.vendorId ? String(prod.vendorId) : 'vnd_kasirkafe_central');
+        const vendorVarMap = pvIdByVendorAndName.get(vId);
+        const catLower = String(prod.category || '').trim().toLowerCase();
+        const assignedVarIds: string[] = [];
+
+        if (vendorVarMap) {
+          const ukuranId = vendorVarMap.get('ukuran cup');
+          const esId = vendorVarMap.get('level es');
+          const gulaId = vendorVarMap.get('tingkat gula');
+          const shotId = vendorVarMap.get('espresso shot');
+
+          if (catLower === 'kopi') {
+            [ukuranId, esId, gulaId, shotId].forEach(id => {
+              if (id && !assignedVarIds.includes(id)) assignedVarIds.push(id);
+            });
+          } else if (catLower === 'teh' || catLower === 'jus') {
+            [ukuranId, esId, gulaId].forEach(id => {
+              if (id && !assignedVarIds.includes(id)) assignedVarIds.push(id);
+            });
+          }
+        }
+
+        await db.collection('products').updateOne(
+          { _id: prod._id },
+          { $set: { variationIds: assignedVarIds } }
+        );
+      }
+
+      // 3c. Sync productIds onto product_variations docs that don't yet have productIds populated
+      const pvsMissingProductIds = await db.collection('product_variations').find({ productIds: { $exists: false } }).toArray();
+      if (pvsMissingProductIds.length > 0) {
+        const allProdsForSync = await db.collection('products').find({}).toArray();
+        for (const pv of pvsMissingProductIds) {
+          const vId = resolveVendorId(pv.vendorId ? String(pv.vendorId) : 'vnd_kasirkafe_central');
+          const pvId = String(pv.id || pv._id?.toString() || '');
+          const matchedProductIds = allProdsForSync
+            .filter(pr => resolveVendorId(pr.vendorId ? String(pr.vendorId) : 'vnd_kasirkafe_central') === vId && Array.isArray(pr.variationIds) && pr.variationIds.includes(pvId))
+            .map(pr => pr._id.toString());
+          await db.collection('product_variations').updateOne(
+            { _id: pv._id },
+            { $set: { productIds: matchedProductIds } }
+          );
+        }
+      }
+
       console.log('[Seeder] Products verified and synced in MongoDB (table uses _id, node code uses id).');
 
       // 4. Product Stocks (on table use '_id', on node js code use 'id', referencing Product id)
@@ -1823,6 +1982,7 @@ export async function seedDatabase() {
       await db.collection('raw_materials').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('raw_material_purchases').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       await db.collection('product_recipes').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
+      await db.collection('product_variations').updateMany({ vendorId: { $exists: false } }, { $set: { vendorId: 'vnd_kasirkafe_central' } });
       console.log('[Seeder] All collections verified and updated with vendorId partition.');
     } catch (err: any) {
       console.warn('[Seeder] MongoDB insert warning, using initialized fallback store:', err.message);

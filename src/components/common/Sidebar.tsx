@@ -24,7 +24,8 @@ import {
   Layers,
   PackagePlus,
   FlaskConical,
-  ChevronRight
+  ChevronRight,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
@@ -51,7 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
   const isCashier = user?.role === 'CASHIER';
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [alertCount, setAlertCount] = useState<number>(0);
   const [rawMaterialAlertCount, setRawMaterialAlertCount] = useState<number>(0);
 
   // Accordion Submenu (Toggle Expanded/Collapsed) for Pembelian Bahan Baku
@@ -87,9 +87,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
     'manager-top-products',
     'top-products',
     'produk-manajemen',
-    'stok-produk',
-    'inventaris',
     'kategori',
+    'variasi-produk',
+    'product-variations',
     'pembelian-bahan',
     'pembelian-baru',
     'riwayat-pembelian',
@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
     'activity-logs',
     'vendor-client'
   ];
-  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-stock', 'admin-inventory', 'admin-inventaris', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
+  const adminTabs = ['admin-dashboard', 'admin-top-products', 'vendor-management', 'log-viewer', 'admin-orders', 'admin-riwayat', 'admin-products', 'admin-users', 'admin-discounts', 'admin-diskon', 'admin-templates', 'admin-login-history', 'admin-activity-logs', 'admin-locked-users', 'admin-housekeeping'];
   const accountTabs = ['profile', 'settings'];
 
   const handleNavClick = (tab: string) => {
@@ -130,9 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
         });
         const data = await res.json();
         if (data.success && data.summary) {
-          const totalAlerts = (data.summary.lowStockCount || 0) + (data.summary.outOfStockCount || 0);
           const rawAlerts = (data.summary.rawMaterialLowCount || 0) + (data.summary.rawMaterialOutCount || 0);
-          setAlertCount(totalAlerts);
           setRawMaterialAlertCount(rawAlerts);
         }
       } catch (e) { }
@@ -272,22 +270,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 </label>
               </SidebarLink>
 
-              <SidebarLink to='stok-produk' allowedRoles={[MANAGER]}>
-                <label>
-                  <Boxes />
-                  <span>{t('stock')}</span>
-                </label>
-                {alertCount > 0 && (
-                  <em>
-                    {alertCount}
-                  </em>
-                )}
-              </SidebarLink>
-
               <SidebarLink to='kategori' allowedRoles={[MANAGER]}>
                 <label>
                   <Layers />
                   <span>{t('category')}</span>
+                </label>
+              </SidebarLink>
+
+              <SidebarLink to='variasi-produk' allowedRoles={[MANAGER]}>
+                <label>
+                  <SlidersHorizontal />
+                  <span>Variasi Produk</span>
                 </label>
               </SidebarLink>
 
@@ -425,16 +418,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, isOpe
                 <label>
                   <Coffee className="text-purple-500" />
                   <span>Katalog Produk Semua Vendor</span>
-                </label>
-                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
-                  SEMUA
-                </span>
-              </SidebarLink>
-
-              <SidebarLink id="nav-admin-stock-btn" to='admin-stock' allowedRoles={[ADMIN]}>
-                <label>
-                  <Boxes className="text-purple-500" />
-                  <span>Stok Produk Semua Vendor</span>
                 </label>
                 <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
                   SEMUA

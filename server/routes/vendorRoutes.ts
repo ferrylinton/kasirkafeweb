@@ -159,7 +159,7 @@ vendorRouter.get('/current', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/vendors/stock-config
- * Configure whether active vendor manages product stock via ProductStockScreen ('PRODUCT_STOCK')
+ * Configure whether active vendor manages product stock manually ('PRODUCT_STOCK')
  * or automatically from RawMaterialStockScreen ('RAW_MATERIAL').
  */
 vendorRouter.patch('/stock-config', authMiddleware, requireManager, async (req: Request, res: Response) => {
@@ -222,7 +222,7 @@ vendorRouter.patch('/stock-config', authMiddleware, requireManager, async (req: 
       summary: `Mengubah konfigurasi sumber stok produk menjadi ${
         stockManagementMode === 'RAW_MATERIAL'
           ? 'Stok Bahan Baku (RawMaterialStockScreen)'
-          : 'Stok Produk Manual (ProductStockScreen)'
+          : 'Stok Produk Manual'
       }`,
       details: { stockManagementMode, syncedCount },
       req
@@ -238,7 +238,7 @@ vendorRouter.patch('/stock-config', authMiddleware, requireManager, async (req: 
       message:
         stockManagementMode === 'RAW_MATERIAL'
           ? `Sumber stok produk dialihkan ke Stok Bahan Baku (${syncedCount} produk resep disinkronkan).`
-          : 'Sumber stok produk dialihkan ke Stok Produk Manual (ProductStockScreen).'
+          : 'Sumber stok produk dialihkan ke Stok Produk Manual.'
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Server Error' });

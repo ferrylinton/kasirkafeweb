@@ -22,8 +22,8 @@ import { SettingsScreen } from './components/screens/SettingsScreen';
 import { ManagerDashboardScreen } from './components/screens/ManagerDashboardScreen';
 import { TopProductsScreen } from './components/screens/TopProductsScreen';
 import { ProductManagementScreen } from './components/screens/ProductManagementScreen';
-import { ProductStockScreen } from './components/screens/ProductStockScreen';
 import { CategoryManagementScreen } from './components/screens/CategoryManagementScreen';
+import { ProductVariationManagementScreen } from './components/screens/ProductVariationManagementScreen';
 import { RawMaterialPurchasesScreen } from './components/screens/RawMaterialPurchasesScreen';
 import { NewPurchaseScreen } from './components/screens/NewPurchaseScreen';
 import { PurchaseHistoryScreen } from './components/screens/PurchaseHistoryScreen';
@@ -246,6 +246,11 @@ const ManagerDashboardPage: React.FC = () => {
   return <ManagerDashboardScreen />;
 };
 
+const ProductVariationPage: React.FC = () => {
+  const navigate = useNavigate();
+  return <ProductVariationManagementScreen onNavigateTab={(tab) => navigate('/' + tab)} />;
+};
+
 /**
  * React Router Configuration using createBrowserRouter & RoleGuard
  */
@@ -293,9 +298,9 @@ export const router = createBrowserRouter([
           { path: 'manager-top-products', element: <TopProductsScreen managerMode={true} /> },
           { path: 'top-products', element: <TopProductsScreen managerMode={true} /> },
           { path: 'produk-manajemen', element: <ProductManagementScreen /> },
-          { path: 'stok-produk', element: <ProductStockScreen /> },
-          { path: 'inventaris', element: <ProductStockScreen /> },
           { path: 'kategori', element: <CategoryManagementScreen /> },
+          { path: 'variasi-produk', element: <ProductVariationPage /> },
+          { path: 'product-variations', element: <ProductVariationPage /> },
           { path: 'pembelian-bahan', element: <NewPurchaseScreen /> },
           { path: 'pembelian-baru', element: <NewPurchaseScreen /> },
           { path: 'riwayat-pembelian', element: <PurchaseHistoryScreen /> },
@@ -322,9 +327,6 @@ export const router = createBrowserRouter([
           { path: 'admin-orders', element: <AdminOrderHistoryPage /> },
           { path: 'admin-riwayat', element: <AdminOrderHistoryPage /> },
           { path: 'admin-products', element: <ProductManagementScreen allVendorsMode={true} /> },
-          { path: 'admin-stock', element: <ProductStockScreen allVendorsMode={true} /> },
-          { path: 'admin-inventory', element: <ProductStockScreen allVendorsMode={true} /> },
-          { path: 'admin-inventaris', element: <ProductStockScreen allVendorsMode={true} /> },
           { path: 'admin-users', element: <UserManagementScreen allVendorsMode={true} /> },
           { path: 'admin-discounts', element: <DiscountRulesScreen allVendorsMode={true} /> },
           { path: 'admin-diskon', element: <DiscountRulesScreen allVendorsMode={true} /> },

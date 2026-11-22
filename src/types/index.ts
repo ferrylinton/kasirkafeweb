@@ -52,13 +52,16 @@ export interface VariationOption {
   isDefault?: boolean;
 }
 
-export interface CategoryVariation {
+export interface ProductVariation {
   id: string;
   vendorId?: string;
   name: string;
+  type?: 'SINGLE_SELECT' | 'MULTI_SELECT' | 'RADIO' | 'CHECKBOX';
+  required?: boolean;
   options: VariationOption[];
-  usedInCategoriesCount?: number;
-  categoryNames?: string[];
+  productIds?: string[];
+  usedInProductsCount?: number;
+  productNames?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -68,10 +71,6 @@ export interface Category {
   vendorId?: string;
   name: string;
   description?: string;
-  categoryVariationIds?: string[];
-  variationIds?: string[];
-  categoryVariationId?: string;
-  variations?: CategoryVariation[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -111,6 +110,8 @@ export interface Product {
   tag?: string;
   image?: string;
   isAvailable?: boolean;
+  variationIds?: string[];
+  variations?: ProductVariation[];
   temporaryUnavailableReason?: string;
   rawMaterialAvailable?: boolean;
   rawMaterialReason?: string;

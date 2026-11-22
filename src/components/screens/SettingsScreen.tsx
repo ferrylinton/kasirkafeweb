@@ -229,7 +229,7 @@ export const SettingsScreen: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          {/* Option 1: ProductStockScreen (Manual Stock) */}
+          {/* Option 1: Manajemen Produk (Manual Stock) */}
           <button
             type="button"
             disabled={!canConfigureStock || savingStockConfig}
@@ -254,7 +254,7 @@ export const SettingsScreen: React.FC = () => {
                   )}
                 </div>
                 <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
-                  Jumlah stok unit produk diatur langsung melalui halaman <strong>Stok Produk</strong> (penambahan/pengurangan manual &amp; restock per menu).
+                  Jumlah stok unit produk diatur langsung melalui halaman <strong>Manajemen Produk</strong> (penambahan/pengurangan manual &amp; restock per menu).
                 </p>
               </div>
             </div>
@@ -322,7 +322,7 @@ export const SettingsScreen: React.FC = () => {
             ) : (
               <span>
                 <strong className="text-stone-800 dark:text-stone-200">Stok Produk Manual Aktif:</strong>{' '}
-                Kasir memotong langsung jumlah unit stok di halaman <strong>Stok Produk</strong>. Produk tanpa resep di mode Bahan Baku juga tetap menggunakan stok produk manual.
+                Kasir memotong langsung jumlah unit stok di halaman <strong>Manajemen Produk</strong>. Produk tanpa resep di mode Bahan Baku juga tetap menggunakan stok produk manual.
               </span>
             )}
           </div>
@@ -331,10 +331,10 @@ export const SettingsScreen: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => navigate(stockManagementMode === 'RAW_MATERIAL' ? '/bahan-baku' : '/stok-produk')}
+                onClick={() => navigate(stockManagementMode === 'RAW_MATERIAL' ? '/bahan-baku' : '/produk-manajemen')}
                 className="px-3 py-1.5 rounded-xl bg-accent text-white text-xs font-bold inline-flex items-center gap-1 hover:opacity-90 cursor-pointer"
               >
-                <span>{stockManagementMode === 'RAW_MATERIAL' ? 'Kelola Bahan Baku' : 'Kelola Stok Produk'}</span>
+                <span>{stockManagementMode === 'RAW_MATERIAL' ? 'Kelola Bahan Baku' : 'Kelola Produk'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
               <button

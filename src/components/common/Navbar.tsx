@@ -42,14 +42,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         return 'Pembayaran Transaksi';
       case 'histori':
         return t('navHistory');
-      case 'inventaris':
-      case 'stok-produk':
-        return 'Stok Produk & Inventaris';
       case 'kategori':
         return 'Kategori Produk';
-      case 'variasi-kategori':
-      case 'category-variations':
-        return 'Variasi Kategori';
+      case 'variasi-produk':
+      case 'product-variations':
+        return 'Variasi Produk';
       case 'produk-manajemen':
         return 'Manajemen Produk';
       case 'users':
@@ -82,10 +79,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         return t('navAdminOrders');
       case 'admin-products':
         return 'Manajemen Produk (Semua Vendor)';
-      case 'admin-stock':
-      case 'admin-inventory':
-      case 'admin-inventaris':
-        return t('navAdminInventory');
       case 'admin-users':
         return t('navAdminUsers');
       case 'admin-discounts':
