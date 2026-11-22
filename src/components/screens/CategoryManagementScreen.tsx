@@ -2,6 +2,8 @@ import {
   AlertCircle,
   Edit3,
   Layers,
+  LayoutGrid,
+  List,
   Plus,
   RefreshCw,
   Trash2,
@@ -25,6 +27,7 @@ export const CategoryManagementScreen: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Modal State (Create / Edit)
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -204,34 +207,39 @@ export const CategoryManagementScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe max-w-7xl mx-auto flex flex-col gap-6 p-4 sm:p-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#251e1c] p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent">
-              <Layers className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight text-stone-900 dark:text-stone-100">
-              Kategori
-            </h1>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                isAdmin
-                  ? 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300'
-                  : isManager
-                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
-                    : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300'
+      {/* Top Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 bg-white dark:bg-[#251e1c] p-4 sm:p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
+          {/* View Mode Toggle (Grid vs Table) */}
+          <div className="flex items-center bg-stone-100 dark:bg-stone-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                  : 'text-stone-400 hover:text-stone-600'
               }`}
+              title="Tampilan Tabel Kategori"
+              aria-label="Tampilan Tabel Kategori"
             >
-              {isAdmin ? 'Role: Admin Sistem' : isManager ? 'Role: Manager' : 'Role: Kasir (Lihat)'}
-            </span>
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-[#251e1c] text-accent shadow-xs'
+                  : 'text-stone-400 hover:text-stone-600'
+              }`}
+              title="Tampilan Grid Kartu"
+              aria-label="Tampilan Grid Kartu"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 max-w-2xl">
-            Kelola kategori produk dan menu toko. Setiap nama kategori bersifat unik per toko dan langsung sinkron ke katalog produk kasir.
-          </p>
-        </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={() => fetchCategories(false)}
@@ -281,7 +289,7 @@ export const CategoryManagementScreen: React.FC = () => {
             </button>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {categories.map(cat => (
             <div
@@ -333,6 +341,80 @@ export const CategoryManagementScreen: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-[#251e1c] rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-2xs overflow-hidden">
+          <div className="p-3 bg-stone-50/50 dark:bg-stone-900/50 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
+            <span className="font-bold flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-accent" />
+              <span>Tabel Kategori Produk</span>
+            </span>
+            <span className="text-[11px] text-stone-400">Total {categories.length} Kategori</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-stone-50 dark:bg-stone-900 border-b border-stone-200/80 dark:border-stone-800 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4">ID Kategori</th>
+                  <th className="py-3 px-4">Nama Kategori</th>
+                  <th className="py-3 px-4">Deskripsi</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  {canManage && <th className="py-3 px-4 text-center">Aksi</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                {categories.map(cat => (
+                  <tr key={cat.id || cat.name} className="hover:bg-stone-50/70 dark:hover:bg-stone-900/40 transition-colors">
+                    <td className="py-3 px-4 font-mono text-[11px] text-stone-500 dark:text-stone-400">
+                      {cat.id}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-accent flex items-center justify-center shrink-0">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <span className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-heading">
+                          {cat.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-stone-500 dark:text-stone-400 max-w-md">
+                      <span className="line-clamp-1">
+                        {cat.description || 'Tidak ada deskripsi kategori'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-[10px] font-semibold">
+                        Aktif di Katalog
+                      </span>
+                    </td>
+                    {canManage && (
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(cat)}
+                            className="p-1.5 rounded-lg text-stone-600 dark:text-stone-300 hover:text-accent hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                            title="Ubah Kategori"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCategoryToDelete(cat)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors cursor-pointer"
+                            title="Hapus Kategori"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
