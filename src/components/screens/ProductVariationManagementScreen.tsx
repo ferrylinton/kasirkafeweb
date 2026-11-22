@@ -8,15 +8,13 @@ import {
   Check,
   X,
   AlertCircle,
-  Coffee,
   Search,
   Copy,
   Tag,
   ArrowUp,
   ArrowDown,
   LayoutGrid,
-  Table2,
-  ChevronRight
+  Table2
 } from 'lucide-react';
 import { Product, ProductVariation, VariationOption } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -36,9 +34,7 @@ const TYPE_LABELS: Record<SelectionType, string> = {
   CHECKBOX: 'Checkbox'
 };
 
-export const ProductVariationManagementScreen: React.FC<ProductVariationManagementScreenProps> = ({
-  onNavigateTab
-}) => {
+export const ProductVariationManagementScreen: React.FC<ProductVariationManagementScreenProps> = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
@@ -54,8 +50,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
   // View, Search & Filters
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | SelectionType>('ALL');
-  const [requiredFilter, setRequiredFilter] = useState<'ALL' | 'REQUIRED' | 'OPTIONAL'>('ALL');
 
   // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -177,79 +171,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
     setProductSearchQuery('');
     setIsModalOpen(true);
     showToast(`Menyalin template variasi '${variation.name}'`, 'info');
-  };
-
-  // Preset Templates
-  const applyPreset = (presetName: string) => {
-    const now = Date.now();
-    switch (presetName) {
-      case 'ukuran':
-        setFormName('Ukuran Cup');
-        setFormType('SINGLE_SELECT');
-        setFormRequired(true);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: 'Regular 12oz', extraPrice: 0, isDefault: true },
-          { id: `opt_${now}_1`, name: 'Large 16oz', extraPrice: 5000, isDefault: false },
-          { id: `opt_${now}_2`, name: 'Jumbo 22oz', extraPrice: 9000, isDefault: false }
-        ]);
-        break;
-      case 'es':
-        setFormName('Level Es');
-        setFormType('SINGLE_SELECT');
-        setFormRequired(false);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: 'Normal Ice', extraPrice: 0, isDefault: true },
-          { id: `opt_${now}_1`, name: 'Less Ice', extraPrice: 0, isDefault: false },
-          { id: `opt_${now}_2`, name: 'No Ice', extraPrice: 0, isDefault: false }
-        ]);
-        break;
-      case 'gula':
-        setFormName('Tingkat Gula');
-        setFormType('SINGLE_SELECT');
-        setFormRequired(false);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: '100% Normal', extraPrice: 0, isDefault: true },
-          { id: `opt_${now}_1`, name: '50% Less Sugar', extraPrice: 0, isDefault: false },
-          { id: `opt_${now}_2`, name: '0% No Sugar', extraPrice: 0, isDefault: false }
-        ]);
-        break;
-      case 'shot':
-        setFormName('Espresso Shot');
-        setFormType('SINGLE_SELECT');
-        setFormRequired(false);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: 'Normal (1 Shot)', extraPrice: 0, isDefault: true },
-          { id: `opt_${now}_1`, name: '+1 Extra Shot', extraPrice: 5000, isDefault: false },
-          { id: `opt_${now}_2`, name: '+2 Extra Shot', extraPrice: 10000, isDefault: false }
-        ]);
-        break;
-      case 'susu':
-        setFormName('Pilihan Susu');
-        setFormType('SINGLE_SELECT');
-        setFormRequired(false);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: 'Fresh Milk (Dairy)', extraPrice: 0, isDefault: true },
-          { id: `opt_${now}_1`, name: 'Oat Milk (Plant-based)', extraPrice: 6000, isDefault: false },
-          { id: `opt_${now}_2`, name: 'Almond Milk', extraPrice: 8000, isDefault: false },
-          { id: `opt_${now}_3`, name: 'Soy Milk', extraPrice: 5000, isDefault: false }
-        ]);
-        break;
-      case 'topping':
-        setFormName('Topping Ekstra');
-        setFormType('MULTI_SELECT');
-        setFormRequired(false);
-        setFormOptions([
-          { id: `opt_${now}_0`, name: 'Brown Sugar Boba', extraPrice: 4000, isDefault: false },
-          { id: `opt_${now}_1`, name: 'Grass Jelly (Cincau)', extraPrice: 3500, isDefault: false },
-          { id: `opt_${now}_2`, name: 'Egg Pudding', extraPrice: 4000, isDefault: false },
-          { id: `opt_${now}_3`, name: 'Coffee Jelly', extraPrice: 4000, isDefault: false },
-          { id: `opt_${now}_4`, name: 'Whipped Cream', extraPrice: 3000, isDefault: false }
-        ]);
-        break;
-      default:
-        break;
-    }
-    showToast(`Preset '${presetName}' diterapkan ke form`, 'info');
   };
 
   // Option CRUD Operations inside Form
@@ -459,17 +380,9 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
         (v.options || []).some(opt => opt.name.toLowerCase().includes(q)) ||
         (v.productNames && v.productNames.some(pName => pName.toLowerCase().includes(q)));
 
-      const vType = (v.type || 'SINGLE_SELECT') as SelectionType;
-      const matchesType = typeFilter === 'ALL' || vType === typeFilter;
-
-      const matchesRequired =
-        requiredFilter === 'ALL' ||
-        (requiredFilter === 'REQUIRED' && !!v.required) ||
-        (requiredFilter === 'OPTIONAL' && !v.required);
-
-      return matchesSearch && matchesType && matchesRequired;
+      return matchesSearch;
     });
-  }, [variations, searchQuery, typeFilter, requiredFilter]);
+  }, [variations, searchQuery]);
 
   const filteredModalProducts = useMemo(() => {
     const q = productSearchQuery.trim().toLowerCase();
@@ -479,40 +392,15 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
     );
   }, [products, productSearchQuery]);
 
-  // Summary Metrics
-  const metrics = useMemo(() => {
-    const total = variations.length;
-    const requiredCount = variations.filter(v => !!v.required).length;
-    const totalOptions = variations.reduce((acc, curr) => acc + (curr.options?.length || 0), 0);
-    const avgOptions = total > 0 ? (totalOptions / total).toFixed(1) : '0.0';
-    const totalLinkedProducts = variations.reduce(
-      (acc, curr) => acc + (curr.usedInProductsCount ?? curr.productIds?.length ?? 0),
-      0
-    );
-
-    return { total, requiredCount, totalOptions, avgOptions, totalLinkedProducts };
-  }, [variations]);
-
   return (
     <div className="min-h-screen pt-safe-nav pb-safe-screen px-safe p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Sub-Navigation Breadcrumb / Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-3">
-        <nav aria-label="Navigasi Manajemen Produk" className="flex items-center gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => (onNavigateTab ? onNavigateTab('produk-manajemen') : null)}
-            className="text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 py-1.5 px-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            <Coffee className="w-3.5 h-3.5" />
-            <span>Manajemen Produk</span>
-          </button>
-          <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" aria-hidden="true" />
-          <span className="font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap shrink-0 px-2 py-1.5">
-            Variasi Produk
-          </span>
-        </nav>
+      {/* Top Actions Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums whitespace-nowrap">
+          {filteredVariations.length} dari {variations.length} variasi
+        </span>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0 ml-auto">
           <button
             type="button"
             onClick={() => fetchVariationsAndProducts(false)}
@@ -538,21 +426,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
         </div>
       </div>
 
-      {/* Page Title */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100 font-heading tracking-tight">
-            Manajemen Variasi Produk
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Kelola grup modifier (Ukuran Cup, Level Es, Tingkat Gula, Topping) dan hubungkan langsung ke produk.
-          </p>
-        </div>
-        <div className="text-xs text-stone-500 dark:text-stone-400 tabular-nums whitespace-nowrap">
-          {filteredVariations.length} dari {variations.length} variasi ditampilkan
-        </div>
-      </div>
-
       {/* Cashier Notice Banner */}
       {isCashier && (
         <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-center gap-3 text-xs text-amber-900 dark:text-amber-200">
@@ -562,47 +435,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
           </p>
         </div>
       )}
-
-      {/* Metrics Strip (Single-Elevation, Hairline Borders, Tabular Numerals) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
-          <div className="text-xs font-medium text-stone-500 dark:text-stone-400">Total Variasi</div>
-          <div className="text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1 tabular-nums">
-            {metrics.total}
-          </div>
-          <div className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">Grup modifier aktif</div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
-          <div className="text-xs font-medium text-stone-500 dark:text-stone-400">Variasi Wajib</div>
-          <div className="text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1 tabular-nums">
-            {metrics.requiredCount}
-          </div>
-          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-            Mandatori saat transaksi kasir
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
-          <div className="text-xs font-medium text-stone-500 dark:text-stone-400">Total Opsi Pilihan</div>
-          <div className="text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1 tabular-nums">
-            {metrics.totalOptions}
-          </div>
-          <div className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5 tabular-nums">
-            Rata-rata {metrics.avgOptions} opsi per variasi
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
-          <div className="text-xs font-medium text-stone-500 dark:text-stone-400">Keterkaitan Produk</div>
-          <div className="text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1 tabular-nums">
-            {metrics.totalLinkedProducts}
-          </div>
-          <div className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
-            Total tautan aktif di {products.length} produk
-          </div>
-        </div>
-      </div>
 
       {/* Filter, Search & View Mode Toolbar */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white dark:bg-stone-900 p-4 rounded-2xl border border-stone-200 dark:border-stone-800">
@@ -628,36 +460,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Segmented Selection Type Filter */}
-          <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-xl overflow-x-auto">
-            {(['ALL', 'SINGLE_SELECT', 'MULTI_SELECT', 'RADIO', 'CHECKBOX'] as const).map(typeKey => (
-              <button
-                key={typeKey}
-                type="button"
-                onClick={() => setTypeFilter(typeKey)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  typeFilter === typeKey
-                    ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-semibold shadow-2xs'
-                    : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
-                }`}
-              >
-                {typeKey === 'ALL' ? 'Semua Tipe' : TYPE_LABELS[typeKey]}
-              </button>
-            ))}
-          </div>
-
-          {/* Required Status Filter */}
-          <select
-            aria-label="Filter status wajib"
-            value={requiredFilter}
-            onChange={e => setRequiredFilter(e.target.value as 'ALL' | 'REQUIRED' | 'OPTIONAL')}
-            className="px-3 py-2 rounded-xl text-xs font-medium bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 focus:outline-hidden focus:ring-2 focus:ring-accent cursor-pointer min-h-[40px]"
-          >
-            <option value="ALL">Semua Status</option>
-            <option value="REQUIRED">Wajib Dipilih</option>
-            <option value="OPTIONAL">Opsional</option>
-          </select>
-
           {/* View Mode Toggle: Grid vs Table */}
           <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-xl shrink-0">
             <button
@@ -734,8 +536,8 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
           </div>
           <div>
             <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
-              {searchQuery || typeFilter !== 'ALL' || requiredFilter !== 'ALL'
-                ? 'Tidak ada variasi yang cocok dengan filter saat ini'
+              {searchQuery
+                ? 'Tidak ada variasi yang cocok dengan pencarian saat ini'
                 : 'Belum ada variasi produk tersimpan'}
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400 max-w-md mx-auto mt-1">
@@ -743,17 +545,13 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
             </p>
           </div>
           <div className="flex items-center justify-center gap-2">
-            {(searchQuery || typeFilter !== 'ALL' || requiredFilter !== 'ALL') && (
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setTypeFilter('ALL');
-                  setRequiredFilter('ALL');
-                }}
+                onClick={() => setSearchQuery('')}
                 className="px-4 py-2 rounded-xl text-xs font-semibold border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
               >
-                Reset Filter
+                Reset Pencarian
               </button>
             )}
             {isManager && (
@@ -1025,32 +823,6 @@ export const ProductVariationManagementScreen: React.FC<ProductVariationManageme
               >
                 <X className="w-4 h-4" />
               </button>
-            </div>
-
-            {/* Quick Presets */}
-            <div className="shrink-0">
-              <div className="flex items-center justify-between text-xs font-semibold text-stone-600 dark:text-stone-300 mb-2">
-                <span>Template Cepat (Opsional):</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { id: 'ukuran', label: 'Ukuran Cup' },
-                  { id: 'es', label: 'Level Es' },
-                  { id: 'gula', label: 'Tingkat Gula' },
-                  { id: 'shot', label: 'Espresso Shot' },
-                  { id: 'susu', label: 'Pilihan Susu' },
-                  { id: 'topping', label: 'Topping Ekstra' }
-                ].map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => applyPreset(p.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Form Body */}
